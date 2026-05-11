@@ -61,6 +61,11 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
+# Local container state and Gemini cookies
+data/*
+!data/
+!data/accounts.example.json
+
 # Flask stuff:
 instance/
 .webassets-cache

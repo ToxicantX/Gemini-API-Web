@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gemini API 管理端</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f9;
+      --panel: #fff;
+      --soft: #f9fbfd;
+      --line: #d8e0ea;
+      --text: #172033;
+      --muted: #667085;
+      --accent: #1769d8;
+      --accent-soft: #eaf2ff;
+      --danger: #c83e3e;
+      --ok: #16845b;
+      --warn: #a05a00;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    h1 { margin: 0; font-size: 18px; font-weight: 750; }
+    h2 { margin: 0; font-size: 15px; }
+    h3 { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+    main { padding: 16px; display: grid; gap: 16px; }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    nav button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .section-head {
+      min-height: 50px;
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .content { padding: 14px; }
+    .grid { display: grid; grid-template-columns: minmax(340px, 430px) minmax(0, 1fr); gap: 16px; }
+    .cards { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 10px; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      min-height: 84px;
+    }
+    .card strong { font-size: 24px; line-height: 1; }
+    .stack { display: grid; gap: 12px; }
+    .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .three { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    button {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      border-radius: 6px;
+      padding: 7px 10px;
+      font: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    button.soft { background: var(--accent-soft); color: var(--accent); border-color: #cfe0fb; }
+    button.danger { color: var(--danger); border-color: #efc7c7; }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+    }
+    textarea { min-height: 106px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+    label { display: grid; gap: 6px; color: var(--muted); font-size: 12px; }
+    .hint { color: var(--muted); font-size: 12px; }
+    .status { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    .dot.ok { background: var(--ok); }
+    .pill {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      color: var(--muted);
+      background: #fff;
+    }
+    .pill.current { color: var(--ok); border-color: #b7e1ce; background: #effaf5; }
+    .pill.off { color: var(--warn); border-color: #f2d4a4; background: #fff8e8; }
+    .account, .item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+    .account-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .account-name { font-weight: 700; overflow-wrap: anywhere; }
+    .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; min-width: 780px; }
+    th, td { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: var(--soft); color: var(--muted); font-size: 12px; font-weight: 650; }
+    tr:last-child td { border-bottom: 0; }
+    .ok-text { color: var(--ok); font-weight: 650; }
+    .bad-text { color: var(--danger); font-weight: 650; }
+    pre {
+      margin: 0;
+      max-height: 360px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #101828;
+      color: #d6e4ff;
+      padding: 12px;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+    .view { display: none; }
+    .view.active { display: grid; gap: 16px; }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(15, 23, 42, .42);
+      z-index: 20;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      width: min(680px, 100%);
+      max-height: calc(100vh - 36px);
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 24px 80px rgba(15, 23, 42, .25);
+    }
+    .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 14px; border-bottom: 1px solid var(--line); }
+    .modal-body { padding: 14px; display: grid; gap: 12px; }
+    .notice { border: 1px solid #cfe0fb; background: var(--accent-soft); color: #24486f; border-radius: 8px; padding: 10px; font-size: 12px; }
+    @media (max-width: 980px) {
+      .grid, .split, .three { grid-template-columns: 1fr; }
+      .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 560px) {
+      header { flex-direction: column; align-items: flex-start; }
+      .cards { grid-template-columns: 1fr; }
+      button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Gemini API 管理端</h1>
+    <div class="status"><span id="healthDot" class="dot"></span><span id="healthText">连接中</span></div>
+  </header>
+
+  <main>
+    <nav>
+      <button data-tab="dashboard" class="active">看板</button>
+      <button data-tab="native">原生生成</button>
+      <button data-tab="gems">Gems</button>
+      <button data-tab="research">Deep Research</button>
+      <button data-tab="media">媒体结果</button>
+      <button data-tab="accounts">账户设置</button>
+    </nav>
+
+    <div id="dashboard" class="view active">
+      <section>
+        <div class="section-head">
+          <h2>请求看板</h2>
+          <button id="refreshAllBtn">刷新</button>
+        </div>
+        <div class="content stack">
+          <div class="cards">
+            <div class="card"><strong id="metricAccounts">0</strong><span class="hint">启用账户</span></div>
+            <div class="card"><strong id="metricCurrent">-</strong><span class="hint">当前账户</span></div>
+            <div class="card"><strong id="metricRequests">0</strong><span class="hint">持久日志数</span></div>
+            <div class="card"><strong id="metricMedia">0</strong><span class="hint">媒体索引</span></div>
+          </div>
+          <div class="three">
+            <div class="item"><b>Gemini 3.1 Pro</b><span class="hint">model: gemini 或 gemini-3.1-pro</span></div>
+            <div class="item"><b>Gemini 3 Flash</b><span class="hint">model: gemini-3-flash</span></div>
+            <div class="item"><b>Gemini 3 Thinking</b><span class="hint">model: gemini-3-flash-thinking</span></div>
+          </div>
+        </div>
+      </section>
+      <section>
+        <div class="section-head">
+          <h2>请求日志</h2>
+          <span class="hint">最近 80 条</span>
+        </div>
+        <div class="content">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>时间</th><th>状态</th><th>账户</th><th>模型</th><th>接口</th><th>类型</th><th>媒体</th><th>耗时</th><th>错误</th></tr></thead>
+              <tbody id="requestLogRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="native" class="view">
+      <section>
+        <div class="section-head">
+          <h2>Gemini 原生生成</h2>
+          <div class="row">
+            <button id="nativeGenerateBtn" class="primary">生成</button>
+            <button id="nativeStreamBtn" class="soft">流式生成</button>
+          </div>
+        </div>
+        <div class="content grid">
+          <div class="stack">
+            <label>模型
+              <select id="nativeModel">
+                <option value="gemini">gemini / 3.1 Pro</option>
+                <option value="gemini-3.1-pro">gemini-3.1-pro</option>
+                <option value="gemini-3-flash">gemini-3-flash</option>
+                <option value="gemini-3-flash-thinking">gemini-3-flash-thinking</option>
+              </select>
+            </label>
+            <label>Gem
+              <select id="nativeGem"><option value="">不使用 Gem</option></select>
+            </label>
+            <label>Prompt
+              <textarea id="nativePrompt" placeholder="输入文本、图片/视频/音乐生成需求，或需要 Gemini 原生分类输出的任务"></textarea>
+            </label>
+            <div class="row">
+              <label><input id="nativeTemporary" type="checkbox"> 临时会话</label>
+              <label><input id="nativeDeepResearch" type="checkbox"> Deep Research 模式</label>
+            </div>
+            <label>附件
+              <input id="nativeFile" type="file">
+            </label>
+            <div class="row">
+              <button id="uploadFileBtn">上传附件</button>
+              <span id="fileInfo" class="hint"></span>
+            </div>
+          </div>
+          <pre id="nativeOutput">等待生成结果...</pre>
+        </div>
+      </section>
+    </div>
+
+    <div id="gems" class="view">
+      <section>
+        <div class="section-head">
+          <h2>Gems / System Prompt</h2>
+          <button id="refreshGemsBtn">刷新 Gems</button>
+        </div>
+        <div class="content grid">
+          <div class="stack">
+            <label>名称<input id="gemName" placeholder="例如：代码审查助手"></label>
+            <label>描述<input id="gemDescription" placeholder="可选"></label>
+            <label>System Prompt<textarea id="gemPrompt" placeholder="写入 Gem 的系统提示词"></textarea></label>
+            <div class="row">
+              <button id="createGemBtn" class="primary">创建 Gem</button>
+              <button id="updateGemBtn">更新选中 Gem</button>
+              <button id="deleteGemBtn" class="danger">删除选中 Gem</button>
+            </div>
+            <input id="selectedGemId" placeholder="选中 Gem ID" readonly>
+          </div>
+          <div id="gemList" class="stack"></div>
+        </div>
+      </section>
+    </div>
+
+    <div id="research" class="view">
+      <section>
+        <div class="section-head">
+          <h2>Deep Research</h2>
+          <div class="row">
+            <button id="researchPlanBtn" class="primary">创建计划</button>
+            <button id="researchStartBtn">启动</button>
+            <button id="researchStatusBtn">查状态</button>
+            <button id="researchWaitBtn" class="soft">等待结果</button>
+          </div>
+        </div>
+        <div class="content grid">
+          <div class="stack">
+            <label>研究主题<textarea id="researchPrompt" placeholder="输入需要深入研究的问题"></textarea></label>
+            <label>任务 ID<input id="researchJobId" placeholder="创建计划后自动填入"></label>
+            <div class="split">
+              <label>轮询间隔秒<input id="researchInterval" type="number" min="2" value="10"></label>
+              <label>超时秒<input id="researchTimeout" type="number" min="30" value="600"></label>
+            </div>
+            <button id="refreshJobsBtn">刷新任务列表</button>
+            <div id="jobList" class="stack"></div>
+          </div>
+          <pre id="researchOutput">等待 Deep Research 操作...</pre>
+        </div>
+      </section>
+    </div>
+
+    <div id="media" class="view">
+      <section>
+        <div class="section-head">
+          <h2>媒体结果</h2>
+          <button id="refreshMediaBtn">刷新媒体</button>
+        </div>
+        <div class="content stack">
+          <div class="row">
+            <button data-media-kind="">全部</button>
+            <button data-media-kind="image">图片</button>
+            <button data-media-kind="video">视频</button>
+            <button data-media-kind="audio">音频</button>
+            <button data-media-kind="web_image">网页图片</button>
+          </div>
+          <div id="mediaList" class="three"></div>
+        </div>
+      </section>
+    </div>
+
+    <div id="accounts" class="view">
+      <div class="grid">
+        <div class="stack">
+          <section>
+            <div class="section-head"><h2>账户池</h2><button id="refreshAccountsBtn">刷新</button></div>
+            <div class="content stack">
+              <div class="row">
+                <button id="importBtn">导入</button>
+                <button id="exportBtn">导出</button>
+                <button id="manualOpenBtn">手动添加</button>
+                <button id="authOpenBtn" class="primary">网页授权</button>
+              </div>
+              <div id="accountList" class="stack"></div>
+            </div>
+          </section>
+          <section>
+            <div class="section-head"><h2>切换设置</h2><button id="saveSettingsBtn" class="primary">保存设置</button></div>
+            <div class="content stack">
+              <div class="split">
+                <label>调用多少次后切换<input id="switchOnUses" type="number" min="0" step="1"></label>
+                <label>错误多少次后切换<input id="failureThreshold" type="number" min="0" step="1"></label>
+              </div>
+              <button id="switchNextBtn" class="soft">手动切换下一个</button>
+              <span class="hint">设置为 0 表示关闭对应自动切换；429/503 和鉴权错误仍会保护性切换。</span>
+            </div>
+          </section>
+        </div>
+        <section>
+          <div class="section-head"><h2>授权操作</h2><button id="saveAuthBtn" class="primary">保存授权 Cookie</button></div>
+          <div class="content stack">
+            <div class="notice">点击“网页授权”会启动容器内浏览器，并在新界面打开 noVNC。登录完成后回到这里保存 Cookie。</div>
+            <div class="row">
+              <button id="reopenAuthBtn">打开授权界面</button>
+              <button id="reloadAuthBtn">刷新授权浏览器</button>
+              <button id="closeAuthBtn">关闭授权会话</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div id="manualModal" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-head"><h2>手动添加 Cookie</h2><button data-close-modal="manualModal">关闭</button></div>
+      <div class="modal-body">
+        <div class="notice">至少填写 __Secure-1PSID；也可以粘贴完整 cookies JSON 对象或浏览器导出的数组。</div>
+        <label>账户名<input id="manualName" placeholder="可选"></label>
+        <label>__Secure-1PSID<textarea id="manualPsid"></textarea></label>
+        <label>__Secure-1PSIDTS<textarea id="manualPsidts"></textarea></label>
+        <label>完整 cookies JSON<textarea id="manualCookies" placeholder='{"__Secure-1PSID":"..."}'></textarea></label>
+        <div class="row"><button id="manualAddBtn" class="primary">添加到账户池</button><button data-close-modal="manualModal">取消</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="authSaveModal" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-head"><h2>保存授权 Cookie</h2><button data-close-modal="authSaveModal">关闭</button></div>
+      <div class="modal-body">
+        <label>账户名<input id="authSaveName" placeholder="可选"></label>
+        <div class="row"><button id="authSaveConfirmBtn" class="primary">保存</button><button data-close-modal="authSaveModal">取消</button></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = { status: null, logs: [], media: [], gems: [], jobs: [], files: [], authWindow: null };
+    const $ = id => document.getElementById(id);
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, { headers: { "Content-Type": "application/json", ...(options.headers || {}) }, ...options });
+      if (!response.ok) {
+        let detail = response.statusText;
+        try { const data = await response.json(); detail = data.error?.message || data.detail || data.message || detail; } catch (_) {}
+        throw new Error(detail);
+      }
+      return response.json();
+    }
+    function setMsg(message) { $("healthText").textContent = message; }
+    function showJson(id, data) { $(id).textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2); }
+    function esc(value) { return String(value ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;"); }
+    function fmt(value) { const d = new Date(value); return Number.isNaN(d.getTime()) ? (value || "-") : d.toLocaleString(); }
+    function openModal(id) { $(id).classList.add("open"); }
+    function closeModal(id) { $(id).classList.remove("open"); }
+    function noVncUrl() { const p = window.location.protocol === "https:" ? "https:" : "http:"; return `${p}//${window.location.hostname}:6080/vnc.html?autoconnect=true&resize=scale&path=websockify`; }
+
+    async function refreshAll() {
+      await Promise.all([refreshStatus(), refreshLogs(), refreshMedia(), refreshJobs()]);
+    }
+    async function refreshStatus() {
+      try {
+        const status = await api("/v1/status");
+        state.status = status;
+        $("healthDot").classList.add("ok");
+        $("healthText").textContent = `在线，当前账户 #${status.current_account_id ?? "-"}`;
+        $("switchOnUses").value = status.switch_on_uses;
+        $("failureThreshold").value = status.failure_threshold;
+        renderAccounts(status.accounts || []);
+        renderMetrics();
+      } catch (error) {
+        $("healthDot").classList.remove("ok");
+        setMsg(`离线：${error.message}`);
+      }
+    }
+    async function refreshLogs() {
+      const data = await api("/v1/request-logs?limit=80");
+      state.logs = data.logs || [];
+      renderLogs();
+      renderMetrics();
+    }
+    async function refreshMedia(kind = "") {
+      const data = await api(`/v1/gemini/media?limit=80${kind ? `&kind=${encodeURIComponent(kind)}` : ""}`);
+      state.media = data.media || [];
+      renderMedia();
+      renderMetrics();
+    }
+    async function refreshGems() {
+      const data = await api("/v1/gemini/gems");
+      state.gems = data.gems || [];
+      renderGems();
+      renderGemSelect();
+    }
+    async function refreshJobs() {
+      const data = await api("/v1/gemini/jobs?job_type=deep_research&limit=40");
+      state.jobs = data.jobs || [];
+      renderJobs();
+    }
+    function renderMetrics() {
+      const accounts = state.status?.accounts || [];
+      $("metricAccounts").textContent = accounts.filter(a => a.enabled && !a.expired).length;
+      $("metricCurrent").textContent = state.status?.current_account_id ?? "-";
+      $("metricRequests").textContent = state.logs.length;
+      $("metricMedia").textContent = state.media.length;
+    }
+    function renderAccounts(accounts) {
+      $("accountList").innerHTML = accounts.length ? accounts.map(a => `
+        <div class="account">
+          <div class="account-top">
+            <div><div class="account-name">#${a.id} ${esc(a.name || "未命名账户")}</div><div class="hint">调用 ${a.usage_count} 次，失败 ${a.failure_count} 次${a.last_used_at ? `，最近 ${esc(fmt(a.last_used_at))}` : ""}</div></div>
+            <div class="row">${a.current ? `<span class="pill current">当前</span>` : ""}<span class="pill ${a.enabled ? "" : "off"}">${a.enabled ? "启用" : "停用"}</span></div>
+          </div>
+          <div class="row"><button data-action="use" data-id="${a.id}">设为当前</button><button data-action="toggle" data-id="${a.id}" data-enabled="${a.enabled}">${a.enabled ? "停用" : "启用"}</button><button class="danger" data-action="delete" data-id="${a.id}">删除</button></div>
+        </div>`).join("") : `<div class="hint">还没有账户。</div>`;
+    }
+    function renderLogs() {
+      $("requestLogRows").innerHTML = state.logs.length ? state.logs.map(l => `
+        <tr><td>${esc(fmt(l.time))}</td><td class="${l.ok ? "ok-text" : "bad-text"}">${l.ok ? "成功" : "失败"}</td><td>#${l.account_id ?? "-"} ${esc(l.account_name || "")}</td><td>${esc(l.model || "-")}${l.stream ? " / stream" : ""}</td><td>${esc(l.endpoint)}</td><td>${esc(l.output_type || "-")}</td><td>${l.media_count || 0}</td><td>${l.duration_ms} ms</td><td>${esc(l.error || "")}</td></tr>
+      `).join("") : `<tr><td colspan="9" class="hint">还没有请求日志。</td></tr>`;
+    }
+    function renderGems() {
+      $("gemList").innerHTML = state.gems.length ? state.gems.map(g => `
+        <div class="item">
+          <div class="row"><b>${esc(g.name)}</b><span class="pill ${g.predefined ? "" : "current"}">${g.predefined ? "预置" : "自定义"}</span></div>
+          <div class="hint">${esc(g.description || "")}</div>
+          <div class="hint">${esc(g.id)}</div>
+          <button data-gem-id="${esc(g.id)}">选中</button>
+        </div>
+      `).join("") : `<div class="hint">还没有 Gems 缓存，点击刷新。</div>`;
+    }
+    function renderGemSelect() {
+      $("nativeGem").innerHTML = `<option value="">不使用 Gem</option>` + state.gems.map(g => `<option value="${esc(g.id)}">${esc(g.name)}</option>`).join("");
+    }
+    function renderJobs() {
+      $("jobList").innerHTML = state.jobs.length ? state.jobs.map(j => `
+        <div class="item"><b>${esc(j.job_id)}</b><span class="hint">${esc(j.state)} / ${esc(j.prompt || "")}</span><button data-job-id="${esc(j.job_id)}">选中</button></div>
+      `).join("") : `<div class="hint">还没有 Deep Research 任务。</div>`;
+    }
+    function renderMedia() {
+      $("mediaList").innerHTML = state.media.length ? state.media.map(m => `
+        <div class="item">
+          <b>${esc(m.kind)} #${m.id}</b>
+          <span class="hint">${esc(m.title || "")}</span>
+          ${m.thumbnail ? `<a href="${esc(m.thumbnail)}" target="_blank">缩略图</a>` : ""}
+          <a href="${esc(m.url)}" target="_blank">打开结果</a>
+          <span class="hint">${esc(fmt(m.created_at))}</span>
+        </div>
+      `).join("") : `<div class="hint">还没有媒体结果。</div>`;
+    }
+    function parseCookieJson(raw) {
+      const value = raw.trim();
+      if (!value) return {};
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return Object.fromEntries(parsed.filter(c => c && typeof c.name === "string" && typeof c.value === "string").map(c => [c.name, c.value]));
+      if (parsed && typeof parsed === "object") return parsed;
+      throw new Error("cookies JSON 必须是对象或数组。");
+    }
+    function downloadJson(filename, data) {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url; link.download = filename; link.click();
+      URL.revokeObjectURL(url);
+    }
+    async function nativePayload() {
+      return {
+        prompt: $("nativePrompt").value,
+        model: $("nativeModel").value,
+        gem_id: $("nativeGem").value || null,
+        temporary: $("nativeTemporary").checked,
+        deep_research: $("nativeDeepResearch").checked,
+        file_ids: state.files.map(f => f.id),
+      };
+    }
+
+    document.querySelectorAll("nav button").forEach(btn => btn.onclick = () => {
+      document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b === btn));
+      document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === btn.dataset.tab));
+      if (btn.dataset.tab === "native") refreshGems().catch(e => setMsg(e.message));
+      if (btn.dataset.tab === "gems") refreshGems().catch(e => setMsg(e.message));
+      if (btn.dataset.tab === "media") refreshMedia().catch(e => setMsg(e.message));
+    });
+    document.body.onclick = event => {
+      const close = event.target.closest("[data-close-modal]");
+      if (close) closeModal(close.dataset.closeModal);
+    };
+    $("refreshAllBtn").onclick = refreshAll;
+    $("refreshAccountsBtn").onclick = refreshAll;
+    $("refreshMediaBtn").onclick = () => refreshMedia();
+    $("refreshGemsBtn").onclick = refreshGems;
+    $("refreshJobsBtn").onclick = refreshJobs;
+    document.querySelectorAll("[data-media-kind]").forEach(btn => btn.onclick = () => refreshMedia(btn.dataset.mediaKind));
+    $("manualOpenBtn").onclick = () => openModal("manualModal");
+    $("saveAuthBtn").onclick = () => openModal("authSaveModal");
+
+    $("nativeGenerateBtn").onclick = async () => {
+      try { showJson("nativeOutput", await api("/v1/gemini/generate", { method: "POST", body: JSON.stringify(await nativePayload()) })); await refreshAll(); }
+      catch (e) { showJson("nativeOutput", e.message); }
+    };
+    $("nativeStreamBtn").onclick = async () => {
+      try {
+        $("nativeOutput").textContent = "";
+        const res = await fetch("/v1/gemini/stream", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(await nativePayload()) });
+        const text = await res.text();
+        $("nativeOutput").textContent = text;
+        await refreshAll();
+      } catch (e) { showJson("nativeOutput", e.message); }
+    };
+    $("uploadFileBtn").onclick = async () => {
+      const file = $("nativeFile").files[0];
+      if (!file) return setMsg("请选择附件");
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch("/v1/gemini/files", { method: "POST", body: form });
+      if (!res.ok) return setMsg(await res.text());
+      const data = await res.json();
+      state.files.push(data.file);
+      $("fileInfo").textContent = state.files.map(f => f.filename).join(", ");
+    };
+    $("gemList").onclick = event => {
+      const btn = event.target.closest("[data-gem-id]");
+      if (!btn) return;
+      const gem = state.gems.find(g => g.id === btn.dataset.gemId);
+      if (!gem) return;
+      $("selectedGemId").value = gem.id;
+      $("gemName").value = gem.name || "";
+      $("gemDescription").value = gem.description || "";
+      $("gemPrompt").value = gem.prompt || "";
+    };
+    $("createGemBtn").onclick = async () => {
+      await api("/v1/gemini/gems", { method: "POST", body: JSON.stringify({ name: $("gemName").value, description: $("gemDescription").value, prompt: $("gemPrompt").value }) });
+      await refreshGems();
+    };
+    $("updateGemBtn").onclick = async () => {
+      const id = $("selectedGemId").value;
+      if (!id) return setMsg("请先选中 Gem");
+      await api(`/v1/gemini/gems/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ name: $("gemName").value, description: $("gemDescription").value, prompt: $("gemPrompt").value }) });
+      await refreshGems();
+    };
+    $("deleteGemBtn").onclick = async () => {
+      const id = $("selectedGemId").value;
+      if (!id || !confirm(`删除 Gem ${id}？`)) return;
+      await api(`/v1/gemini/gems/${encodeURIComponent(id)}`, { method: "DELETE" });
+      $("selectedGemId").value = "";
+      await refreshGems();
+    };
+    $("researchPlanBtn").onclick = async () => {
+      const data = await api("/v1/gemini/deep-research/plan", { method: "POST", body: JSON.stringify({ prompt: $("researchPrompt").value, model: "gemini" }) });
+      $("researchJobId").value = data.job?.job_id || data.plan?.research_id || "";
+      showJson("researchOutput", data);
+      await refreshJobs();
+    };
+    $("researchStartBtn").onclick = async () => {
+      const data = await api("/v1/gemini/deep-research/start", { method: "POST", body: JSON.stringify({ job_id: $("researchJobId").value }) });
+      showJson("researchOutput", data);
+      await refreshJobs();
+    };
+    $("researchStatusBtn").onclick = async () => {
+      const id = $("researchJobId").value;
+      showJson("researchOutput", await api(`/v1/gemini/deep-research/${encodeURIComponent(id)}/status`));
+      await refreshJobs();
+    };
+    $("researchWaitBtn").onclick = async () => {
+      const data = await api("/v1/gemini/deep-research/wait", { method: "POST", body: JSON.stringify({ job_id: $("researchJobId").value, poll_interval: Number($("researchInterval").value), timeout: Number($("researchTimeout").value) }) });
+      showJson("researchOutput", data);
+      await refreshJobs();
+    };
+    $("jobList").onclick = event => {
+      const btn = event.target.closest("[data-job-id]");
+      if (btn) $("researchJobId").value = btn.dataset.jobId;
+    };
+    $("importBtn").onclick = async () => { await api("/v1/accounts/import", { method: "POST", body: "{}" }); await refreshAll(); };
+    $("exportBtn").onclick = async () => downloadJson(`gemini-accounts-${new Date().toISOString().slice(0, 10)}.json`, await api("/v1/accounts/export"));
+    $("manualAddBtn").onclick = async () => {
+      const cookies = parseCookieJson($("manualCookies").value);
+      const psid = $("manualPsid").value.trim() || cookies["__Secure-1PSID"];
+      const psidts = $("manualPsidts").value.trim() || cookies["__Secure-1PSIDTS"] || null;
+      if (!psid) return setMsg("缺少 __Secure-1PSID");
+      await api("/v1/accounts", { method: "POST", body: JSON.stringify({ name: $("manualName").value || null, "__Secure-1PSID": psid, "__Secure-1PSIDTS": psidts, cookies }) });
+      closeModal("manualModal");
+      await refreshAll();
+    };
+    $("accountList").onclick = async event => {
+      const btn = event.target.closest("button[data-action]");
+      if (!btn) return;
+      const id = Number(btn.dataset.id);
+      if (btn.dataset.action === "use") await api("/v1/accounts/switch", { method: "POST", body: JSON.stringify({ account_id: id }) });
+      if (btn.dataset.action === "toggle") await api(`/v1/accounts/${id}`, { method: "PATCH", body: JSON.stringify({ enabled: btn.dataset.enabled !== "true" }) });
+      if (btn.dataset.action === "delete" && confirm(`确认删除账户 #${id}？`)) await api(`/v1/accounts/${id}`, { method: "DELETE" });
+      await refreshAll();
+    };
+    $("saveSettingsBtn").onclick = async () => {
+      await api("/v1/settings", { method: "PATCH", body: JSON.stringify({ switch_on_uses: Number($("switchOnUses").value || 0), failure_threshold: Number($("failureThreshold").value || 0) }) });
+      await refreshStatus();
+    };
+    $("switchNextBtn").onclick = async () => { await api("/v1/accounts/switch", { method: "POST", body: "{}" }); await refreshAll(); };
+    async function startAuth() {
+      await api("/v1/auth/session", { method: "POST", body: "{}" });
+      state.authWindow = window.open(noVncUrl(), "gemini-auth-browser");
+      if (!state.authWindow) throw new Error("浏览器阻止了弹窗，请允许此站点打开新窗口。");
+    }
+    $("authOpenBtn").onclick = () => startAuth().catch(e => setMsg(e.message));
+    $("reopenAuthBtn").onclick = () => startAuth().catch(e => setMsg(e.message));
+    $("reloadAuthBtn").onclick = () => api("/v1/auth/press", { method: "POST", body: JSON.stringify({ key: "F5" }) }).catch(e => setMsg(e.message));
+    $("closeAuthBtn").onclick = async () => { await api("/v1/auth/session", { method: "DELETE" }); if (state.authWindow && !state.authWindow.closed) state.authWindow.close(); };
+    $("authSaveConfirmBtn").onclick = async () => {
+      await api("/v1/auth/save", { method: "POST", body: JSON.stringify({ name: $("authSaveName").value || null }) });
+      closeModal("authSaveModal");
+      await refreshAll();
+    };
+
+    refreshAll().catch(e => setMsg(e.message));
+    setInterval(() => refreshAll().catch(() => {}), 8000);
+  </script>
+</body>
+</html>

@@ -96,6 +96,67 @@ Optionally, the package offers a way to automatically import cookies from your l
 pip install -U gemini_webapi[browser]
 ```
 
+## Docker API Server
+
+This repository can also run as a long-lived container API service with persistent
+SQLite account state and multi-cookie rotation.
+
+Create `data/accounts.json` from `data/accounts.example.json` and put one or more
+Gemini cookie sets in it:
+
+```json
+{
+  "accounts": [
+    {
+      "name": "account-1",
+      "__Secure-1PSID": "COOKIE VALUE HERE",
+      "__Secure-1PSIDTS": "COOKIE VALUE HERE",
+      "enabled": true
+    }
+  ]
+}
+```
+
+Start the service:
+
+```sh
+docker compose up -d --build
+```
+
+The service listens on `http://localhost:7860` by default. Account usage counters,
+failure counters, and the current rotation pointer are stored in `data/app.db`.
+Open `http://localhost:7860/` in a browser to use the management console. The
+console can import cookie files, enable or disable accounts, and start an
+authorization browser session. After logging in to Google in that remote browser,
+click "save current login" to automatically store the cookies in SQLite.
+The authorization browser uses noVNC on port `6080`, so keep both `7860` and
+`6080` published when running with Docker.
+
+Useful environment variables:
+
+```env
+SWITCH_ON_USES=40
+FAILURE_THRESHOLD=3
+IMMEDIATE_SWITCH_STATUS_CODES=429,503
+GEMINI_DATABASE_PATH=/app/data/app.db
+GEMINI_ACCOUNTS_FILE=/app/data/accounts.json
+GEMINI_AUTH_HEADLESS=false
+```
+
+Example requests:
+
+```sh
+curl http://localhost:7860/v1/status
+
+curl http://localhost:7860/v1/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Hello"}'
+
+curl http://localhost:7860/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gemini","messages":[{"role":"user","content":"Hello"}]}'
+```
+
 ## Authentication
 
 > [!TIP]

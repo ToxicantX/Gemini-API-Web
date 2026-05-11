@@ -1,0 +1,15 @@
+services:
+  gemini-api:
+    build: .
+    ports:
+      - "7860:7860"
+      - "6080:6080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      SWITCH_ON_USES: "40"
+      FAILURE_THRESHOLD: "3"
+      IMMEDIATE_SWITCH_STATUS_CODES: "429,503"
+      REQUEST_TIMEOUT: "300"
+      GEMINI_AUTO_REFRESH: "true"
+      GEMINI_AUTH_HEADLESS: "false"

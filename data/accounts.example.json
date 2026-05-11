@@ -1,0 +1,16 @@
+{
+  "accounts": [
+    {
+      "name": "account-1",
+      "__Secure-1PSID": "COOKIE VALUE HERE",
+      "__Secure-1PSIDTS": "COOKIE VALUE HERE",
+      "enabled": true
+    },
+    {
+      "name": "account-2",
+      "__Secure-1PSID": "COOKIE VALUE HERE",
+      "__Secure-1PSIDTS": "COOKIE VALUE HERE",
+      "enabled": true
+    }
+  ]
+}

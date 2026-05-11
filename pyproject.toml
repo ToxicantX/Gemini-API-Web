@@ -29,14 +29,27 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 browser = ["browser-cookie3"]
+server = [
+    "fastapi>=0.110,<1",
+    "httpx>=0.27,<1",
+    "playwright>=1.45,<2",
+    "python-multipart>=0.0.9,<1",
+    "uvicorn[standard]>=0.27,<1",
+]
+
+[project.scripts]
+gemini-webapi-server = "gemini_webapi.server.app:main"
 
 [project.urls]
-Repository = "https://github.com/HanaokaYuzu/Gemini-API"
-Issues = "https://github.com/HanaokaYuzu/Gemini-API/issues"
+Repository = "https://github.com/ToxicantX/Gemini-API-Web"
+Issues = "https://github.com/ToxicantX/Gemini-API-Web/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["gemini_webapi"]
+include = ["gemini_webapi*"]
+
+[tool.setuptools.package-data]
+gemini_webapi = ["server/static/*"]
 
 [tool.setuptools_scm]
 version_scheme = "post-release"

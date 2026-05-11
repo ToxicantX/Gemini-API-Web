@@ -1,0 +1,15 @@
+.git
+.github
+.vscode
+assets
+tests
+data
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+dist
+build
+*.egg-info
+.pytest_cache
+.mypy_cache
