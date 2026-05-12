@@ -115,27 +115,7 @@ class ChatCompletionRequest(BaseModel):
 
 MODEL_ALIASES = {
     "gemini": "gemini-3-pro",
-    "gemini-pro": "gemini-3-pro",
     "gemini-3.1-pro": "gemini-3-pro",
-    "gemini-3.1-pro-preview": "gemini-3-pro",
-    "gemini-3-pro-preview": "gemini-3-pro",
-    "gemini-2.5-pro": "gemini-3-pro",
-    "gemini-2.5-pro-preview": "gemini-3-pro",
-    "gemini-2.5-pro-latest": "gemini-3-pro",
-    "gemini-flash": "gemini-3-flash",
-    "gemini-3-flash-preview": "gemini-3-flash",
-    "gemini-2.5-flash": "gemini-3-flash",
-    "gemini-2.5-flash-preview": "gemini-3-flash",
-    "gemini-2.5-flash-latest": "gemini-3-flash",
-    "gemini-2.5-flash-lite": "gemini-3-flash",
-    "gemini-2.5-flash-lite-preview": "gemini-3-flash",
-    "gemini-thinking": "gemini-3-flash-thinking",
-    "gemini-3-thinking": "gemini-3-flash-thinking",
-    "gemini-3-thinking-preview": "gemini-3-flash-thinking",
-    "gemini-3.1-thinking": "gemini-3-flash-thinking",
-    "gemini-3.1-thinking-preview": "gemini-3-flash-thinking",
-    "gemini-2.5-flash-thinking": "gemini-3-flash-thinking",
-    "gemini-2.5-flash-thinking-preview": "gemini-3-flash-thinking",
 }
 
 
@@ -166,26 +146,12 @@ def _messages_to_prompt(messages: list[ChatMessage]) -> str:
 
 
 def _openai_model_ids() -> list[str]:
-    ids = [
+    return [
         "gemini",
         "gemini-3.1-pro",
-        "gemini-3.1-pro-preview",
-        "gemini-3-pro-preview",
         "gemini-3-flash",
-        "gemini-3-flash-preview",
         "gemini-3-flash-thinking",
-        "gemini-3-thinking",
-        "gemini-pro",
-        "gemini-flash",
-        "gemini-thinking",
-        "gemini-2.5-pro",
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-thinking",
     ]
-    for model in Model:
-        if model.model_name not in ids:
-            ids.append(model.model_name)
-    return ids
 
 
 def _resolve_model_arg(model: str | None) -> str | None:
