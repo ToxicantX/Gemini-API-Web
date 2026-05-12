@@ -5,6 +5,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
+import orjson as json
 from pydantic import BaseModel, Field
 
 from ..constants import Model
@@ -97,9 +98,23 @@ class AuthSaveRequest(BaseModel):
     name: str | None = None
 
 
+class FunctionToolSpec(BaseModel):
+    name: str
+    description: str | None = None
+    parameters: dict[str, Any] | None = None
+
+
+class ChatToolSpec(BaseModel):
+    type: str = "function"
+    function: FunctionToolSpec
+
+
 class ChatMessage(BaseModel):
     role: str
-    content: str | list[dict[str, Any]]
+    content: str | list[dict[str, Any]] | None = None
+    name: str | None = None
+    tool_call_id: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
 
 
 class ChatCompletionRequest(BaseModel):
@@ -111,6 +126,9 @@ class ChatCompletionRequest(BaseModel):
     top_p: float | None = None
     n: int | None = None
     stop: str | list[str] | None = None
+    tools: list[ChatToolSpec] | None = None
+    tool_choice: str | dict[str, Any] | None = None
+    parallel_tool_calls: bool | None = None
 
 
 MODEL_ALIASES = {
@@ -119,7 +137,9 @@ MODEL_ALIASES = {
 }
 
 
-def _message_content_to_text(content: str | list[dict[str, Any]]) -> str:
+def _message_content_to_text(content: str | list[dict[str, Any]] | None) -> str:
+    if content is None:
+        return ""
     if isinstance(content, str):
         return content
     parts: list[str] = []
@@ -133,16 +153,227 @@ def _messages_to_prompt(messages: list[ChatMessage]) -> str:
     prompt_parts: list[str] = []
     for message in messages:
         text = _message_content_to_text(message.content)
-        if not text:
-            continue
         role = message.role.lower()
         if role == "system":
+            if not text:
+                continue
             prompt_parts.append(f"System: {text}")
         elif role == "assistant":
-            prompt_parts.append(f"Assistant: {text}")
+            if text:
+                prompt_parts.append(f"Assistant: {text}")
+            if message.tool_calls:
+                prompt_parts.append(
+                    f"Assistant tool calls: {json.dumps(message.tool_calls).decode()}"
+                )
+        elif role == "tool":
+            if not text:
+                continue
+            label = message.name or message.tool_call_id or "tool"
+            prompt_parts.append(f"Tool result ({label}): {text}")
         else:
+            if not text:
+                continue
             prompt_parts.append(f"User: {text}")
     return "\n\n".join(prompt_parts)
+
+
+def _tools_enabled(request: ChatCompletionRequest) -> bool:
+    if not request.tools:
+        return False
+    return request.tool_choice != "none"
+
+
+def _tool_choice_name(tool_choice: str | dict[str, Any] | None) -> str | None:
+    if not isinstance(tool_choice, dict):
+        return None
+    function = tool_choice.get("function")
+    if isinstance(function, dict) and isinstance(function.get("name"), str):
+        return function["name"]
+    return None
+
+
+def _tool_specs_text(tools: list[ChatToolSpec]) -> str:
+    lines: list[str] = []
+    for tool in tools:
+        if tool.type != "function":
+            continue
+        function = tool.function
+        parameters = function.parameters or {"type": "object", "properties": {}}
+        lines.append(
+            "\n".join(
+                [
+                    f"- name: {function.name}",
+                    f"  description: {function.description or ''}",
+                    f"  parameters: {json.dumps(parameters).decode()}",
+                ]
+            )
+        )
+    return "\n".join(lines)
+
+
+def _append_tool_instructions(prompt: str, request: ChatCompletionRequest) -> str:
+    if not _tools_enabled(request):
+        return prompt
+    tools = request.tools or []
+    forced_name = _tool_choice_name(request.tool_choice)
+    choice_line = "If no tool is needed, answer normally."
+    if request.tool_choice == "required":
+        choice_line = "You must call one of the available tools."
+    if forced_name:
+        choice_line = f"You must call the tool named {forced_name}."
+    parallel_line = ""
+    if request.parallel_tool_calls is False:
+        parallel_line = "Return at most one tool call."
+    instructions = f"""
+Tool calling is available.
+When a tool is needed, respond with only valid JSON in this exact schema:
+{{"tool_calls":[{{"name":"tool_name","arguments":{{}}}}]}}
+Do not wrap the JSON in markdown. Do not include natural language with a tool call.
+{choice_line}
+{parallel_line}
+Available tools:
+{_tool_specs_text(tools)}
+"""
+    return f"{prompt}\n\nSystem: {instructions.strip()}"
+
+
+def _strip_json_fence(text: str) -> str:
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    lines = stripped.splitlines()
+    if len(lines) >= 2 and lines[-1].strip() == "```":
+        return "\n".join(lines[1:-1]).strip()
+    return stripped
+
+
+def _extract_json_value(text: str) -> Any | None:
+    stripped = _strip_json_fence(text)
+    try:
+        return json.loads(stripped)
+    except Exception:
+        pass
+    start = stripped.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for index, char in enumerate(stripped[start:], start):
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(stripped[start : index + 1])
+                except Exception:
+                    return None
+    return None
+
+
+def _arguments_to_openai_json(arguments: Any) -> str:
+    if arguments is None:
+        return "{}"
+    if isinstance(arguments, str):
+        return arguments
+    return json.dumps(arguments).decode()
+
+
+def _normalize_tool_call(
+    item: Any,
+    allowed_names: set[str],
+) -> dict[str, Any] | None:
+    if not isinstance(item, dict):
+        return None
+    function = item.get("function")
+    if isinstance(function, dict):
+        name = function.get("name")
+        arguments = function.get("arguments", item.get("arguments"))
+    elif isinstance(function, str):
+        name = function
+        arguments = item.get("arguments")
+    else:
+        name = item.get("name") or item.get("tool_name")
+        arguments = item.get("arguments") if "arguments" in item else item.get("args")
+    if not isinstance(name, str) or name not in allowed_names:
+        return None
+    call_id = item.get("id") if isinstance(item.get("id"), str) else f"call_{uuid.uuid4().hex}"
+    return {
+        "id": call_id,
+        "type": "function",
+        "function": {
+            "name": name,
+            "arguments": _arguments_to_openai_json(arguments),
+        },
+    }
+
+
+def _tool_calls_from_output_text(
+    text: str,
+    tools: list[ChatToolSpec] | None,
+) -> list[dict[str, Any]]:
+    if not tools:
+        return []
+    parsed = _extract_json_value(text)
+    if not isinstance(parsed, dict):
+        return []
+    raw_calls: Any
+    if isinstance(parsed.get("tool_calls"), list):
+        raw_calls = parsed["tool_calls"]
+    elif isinstance(parsed.get("tool_call"), dict):
+        raw_calls = [parsed["tool_call"]]
+    elif "name" in parsed or "function" in parsed:
+        raw_calls = [parsed]
+    else:
+        return []
+    allowed_names = {tool.function.name for tool in tools if tool.type == "function"}
+    calls: list[dict[str, Any]] = []
+    for item in raw_calls:
+        call = _normalize_tool_call(item, allowed_names)
+        if call:
+            calls.append(call)
+    return calls
+
+
+def _chat_tool_calls_chunk(
+    completion_id: str,
+    model: str,
+    tool_calls: list[dict[str, Any]],
+) -> dict[str, Any]:
+    stream_calls = []
+    for index, call in enumerate(tool_calls):
+        stream_calls.append(
+            {
+                "index": index,
+                "id": call["id"],
+                "type": "function",
+                "function": call["function"],
+            }
+        )
+    return {
+        "id": completion_id,
+        "object": "chat.completion.chunk",
+        "created": int(time.time()),
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "delta": {"tool_calls": stream_calls},
+                "finish_reason": None,
+            }
+        ],
+    }
 
 
 def _openai_model_ids() -> list[str]:
@@ -1066,6 +1297,7 @@ def create_app(config: ServerConfig | None = None):
         prompt = _messages_to_prompt(request.messages)
         if not prompt:
             raise HTTPException(status_code=400, detail="messages must contain text.")
+        prompt = _append_tool_instructions(prompt, request)
         model = request.model or "gemini"
 
         if request.stream:
@@ -1074,6 +1306,7 @@ def create_app(config: ServerConfig | None = None):
             async def event_stream():
                 first = _chat_chunk(completion_id, model, role="assistant")
                 yield f"data: {json.dumps(first).decode()}\n\n"
+                buffered_text: list[str] = []
 
                 async def operation(client):
                     kwargs: dict[str, Any] = {}
@@ -1091,6 +1324,9 @@ def create_app(config: ServerConfig | None = None):
                     ):
                         delta = output.text_delta or ""
                         if delta:
+                            if _tools_enabled(request):
+                                buffered_text.append(delta)
+                                continue
                             chunk = _chat_chunk(completion_id, model, content=delta)
                             yield f"data: {json.dumps(chunk).decode()}\n\n"
                 except Exception as exc:
@@ -1099,7 +1335,18 @@ def create_app(config: ServerConfig | None = None):
                     yield "data: [DONE]\n\n"
                     return
 
-                final = _chat_chunk(completion_id, model, finish_reason="stop")
+                finish_reason = "stop"
+                if _tools_enabled(request):
+                    text = "".join(buffered_text)
+                    tool_calls = _tool_calls_from_output_text(text, request.tools)
+                    if tool_calls:
+                        tool_chunk = _chat_tool_calls_chunk(completion_id, model, tool_calls)
+                        yield f"data: {json.dumps(tool_chunk).decode()}\n\n"
+                        finish_reason = "tool_calls"
+                    elif text:
+                        chunk = _chat_chunk(completion_id, model, content=text)
+                        yield f"data: {json.dumps(chunk).decode()}\n\n"
+                final = _chat_chunk(completion_id, model, finish_reason=finish_reason)
                 yield f"data: {json.dumps(final).decode()}\n\n"
                 yield "data: [DONE]\n\n"
 
@@ -1122,6 +1369,20 @@ def create_app(config: ServerConfig | None = None):
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
 
         created = int(time.time())
+        tool_calls = (
+            _tool_calls_from_output_text(output.text, request.tools)
+            if _tools_enabled(request)
+            else []
+        )
+        message: dict[str, Any] = {"role": "assistant", "content": output.text}
+        finish_reason = "stop"
+        if tool_calls:
+            message = {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": tool_calls,
+            }
+            finish_reason = "tool_calls"
         return {
             "id": f"chatcmpl-{uuid.uuid4().hex}",
             "object": "chat.completion",
@@ -1130,8 +1391,8 @@ def create_app(config: ServerConfig | None = None):
             "choices": [
                 {
                     "index": 0,
-                    "message": {"role": "assistant", "content": output.text},
-                    "finish_reason": "stop",
+                    "message": message,
+                    "finish_reason": finish_reason,
                 }
             ],
             "usage": {
