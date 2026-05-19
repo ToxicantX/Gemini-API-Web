@@ -158,14 +158,19 @@ class AuthBrowserManager:
             )
 
         account_name = name or await self._detect_account_name(session)
-        self.store.upsert_account(
+        account = self.store.upsert_account(
             name=account_name,
             secure_1psid=psid,
             secure_1psidts=psidts,
             cookies=cookies,
             enabled=True,
         )
-        return {"ok": True, "name": account_name, "cookie_count": len(cookies)}
+        return {
+            "ok": True,
+            "account_id": account.id,
+            "name": account_name,
+            "cookie_count": len(cookies),
+        }
 
     def _require_session(self) -> BrowserSession:
         if self._session is None:

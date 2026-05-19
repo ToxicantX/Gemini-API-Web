@@ -12,6 +12,22 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def account_identity_keys(name: str | None) -> set[str]:
+    if not isinstance(name, str):
+        return set()
+    normalized = name.strip().lower()
+    if not normalized or normalized in {"gemini web account", "gemini-webapi", "gemini webapi"}:
+        return set()
+    keys = {normalized}
+    if normalized.startswith("gemini-") and len(normalized) > len("gemini-"):
+        keys.add(normalized[len("gemini-") :])
+    if "@" in normalized:
+        local, domain = normalized.split("@", 1)
+        if local and domain in {"gmail.com", "googlemail.com"}:
+            keys.add(local)
+    return keys
+
+
 @dataclass(frozen=True)
 class Account:
     id: int
@@ -24,6 +40,9 @@ class Account:
     usage_count: int
     failure_count: int
     last_used_at: str | None
+    validation_status: str | None
+    validation_message: str | None
+    validated_at: str | None
 
 
 @dataclass(frozen=True)
@@ -199,7 +218,15 @@ class AccountStore:
             );
             """
         )
+        self._ensure_column("accounts", "validation_status", "TEXT")
+        self._ensure_column("accounts", "validation_message", "TEXT")
+        self._ensure_column("accounts", "validated_at", "TEXT")
         self.conn.commit()
+
+    def _ensure_column(self, table: str, column: str, definition: str) -> None:
+        rows = self.conn.execute(f"PRAGMA table_info({table})").fetchall()
+        if column not in {row["name"] for row in rows}:
+            self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     def import_accounts_file(self, path: str | Path | None) -> int:
         if path is None:
@@ -281,22 +308,66 @@ class AccountStore:
         name: str | None = None,
         enabled: bool = True,
         expired: bool = False,
-    ) -> None:
+    ) -> Account:
         now = utc_now()
         cookies_json = json.dumps(cookies or {}, ensure_ascii=True, sort_keys=True)
+        existing_account = self.get_account_by_psid(secure_1psid)
+        if existing_account is None:
+            existing_account = self.get_account_by_name_identity(name)
+        if existing_account is not None and existing_account.secure_1psid != secure_1psid:
+            self.conn.execute(
+                """
+                UPDATE accounts
+                SET name = ?,
+                    secure_1psid = ?,
+                    secure_1psidts = ?,
+                    cookies_json = ?,
+                    enabled = ?,
+                    expired = ?,
+                    validation_status = ?,
+                    validation_message = ?,
+                    validated_at = ?,
+                    failure_count = 0,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    name,
+                    secure_1psid,
+                    secure_1psidts,
+                    cookies_json,
+                    1 if enabled else 0,
+                    1 if expired else 0,
+                    "PENDING",
+                    "Account cookies were updated. Validation is pending.",
+                    None,
+                    now,
+                    existing_account.id,
+                ),
+            )
+            self.conn.commit()
+            account = self.get_account_by_psid(secure_1psid)
+            if account is None:
+                raise RuntimeError("Failed to load saved account.")
+            return account
         self.conn.execute(
             """
             INSERT INTO accounts (
                 name, secure_1psid, secure_1psidts, cookies_json,
-                enabled, expired, created_at, updated_at
+                enabled, expired, validation_status, validation_message,
+                validated_at, failure_count, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
             ON CONFLICT(secure_1psid) DO UPDATE SET
                 name = excluded.name,
                 secure_1psidts = excluded.secure_1psidts,
                 cookies_json = excluded.cookies_json,
                 enabled = excluded.enabled,
                 expired = excluded.expired,
+                validation_status = excluded.validation_status,
+                validation_message = excluded.validation_message,
+                validated_at = excluded.validated_at,
+                failure_count = 0,
                 updated_at = excluded.updated_at
             """,
             (
@@ -306,11 +377,18 @@ class AccountStore:
                 cookies_json,
                 1 if enabled else 0,
                 1 if expired else 0,
+                "PENDING",
+                "Account cookies were updated. Validation is pending.",
+                None,
                 now,
                 now,
             ),
         )
         self.conn.commit()
+        account = self.get_account_by_psid(secure_1psid)
+        if account is None:
+            raise RuntimeError("Failed to load saved account.")
+        return account
 
     def list_accounts(self, include_disabled: bool = True) -> list[Account]:
         where = "" if include_disabled else "WHERE enabled = 1 AND expired = 0"
@@ -323,6 +401,22 @@ class AccountStore:
         ).fetchone()
         return self._row_to_account(row) if row else None
 
+    def get_account_by_psid(self, secure_1psid: str) -> Account | None:
+        row = self.conn.execute(
+            "SELECT * FROM accounts WHERE secure_1psid = ?", (secure_1psid,)
+        ).fetchone()
+        return self._row_to_account(row) if row else None
+
+    def get_account_by_name_identity(self, name: str | None) -> Account | None:
+        keys = account_identity_keys(name)
+        if not keys:
+            return None
+        rows = self.conn.execute("SELECT * FROM accounts ORDER BY id").fetchall()
+        for row in rows:
+            if keys & account_identity_keys(row["name"]):
+                return self._row_to_account(row)
+        return None
+
     def get_active_accounts(self) -> list[Account]:
         return self.list_accounts(include_disabled=False)
 
@@ -330,6 +424,38 @@ class AccountStore:
         cursor = self.conn.execute(
             "UPDATE accounts SET enabled = ?, updated_at = ? WHERE id = ?",
             (1 if enabled else 0, utc_now(), account_id),
+        )
+        self.conn.commit()
+        return cursor.rowcount > 0
+
+    def set_account_validation(
+        self,
+        account_id: int,
+        *,
+        expired: bool,
+        status: str,
+        message: str | None = None,
+    ) -> bool:
+        cursor = self.conn.execute(
+            """
+            UPDATE accounts
+            SET expired = ?,
+                validation_status = ?,
+                validation_message = ?,
+                validated_at = ?,
+                failure_count = CASE WHEN ? = 0 THEN 0 ELSE failure_count END,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                1 if expired else 0,
+                status,
+                message,
+                utc_now(),
+                1 if expired else 0,
+                utc_now(),
+                account_id,
+            ),
         )
         self.conn.commit()
         return cursor.rowcount > 0
@@ -633,6 +759,9 @@ class AccountStore:
             usage_count=int(row["usage_count"]),
             failure_count=int(row["failure_count"]),
             last_used_at=row["last_used_at"],
+            validation_status=row["validation_status"],
+            validation_message=row["validation_message"],
+            validated_at=row["validated_at"],
         )
 
     def _row_to_request_log(self, row: sqlite3.Row) -> RequestLog:

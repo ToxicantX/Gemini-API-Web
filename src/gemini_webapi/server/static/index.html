@@ -433,6 +433,8 @@
               <div class="row">
                 <button id="importBtn">导入</button>
                 <button id="exportBtn">导出</button>
+                <button id="validateCurrentBtn">验证当前</button>
+                <button id="validateAllBtn">验证全部</button>
                 <button id="manualOpenBtn">手动添加</button>
                 <button id="authOpenBtn" class="primary">网页授权</button>
               </div>
@@ -618,16 +620,21 @@
       }
       const expiredText = current.expired ? "已过期，需要重新认证" : "认证状态正常";
       const enabledText = current.enabled ? "启用" : "停用";
-      $("currentAccountPanel").innerHTML = `当前账户 #${current.id} ${esc(current.name || "未命名")}，${enabledText}，${expiredText}。调用 ${current.usage_count} 次，失败 ${current.failure_count} 次${current.last_used_at ? `，最近 ${esc(fmt(current.last_used_at))}` : ""}。`;
+      const validation = current.validation_status ? `最近验证：${esc(current.validation_status)}${current.validated_at ? ` / ${esc(fmt(current.validated_at))}` : ""}` : "尚未验证";
+      $("currentAccountPanel").innerHTML = `当前账户 #${current.id} ${esc(current.name || "未命名")}，${enabledText}，${expiredText}。调用 ${current.usage_count} 次，失败 ${current.failure_count} 次${current.last_used_at ? `，最近 ${esc(fmt(current.last_used_at))}` : ""}。${validation}${current.validation_message ? `，${esc(current.validation_message)}` : ""}。`;
     }
     function renderAccounts(accounts) {
       $("accountList").innerHTML = accounts.length ? accounts.map(a => `
         <div class="account">
           <div class="account-top">
-            <div><div class="account-name">#${a.id} ${esc(a.name || "未命名账户")}</div><div class="hint">调用 ${a.usage_count} 次，失败 ${a.failure_count} 次${a.last_used_at ? `，最近 ${esc(fmt(a.last_used_at))}` : ""}</div></div>
-            <div class="row">${a.current ? `<span class="pill current">当前</span>` : ""}<span class="pill ${a.enabled ? "" : "off"}">${a.enabled ? "启用" : "停用"}</span></div>
+            <div>
+              <div class="account-name">#${a.id} ${esc(a.name || "未命名账户")}</div>
+              <div class="hint">调用 ${a.usage_count} 次，失败 ${a.failure_count} 次${a.last_used_at ? `，最近 ${esc(fmt(a.last_used_at))}` : ""}</div>
+              <div class="hint">${a.validation_status ? `验证 ${esc(a.validation_status)}${a.validated_at ? `，${esc(fmt(a.validated_at))}` : ""}` : "尚未验证"}${a.validation_message ? `，${esc(a.validation_message)}` : ""}</div>
+            </div>
+            <div class="row">${a.current ? `<span class="pill current">当前</span>` : ""}<span class="pill ${a.enabled ? "" : "off"}">${a.enabled ? "启用" : "停用"}</span><span class="pill ${a.expired ? "off" : "current"}">${a.expired ? "需认证" : "有效"}</span></div>
           </div>
-          <div class="row"><button data-action="use" data-id="${a.id}">设为当前</button><button data-action="toggle" data-id="${a.id}" data-enabled="${a.enabled}">${a.enabled ? "停用" : "启用"}</button><button class="danger" data-action="delete" data-id="${a.id}">删除</button></div>
+          <div class="row"><button data-action="use" data-id="${a.id}">设为当前</button><button data-action="validate" data-id="${a.id}">验证</button><button data-action="toggle" data-id="${a.id}" data-enabled="${a.enabled}">${a.enabled ? "停用" : "启用"}</button><button class="danger" data-action="delete" data-id="${a.id}">删除</button></div>
         </div>`).join("") : `<div class="hint">还没有账户。</div>`;
     }
     function renderLogs() {
@@ -810,20 +817,50 @@
     };
     $("importBtn").onclick = async () => { await api("/v1/accounts/import", { method: "POST", body: "{}" }); await refreshAll(); };
     $("exportBtn").onclick = async () => downloadJson(`gemini-accounts-${new Date().toISOString().slice(0, 10)}.json`, await api("/v1/accounts/export"));
+    $("validateCurrentBtn").onclick = async () => {
+      setMsg("正在验证当前账户...");
+      const data = await api("/v1/accounts/validate", { method: "POST", body: "{}" });
+      state.status.accounts = data.accounts || state.status.accounts;
+      renderAccounts(state.status.accounts);
+      renderCurrentAccount();
+      renderMetrics();
+      setMsg(data.validation.valid ? "当前账户验证通过" : `当前账户不可用：${data.validation.message}`);
+    };
+    $("validateAllBtn").onclick = async () => {
+      setMsg("正在验证全部账户...");
+      const data = await api("/v1/accounts/validate-all", { method: "POST", body: "{}" });
+      state.status.accounts = data.accounts || state.status.accounts;
+      renderAccounts(state.status.accounts);
+      renderCurrentAccount();
+      renderMetrics();
+      const invalid = (data.validations || []).filter(item => !item.valid).length;
+      setMsg(invalid ? `验证完成，${invalid} 个账户不可用` : "全部账户验证通过");
+    };
     $("manualAddBtn").onclick = async () => {
       const cookies = parseCookieJson($("manualCookies").value);
       const psid = $("manualPsid").value.trim() || cookies["__Secure-1PSID"];
       const psidts = $("manualPsidts").value.trim() || cookies["__Secure-1PSIDTS"] || null;
       if (!psid) return setMsg("缺少 __Secure-1PSID");
-      await api("/v1/accounts", { method: "POST", body: JSON.stringify({ name: $("manualName").value || null, "__Secure-1PSID": psid, "__Secure-1PSIDTS": psidts, cookies }) });
+      const data = await api("/v1/accounts", { method: "POST", body: JSON.stringify({ name: $("manualName").value || null, "__Secure-1PSID": psid, "__Secure-1PSIDTS": psidts, cookies }) });
       closeModal("manualModal");
       await refreshAll();
+      setMsg(data.validation.valid ? "账户已添加并验证通过" : `账户已添加，但验证失败：${data.validation.message}`);
     };
     $("accountList").onclick = async event => {
       const btn = event.target.closest("button[data-action]");
       if (!btn) return;
       const id = Number(btn.dataset.id);
       if (btn.dataset.action === "use") await api("/v1/accounts/switch", { method: "POST", body: JSON.stringify({ account_id: id }) });
+      if (btn.dataset.action === "validate") {
+        setMsg(`正在验证账户 #${id}...`);
+        const data = await api(`/v1/accounts/${id}/validate`, { method: "POST", body: "{}" });
+        state.status.accounts = data.accounts || state.status.accounts;
+        renderAccounts(state.status.accounts);
+        renderCurrentAccount();
+        renderMetrics();
+        setMsg(data.validation.valid ? `账户 #${id} 验证通过` : `账户 #${id} 不可用：${data.validation.message}`);
+        return;
+      }
       if (btn.dataset.action === "toggle") await api(`/v1/accounts/${id}`, { method: "PATCH", body: JSON.stringify({ enabled: btn.dataset.enabled !== "true" }) });
       if (btn.dataset.action === "delete" && confirm(`确认删除账户 #${id}？`)) await api(`/v1/accounts/${id}`, { method: "DELETE" });
       await refreshAll();
@@ -843,9 +880,10 @@
     $("reloadAuthBtn").onclick = () => api("/v1/auth/press", { method: "POST", body: JSON.stringify({ key: "F5" }) }).catch(e => setMsg(e.message));
     $("closeAuthBtn").onclick = async () => { await api("/v1/auth/session", { method: "DELETE" }); if (state.authWindow && !state.authWindow.closed) state.authWindow.close(); };
     $("authSaveConfirmBtn").onclick = async () => {
-      await api("/v1/auth/save", { method: "POST", body: JSON.stringify({ name: $("authSaveName").value || null }) });
+      const data = await api("/v1/auth/save", { method: "POST", body: JSON.stringify({ name: $("authSaveName").value || null }) });
       closeModal("authSaveModal");
       await refreshAll();
+      setMsg(data.validation.valid ? "授权 Cookie 已保存并验证通过" : `授权 Cookie 已保存，但验证失败：${data.validation.message}`);
     };
 
     refreshAll().catch(e => setMsg(e.message));

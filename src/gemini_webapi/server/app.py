@@ -6,6 +6,9 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import orjson as json
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ..constants import Model
@@ -134,6 +137,9 @@ class ChatCompletionRequest(BaseModel):
 MODEL_ALIASES = {
     "gemini": "gemini-3-pro",
     "gemini-3.1-pro": "gemini-3-pro",
+    "gemini-3-pro-preview": "gemini-3-pro",
+    "gemini-3.1-pro-preview": "gemini-3-pro",
+    "gemini-3-flash-preview": "gemini-3-flash",
 }
 
 
@@ -530,9 +536,6 @@ def _gem_dict(gem: Any) -> dict[str, Any]:
 
 
 def create_app(config: ServerConfig | None = None):
-    from fastapi import FastAPI, File, HTTPException, Request, UploadFile
-    from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
-    from fastapi.staticfiles import StaticFiles
     import httpx
     import orjson as json
     from pathlib import Path
@@ -589,11 +592,7 @@ def create_app(config: ServerConfig | None = None):
         if (
             config.api_keys
             and request.url.path.startswith("/v1/")
-            and not request.url.path.startswith("/v1/auth/")
-            and not request.url.path.startswith("/v1/accounts")
             and request.url.path != "/v1/status"
-            and request.url.path != "/v1/settings"
-            and request.url.path != "/v1/request-logs"
         ):
             auth = request.headers.get("authorization", "")
             token = auth.removeprefix("Bearer ").strip()
@@ -1164,14 +1163,19 @@ def create_app(config: ServerConfig | None = None):
         cookies["__Secure-1PSID"] = request.secure_1psid
         if request.secure_1psidts:
             cookies["__Secure-1PSIDTS"] = request.secure_1psidts
-        store.upsert_account(
+        account = store.upsert_account(
             name=request.name,
             secure_1psid=request.secure_1psid,
             secure_1psidts=request.secure_1psidts,
             cookies=cookies,
             enabled=request.enabled,
         )
-        return {"ok": True, "accounts": rotator.status()["accounts"]}
+        validation = await rotator.validate_account(account.id)
+        return {
+            "ok": True,
+            "validation": validation,
+            "accounts": rotator.status()["accounts"],
+        }
 
     @app.post("/v1/accounts/import")
     async def import_accounts() -> dict[str, Any]:
@@ -1204,6 +1208,27 @@ def create_app(config: ServerConfig | None = None):
         except Exception as exc:
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
         return {"ok": True, "current_account_id": account.id, "status": rotator.status()}
+
+    @app.post("/v1/accounts/validate")
+    async def validate_current_account() -> dict[str, Any]:
+        try:
+            result = await rotator.validate_account()
+        except Exception as exc:
+            raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
+        return {"ok": True, "validation": result, "accounts": rotator.status()["accounts"]}
+
+    @app.post("/v1/accounts/validate-all")
+    async def validate_all_accounts() -> dict[str, Any]:
+        results = await rotator.validate_accounts()
+        return {"ok": True, "validations": results, "accounts": rotator.status()["accounts"]}
+
+    @app.post("/v1/accounts/{account_id}/validate")
+    async def validate_account(account_id: int) -> dict[str, Any]:
+        try:
+            result = await rotator.validate_account(account_id)
+        except Exception as exc:
+            raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
+        return {"ok": True, "validation": result, "accounts": rotator.status()["accounts"]}
 
     @app.patch("/v1/accounts/{account_id}")
     async def update_account(
@@ -1266,9 +1291,10 @@ def create_app(config: ServerConfig | None = None):
     async def auth_save(request: AuthSaveRequest) -> dict[str, Any]:
         try:
             result = await auth_browser.save_account(name=request.name)
+            validation = await rotator.validate_account(result["account_id"])
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return {**result, "accounts": rotator.status()["accounts"]}
+        return {**result, "validation": validation, "accounts": rotator.status()["accounts"]}
 
     @app.post("/v1/generate")
     async def generate(request: GenerateRequest) -> dict[str, Any]:
