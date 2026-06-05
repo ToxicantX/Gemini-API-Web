@@ -680,6 +680,7 @@ gemini-webapi-server
 - 不要提交 `data/app.db`、`data/accounts.json`、`cookies.json` 或任何真实 Cookie。
 - 本项目通过 Gemini Web 的 Cookie 工作，不是 Google 官方 API Key 接口。
 - Google 可能调整 Gemini Web 页面结构，某些原生能力可能会受账号权限、地区、订阅状态或上游 SDK 适配影响。
+- 服务器或公网部署必须设置 `ADMIN_PASSWORD`，否则管理端和账户管理接口会保持开放；`/health` 会在未设置时返回告警。
 - 建议只在可信网络中暴露管理端，公网部署请自行加反向代理鉴权。
 
 ## 上游项目

@@ -1670,6 +1670,10 @@ def create_app(config: ServerConfig | None = None):
         status_data = rotator.status()
         accounts = status_data.get("accounts") or []
         warnings: list[str] = []
+        if not config.admin_password:
+            warnings.append(
+                "ADMIN_PASSWORD is not configured. The admin console and management APIs are open; set ADMIN_PASSWORD for server deployments."
+            )
         if (
             config.require_api_key
             and not config.api_keys

@@ -802,8 +802,31 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertTrue(health.json()["auth"]["api_key_required"])
             self.assertFalse(health.json()["auth"]["api_key_configured"])
             self.assertTrue(health.json()["warnings"])
-            self.assertIn("ADMIN_PASSWORD", health.json()["warnings"][0])
+            self.assertTrue(
+                any(
+                    "bootstrap external access" in warning
+                    for warning in health.json()["warnings"]
+                )
+            )
             self.assertEqual(blocked.status_code, 401)
+
+    def test_health_warns_when_admin_login_is_disabled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = create_app(self._config(tmp))
+            with TestClient(app) as client:
+                health = client.get("/health")
+                management = client.get("/v1/request-logs")
+
+            self.assertEqual(health.status_code, 200)
+            self.assertFalse(health.json()["auth"]["admin_enabled"])
+            self.assertTrue(health.json()["warnings"])
+            self.assertTrue(
+                any(
+                    "ADMIN_PASSWORD is not configured" in warning
+                    for warning in health.json()["warnings"]
+                )
+            )
+            self.assertEqual(management.status_code, 200)
 
     def test_health_warns_when_admin_login_does_not_protect_external_api(self):
         with tempfile.TemporaryDirectory() as tmp:
