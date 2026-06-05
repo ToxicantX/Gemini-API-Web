@@ -135,6 +135,7 @@ environment:
   GEMINI_AUTH_HEADLESS: "false"
   ADMIN_PASSWORD: ""
   ADMIN_SESSION_SECRET: ""
+  ADMIN_COOKIE_SECURE: "false"
   API_KEYS: ""
   CORS_ALLOW_ORIGINS: "*"
 ```
@@ -149,6 +150,7 @@ environment:
 - `GEMINI_AUTH_HEADLESS`：授权浏览器是否无头运行。需要 noVNC 登录时保持 `false`。
 - `ADMIN_PASSWORD`：管理员密码。为空时不启用管理端登录，适合本地自用；服务器部署建议设置。
 - `ADMIN_SESSION_SECRET`：管理员会话签名密钥。服务器部署建议设置为一段随机长字符串。
+- `ADMIN_COOKIE_SECURE`：管理员会话 Cookie 是否只允许 HTTPS 发送。直连本地 HTTP 保持 `false`；通过 HTTPS 域名反向代理部署时建议设为 `true`。
 - `API_KEYS`：外部调用鉴权密钥，多个值可用英文逗号分隔；也可以在管理端“系统设置”里生成和管理。
 - `CORS_ALLOW_ORIGINS`：允许浏览器跨域调用的来源，默认 `*`。公网部署时建议改成你的面板域名，多个来源用英文逗号分隔。
 
@@ -160,10 +162,10 @@ environment:
 ADMIN_PASSWORD=your-admin-password docker compose up -d --build
 ```
 
-也可以同时配置固定会话密钥和外部 API Key：
+也可以同时配置固定会话密钥、HTTPS 安全 Cookie 和外部 API Key：
 
 ```sh
-ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-secret API_KEYS=sk-your-external-key CORS_ALLOW_ORIGINS=https://your-panel.example.com docker compose up -d --build
+ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-secret ADMIN_COOKIE_SECURE=true API_KEYS=sk-your-external-key CORS_ALLOW_ORIGINS=https://your-panel.example.com docker compose up -d --build
 ```
 
 启用后：

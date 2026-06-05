@@ -800,12 +800,20 @@
       if (key && !headers.Authorization) headers.Authorization = `Bearer ${key}`;
       return headers;
     }
+    function requireAdminLogin(message = "管理员会话已过期，请重新登录。") {
+      state.adminReady = false;
+      $("logoutBtn").style.display = "none";
+      $("loginBackdrop").classList.add("open");
+      $("loginMessage").textContent = message;
+      $("adminPassword").focus();
+    }
     async function api(path, options = {}) {
       const headers = authHeaders({ "Content-Type": "application/json", ...(options.headers || {}) });
       const response = await fetch(path, { headers, ...options });
       if (!response.ok) {
         let detail = response.statusText;
         try { const data = await response.json(); detail = data.error?.message || data.detail || data.message || detail; } catch (_) {}
+        if (response.status === 401 && detail === "Admin login required.") requireAdminLogin();
         throw new Error(detail);
       }
       return response.json();
@@ -1262,6 +1270,12 @@
         const form = new FormData();
         form.append("file", file);
         const res = await fetch("/v1/gemini/files", { method: "POST", headers: authHeaders(), body: form });
+        if (res.status === 401) {
+          let detail = "管理员会话已过期，请重新登录。";
+          try { const data = await res.json(); detail = data.detail || data.error?.message || detail; } catch (_) {}
+          if (detail === "Admin login required.") requireAdminLogin();
+          throw new Error(detail);
+        }
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
         state[targetKey].push(data.file);
@@ -1349,6 +1363,13 @@
       try {
         $("nativeOutput").textContent = "";
         const res = await fetch("/v1/gemini/stream", { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(await nativePayload()) });
+        if (res.status === 401) {
+          let detail = "管理员会话已过期，请重新登录。";
+          try { const data = await res.json(); detail = data.detail || data.error?.message || detail; } catch (_) {}
+          if (detail === "Admin login required.") requireAdminLogin();
+          throw new Error(detail);
+        }
+        if (!res.ok) throw new Error(await res.text());
         const text = await res.text();
         $("nativeOutput").textContent = text;
         await refreshAll();

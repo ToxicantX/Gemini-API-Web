@@ -100,6 +100,12 @@ class ServerEndpointTests(unittest.TestCase):
             port=7860,
         )
 
+    def _assert_sse_headers(self, response) -> None:
+        # 流式接口在反向代理后面运行时，需要明确关闭缓冲，避免客户端迟迟收不到增量。
+        self.assertEqual(response.headers["cache-control"], "no-cache")
+        self.assertEqual(response.headers["connection"], "keep-alive")
+        self.assertEqual(response.headers["x-accel-buffering"], "no")
+
     def test_cors_preflight_supports_external_browser_clients(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)
@@ -486,6 +492,38 @@ class ServerEndpointTests(unittest.TestCase):
                 self.assertEqual(client.get("/v1/request-logs").status_code, 200)
                 self.assertEqual(client.post("/v1/admin/logout", json={}).status_code, 200)
 
+    def test_admin_login_can_set_secure_cookie_for_https_deployments(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+                admin_cookie_secure=True,
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                login = client.post(
+                    "/v1/admin/login",
+                    json={"password": "admin-pass"},
+                )
+
+            self.assertEqual(login.status_code, 200)
+            # 服务器 HTTPS 部署时允许强制 Secure Cookie，防止管理员会话在明文连接中发送。
+            self.assertIn("Secure", login.headers["set-cookie"])
+
     def test_admin_login_allows_native_external_api_key_paths(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)
@@ -736,6 +774,7 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertIn("approximately 16 tokens", calls[0][0])
             self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
             self.assertEqual(stream.status_code, 200)
+            self._assert_sse_headers(stream)
             self.assertIn('"object":"text_completion.chunk"', stream.text)
             self.assertIn('"text":"one "', stream.text)
             self.assertIn('"text":"two"', stream.text)
@@ -881,6 +920,7 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(len(calls[0][1]["files"]), 1)
             self.assertTrue(Path(calls[0][1]["files"][0]).is_file())
             self.assertEqual(stream.status_code, 200)
+            self._assert_sse_headers(stream)
             self.assertIn("data: [DONE]", stream.text)
             self.assertIn('"choices":[]', stream.text)
             self.assertIn('"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}', stream.text)
@@ -1039,6 +1079,7 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
             self.assertEqual(len(calls[0][1]["files"]), 1)
             self.assertEqual(stream.status_code, 200)
+            self._assert_sse_headers(stream)
             self.assertIn("event: response.created", stream.text)
             self.assertIn("event: response.output_text.delta", stream.text)
             self.assertIn('"delta":"one "', stream.text)
@@ -2151,6 +2192,64 @@ class ServerEndpointTests(unittest.TestCase):
                         self.assertIn(
                             expected_message, response.json()["error"]["message"]
                         )
+
+    def test_native_gemini_stream_uses_proxy_friendly_sse_headers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+
+            async def fake_init(self, *args, **kwargs):
+                self.client = FakeSession()
+                self.account_status = AccountStatus.AVAILABLE
+
+            async def fake_close(self):
+                self.client = None
+
+            async def fake_generate_content_stream(self, prompt, **kwargs):
+                yield ModelOutput(
+                    metadata=["cid", "rid"],
+                    candidates=[Candidate(rcid="rcid", text="", text_delta="hello")],
+                )
+
+            with (
+                patch.object(GeminiClient, "init", fake_init),
+                patch.object(GeminiClient, "close", fake_close),
+                patch.object(GeminiClient, "generate_content_stream", fake_generate_content_stream),
+                TestClient(app) as client,
+            ):
+                app.state.store.upsert_account(
+                    secure_1psid="psid-one",
+                    cookies={"__Secure-1PSID": "psid-one"},
+                    name="one",
+                )
+                response = client.post(
+                    "/v1/gemini/stream",
+                    headers={"Authorization": "Bearer sk-external"},
+                    json={"model": "gemini", "prompt": "stream"},
+                )
+
+            self.assertEqual(response.status_code, 200)
+            self._assert_sse_headers(response)
+            self.assertIn('"type":"delta"', response.text)
+            self.assertIn('"text_delta":"hello"', response.text)
+            self.assertIn("data: [DONE]", response.text)
 
 
 if __name__ == "__main__":

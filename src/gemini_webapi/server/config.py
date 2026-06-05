@@ -62,6 +62,7 @@ class ServerConfig:
     port: int
     admin_password: str | None = None
     admin_session_secret: str = ""
+    admin_cookie_secure: bool = False
     cors_allow_origins: tuple[str, ...] = ("*",)
 
     @classmethod
@@ -103,5 +104,8 @@ class ServerConfig:
             port=_env_int("PORT", 7860, minimum=1),
             admin_password=os.getenv("ADMIN_PASSWORD") or None,
             admin_session_secret=os.getenv("ADMIN_SESSION_SECRET", ""),
+            # HTTPS 反向代理部署时建议开启，浏览器会只在安全连接中发送管理员会话 Cookie。
+            admin_cookie_secure=os.getenv("ADMIN_COOKIE_SECURE", "false").lower()
+            in {"1", "true", "yes"},
             cors_allow_origins=_env_list("CORS_ALLOW_ORIGINS", ("*",)),
         )

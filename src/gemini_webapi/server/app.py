@@ -488,6 +488,19 @@ def _responses_stream_event(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data).decode()}\n\n"
 
 
+def _sse_response(event_stream: Any) -> StreamingResponse:
+    """统一 SSE 响应头，减少反向代理或浏览器客户端缓冲流式数据。"""
+    return StreamingResponse(
+        event_stream,
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 def _openai_image_generation_output(
     media_items: list[Any],
     *,
@@ -1581,7 +1594,7 @@ def create_app(config: ServerConfig | None = None):
             _admin_session_value(config),
             httponly=True,
             samesite="lax",
-            secure=False,
+            secure=config.admin_cookie_secure,
             max_age=7 * 24 * 60 * 60,
             path="/",
         )
@@ -2160,7 +2173,7 @@ def create_app(config: ServerConfig | None = None):
                 yield f"data: {json.dumps(final).decode()}\n\n"
             yield "data: [DONE]\n\n"
 
-        return StreamingResponse(event_stream(), media_type="text/event-stream")
+        return _sse_response(event_stream())
 
     @app.get("/v1/gemini/gems")
     async def list_gems(include_hidden: bool = False) -> dict[str, Any]:
@@ -2802,7 +2815,7 @@ def create_app(config: ServerConfig | None = None):
                 )
                 yield "data: [DONE]\n\n"
 
-            return StreamingResponse(event_stream(), media_type="text/event-stream")
+            return _sse_response(event_stream())
 
         async def operation(client):
             kwargs: dict[str, Any] = {}
@@ -3179,7 +3192,7 @@ def create_app(config: ServerConfig | None = None):
                     yield f"data: {json.dumps(usage).decode()}\n\n"
                 yield "data: [DONE]\n\n"
 
-            return StreamingResponse(event_stream(), media_type="text/event-stream")
+            return _sse_response(event_stream())
 
         async def operation(client):
             kwargs: dict[str, Any] = {}
@@ -3298,7 +3311,7 @@ def create_app(config: ServerConfig | None = None):
                     yield f"data: {json.dumps(usage).decode()}\n\n"
                 yield "data: [DONE]\n\n"
 
-            return StreamingResponse(event_stream(), media_type="text/event-stream")
+            return _sse_response(event_stream())
 
         async def operation(client):
             kwargs: dict[str, Any] = {}
