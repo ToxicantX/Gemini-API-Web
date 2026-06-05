@@ -1147,9 +1147,10 @@ def _external_api_path(path: str) -> bool:
 
 def _api_key_from_request(request: Request) -> str:
     """兼容常见外部客户端的鉴权头写法。"""
-    api_key = request.headers.get("x-api-key", "").strip()
-    if api_key:
-        return api_key
+    for header_name in ("x-api-key", "openai-api-key"):
+        api_key = request.headers.get(header_name, "").strip()
+        if api_key:
+            return api_key
     auth = request.headers.get("authorization", "").strip()
     scheme, _, token = auth.partition(" ")
     if scheme.lower() == "bearer" and token.strip():
