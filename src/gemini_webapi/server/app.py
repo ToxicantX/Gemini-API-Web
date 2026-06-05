@@ -2050,7 +2050,7 @@ def create_app(config: ServerConfig | None = None):
             ]
         }
 
-    @app.get("/v1/gemini/files")
+    @app.api_route("/v1/gemini/files", methods=["GET", "HEAD"])
     async def list_files(limit: int = 80) -> dict[str, Any]:
         return {"files": [_file_dict(item) for item in store.list_files(limit=limit)]}
 
@@ -2104,7 +2104,7 @@ def create_app(config: ServerConfig | None = None):
             "file": _file_dict(record),
         }
 
-    @app.get("/v1/files")
+    @app.api_route("/v1/files", methods=["GET", "HEAD"])
     async def openai_list_files(limit: int = 80) -> dict[str, Any]:
         return {
             "object": "list",
@@ -2123,7 +2123,7 @@ def create_app(config: ServerConfig | None = None):
         record = await _save_uploaded_file(file, purpose=purpose or "assistants")
         return _openai_file_object(record)
 
-    @app.get("/v1/files/{file_id}")
+    @app.api_route("/v1/files/{file_id}", methods=["GET", "HEAD"])
     async def openai_get_file(file_id: str) -> dict[str, Any]:
         record = store.get_file(file_id)
         if record is None:

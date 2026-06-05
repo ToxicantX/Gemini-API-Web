@@ -1855,6 +1855,18 @@ class ServerEndpointTests(unittest.TestCase):
                     f"/v1/files/{file_id}",
                     headers={"Authorization": "Bearer sk-external"},
                 )
+                listed_head = client.head(
+                    "/v1/files",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                fetched_head = client.head(
+                    f"/v1/files/{file_id}",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                native_head = client.head(
+                    "/v1/gemini/files",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
                 content = client.get(
                     f"/v1/files/{file_id}/content",
                     headers={"Authorization": "Bearer sk-external"},
@@ -1892,6 +1904,13 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(fetched.status_code, 200)
             self.assertEqual(fetched.json()["id"], file_id)
             self.assertEqual(fetched.json()["purpose"], "fine-tune")
+            # 部分外部客户端会用 HEAD 探测文件接口是否存在，应只返回状态和头部。
+            self.assertEqual(listed_head.status_code, 200)
+            self.assertEqual(fetched_head.status_code, 200)
+            self.assertEqual(native_head.status_code, 200)
+            self.assertFalse(listed_head.content)
+            self.assertFalse(fetched_head.content)
+            self.assertFalse(native_head.content)
             self.assertEqual(content.status_code, 200)
             self.assertEqual(content.content, b"hello")
             self.assertEqual(content_head.status_code, 200)
