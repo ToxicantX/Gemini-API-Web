@@ -50,6 +50,8 @@ http://localhost:7860
 http://localhost:7860/novnc/vnc.html?autoconnect=true&resize=scale&path=websockify
 ```
 
+出于安全考虑，`docker-compose.yml` 默认只映射管理端 `7860`。noVNC 的 `6080` 端口只在容器内部使用，并通过 `/novnc` 同源代理访问；服务器部署时不要把 `6080` 直接暴露到公网，否则会绕过管理端登录保护。
+
 默认数据目录是本机 `./data`，容器内映射为 `/app/data`。SQLite 数据库默认保存到：
 
 ```text

@@ -3,7 +3,6 @@ services:
     build: .
     ports:
       - "7860:7860"
-      - "6080:6080"
     volumes:
       - ./data:/app/data
     environment:
