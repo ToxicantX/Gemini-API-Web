@@ -2725,26 +2725,28 @@ def create_app(config: ServerConfig | None = None):
         return {**result, "validation": validation, "accounts": rotator.status()["accounts"]}
 
     @app.post("/v1/generate")
-    async def generate(request: GenerateRequest) -> dict[str, Any]:
+    async def generate(request: Request, payload: GenerateRequest) -> dict[str, Any]:
+        request_id = _request_id_from_request(request)
         try:
-            generation_mode = _generation_mode_arg(request.mode)
-            resolved_model = _resolve_model_arg(request.model)
+            generation_mode = _generation_mode_arg(payload.mode)
+            resolved_model = _resolve_model_arg(payload.model)
 
             async def operation(client):
-                kwargs: dict[str, Any] = {"temporary": request.temporary}
+                kwargs: dict[str, Any] = {"temporary": payload.temporary}
                 if resolved_model:
                     kwargs["model"] = resolved_model
                 if generation_mode:
                     kwargs["generation_mode"] = generation_mode
-                output = await client.generate_content(request.prompt, **kwargs)
+                output = await client.generate_content(payload.prompt, **kwargs)
                 _ensure_media_generation_result(output, generation_mode)
                 return output
 
             output = await rotator.run(
                 operation,
                 endpoint="/v1/generate",
-                model=request.model or "gemini",
-                output_type=f"gemini_{request.mode or 'native'}",
+                model=payload.model or "gemini",
+                output_type=f"gemini_{payload.mode or 'native'}",
+                job_id=request_id,
                 require_video_generation=generation_mode == "video",
                 media_generation_mode=generation_mode,
             )
@@ -2757,22 +2759,23 @@ def create_app(config: ServerConfig | None = None):
         }
 
     @app.post("/v1/responses")
-    async def responses(request: ResponsesRequest) -> dict[str, Any]:
+    async def responses(request: Request, payload: ResponsesRequest) -> dict[str, Any]:
+        request_id = _request_id_from_request(request)
         try:
-            response_messages = _responses_messages(request)
-            prompt = _responses_prompt(request)
+            response_messages = _responses_messages(payload)
+            prompt = _responses_prompt(payload)
             files = _file_paths(_messages_file_ids(response_messages))
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if not prompt:
             raise HTTPException(status_code=400, detail="input must contain text.")
-        model = request.model or "gemini"
+        model = payload.model or "gemini"
         try:
-            resolved_model = _resolve_model_arg(request.model)
+            resolved_model = _resolve_model_arg(payload.model)
         except Exception as exc:
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
 
-        if request.stream:
+        if payload.stream:
             response_id = f"resp_{uuid.uuid4().hex}"
             output_id = f"msg_{uuid.uuid4().hex}"
             content_id = f"out_{uuid.uuid4().hex}"
@@ -2837,6 +2840,7 @@ def create_app(config: ServerConfig | None = None):
                         operation,
                         endpoint="/v1/responses",
                         model=model,
+                        job_id=request_id,
                     ):
                         delta = output.text_delta or ""
                         if not delta:
@@ -2939,6 +2943,7 @@ def create_app(config: ServerConfig | None = None):
                 operation,
                 endpoint="/v1/responses",
                 model=model,
+                job_id=request_id,
             )
         except Exception as exc:
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
@@ -3067,6 +3072,7 @@ def create_app(config: ServerConfig | None = None):
         response_format: str | None,
         language: str | None,
         temperature: float | None,
+        request_id: str | None = None,
     ) -> Response | dict[str, Any]:
         allowed_formats = {"json", "text", "verbose_json", "srt", "vtt"}
         if response_format and response_format not in allowed_formats:
@@ -3107,6 +3113,7 @@ def create_app(config: ServerConfig | None = None):
                     endpoint=endpoint,
                     model=model or "gemini",
                     output_type=output_type,
+                    job_id=request_id,
                 )
             except Exception as exc:
                 raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
@@ -3138,6 +3145,7 @@ def create_app(config: ServerConfig | None = None):
 
     @app.post("/v1/audio/transcriptions", response_model=None)
     async def audio_transcriptions(
+        request: Request,
         file: UploadFile = File(...),
         model: str | None = Form(None),
         prompt: str | None = Form(None),
@@ -3156,10 +3164,12 @@ def create_app(config: ServerConfig | None = None):
             response_format=response_format,
             language=language,
             temperature=temperature,
+            request_id=_request_id_from_request(request),
         )
 
     @app.post("/v1/audio/translations", response_model=None)
     async def audio_translations(
+        request: Request,
         file: UploadFile = File(...),
         model: str | None = Form(None),
         prompt: str | None = Form(None),
@@ -3178,6 +3188,7 @@ def create_app(config: ServerConfig | None = None):
             response_format=response_format,
             language=language,
             temperature=temperature,
+            request_id=_request_id_from_request(request),
         )
 
     @app.post("/v1/images/edits")
@@ -3233,25 +3244,26 @@ def create_app(config: ServerConfig | None = None):
             await _cleanup_temporary_upload_inputs(variation_dir, paths)
 
     @app.post("/v1/completions")
-    async def completions(request: CompletionRequest):
-        if request.n is not None and request.n < 1:
+    async def completions(request: Request, payload: CompletionRequest):
+        request_id = _request_id_from_request(request)
+        if payload.n is not None and payload.n < 1:
             raise HTTPException(status_code=400, detail="n must be at least 1.")
-        if request.n and request.n > 1:
+        if payload.n and payload.n > 1:
             raise HTTPException(status_code=400, detail="Only n=1 is supported.")
-        prompt_value = request.prompt[0] if isinstance(request.prompt, list) else request.prompt
+        prompt_value = payload.prompt[0] if isinstance(payload.prompt, list) else payload.prompt
         if not isinstance(prompt_value, str) or not prompt_value:
             raise HTTPException(status_code=400, detail="prompt must contain text.")
         prompt = prompt_value
-        if request.suffix:
-            prompt = f"{prompt}\n{request.suffix}"
-        prompt = _append_completion_token_limit_instruction(prompt, request)
-        model = request.model or "gemini"
+        if payload.suffix:
+            prompt = f"{prompt}\n{payload.suffix}"
+        prompt = _append_completion_token_limit_instruction(prompt, payload)
+        model = payload.model or "gemini"
         try:
-            resolved_model = _resolve_model_arg(request.model)
+            resolved_model = _resolve_model_arg(payload.model)
         except Exception as exc:
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
 
-        if request.stream:
+        if payload.stream:
             completion_id = f"cmpl-{uuid.uuid4().hex}"
 
             async def event_stream():
@@ -3270,6 +3282,7 @@ def create_app(config: ServerConfig | None = None):
                         operation,
                         endpoint="/v1/completions",
                         model=model,
+                        job_id=request_id,
                     ):
                         delta = output.text_delta or ""
                         if not delta:
@@ -3277,7 +3290,7 @@ def create_app(config: ServerConfig | None = None):
                         next_text = f"{emitted_text}{delta}"
                         truncated, stopped_by_sequence = _apply_stop_sequences(
                             next_text,
-                            request.stop,
+                            payload.stop,
                         )
                         send_delta = truncated[len(emitted_text) :]
                         emitted_text = truncated
@@ -3298,7 +3311,7 @@ def create_app(config: ServerConfig | None = None):
                     finish_reason="stop",
                 )
                 yield f"data: {json.dumps(final).decode()}\n\n"
-                if _stream_include_usage(request.stream_options):
+                if _stream_include_usage(payload.stream_options):
                     usage = _completion_usage_chunk(completion_id, model)
                     yield f"data: {json.dumps(usage).decode()}\n\n"
                 yield "data: [DONE]\n\n"
@@ -3316,10 +3329,11 @@ def create_app(config: ServerConfig | None = None):
                 operation,
                 endpoint="/v1/completions",
                 model=model,
+                job_id=request_id,
             )
         except Exception as exc:
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
-        text, _ = _apply_stop_sequences(output.text, request.stop)
+        text, _ = _apply_stop_sequences(output.text, payload.stop)
         return {
             "id": f"cmpl-{uuid.uuid4().hex}",
             "object": "text_completion",
@@ -3336,27 +3350,28 @@ def create_app(config: ServerConfig | None = None):
         }
 
     @app.post("/v1/chat/completions")
-    async def chat_completions(request: ChatCompletionRequest):
+    async def chat_completions(request: Request, payload: ChatCompletionRequest):
+        request_id = _request_id_from_request(request)
         try:
-            files = _file_paths(_messages_file_ids(request.messages))
+            files = _file_paths(_messages_file_ids(payload.messages))
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        prompt = _messages_to_prompt(request.messages)
+        prompt = _messages_to_prompt(payload.messages)
         if not prompt:
             raise HTTPException(status_code=400, detail="messages must contain text.")
-        prompt = _append_tool_instructions(prompt, request)
+        prompt = _append_tool_instructions(prompt, payload)
         try:
-            prompt = _append_response_format_instructions(prompt, request)
+            prompt = _append_response_format_instructions(prompt, payload)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        prompt = _append_chat_token_limit_instruction(prompt, request)
-        model = request.model or "gemini"
+        prompt = _append_chat_token_limit_instruction(prompt, payload)
+        model = payload.model or "gemini"
         try:
-            resolved_model = _resolve_model_arg(request.model)
+            resolved_model = _resolve_model_arg(payload.model)
         except Exception as exc:
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
 
-        if request.stream:
+        if payload.stream:
             completion_id = f"chatcmpl-{uuid.uuid4().hex}"
 
             async def event_stream():
@@ -3380,16 +3395,17 @@ def create_app(config: ServerConfig | None = None):
                         operation,
                         endpoint="/v1/chat/completions",
                         model=model,
+                        job_id=request_id,
                     ):
                         delta = output.text_delta or ""
                         if delta:
-                            if _tools_enabled(request):
+                            if _tools_enabled(payload):
                                 buffered_text.append(delta)
                                 continue
                             next_text = f"{emitted_text}{delta}"
                             truncated, stopped_by_sequence = _apply_stop_sequences(
                                 next_text,
-                                request.stop,
+                                payload.stop,
                             )
                             send_delta = truncated[len(emitted_text) :]
                             emitted_text = truncated
@@ -3405,9 +3421,9 @@ def create_app(config: ServerConfig | None = None):
                     return
 
                 finish_reason = "stop"
-                if _tools_enabled(request):
+                if _tools_enabled(payload):
                     text = "".join(buffered_text)
-                    tool_calls = _tool_calls_from_output_text(text, request.tools)
+                    tool_calls = _tool_calls_from_output_text(text, payload.tools)
                     if tool_calls:
                         tool_chunk = _chat_tool_calls_chunk(completion_id, model, tool_calls)
                         yield f"data: {json.dumps(tool_chunk).decode()}\n\n"
@@ -3417,7 +3433,7 @@ def create_app(config: ServerConfig | None = None):
                         yield f"data: {json.dumps(chunk).decode()}\n\n"
                 final = _chat_chunk(completion_id, model, finish_reason=finish_reason)
                 yield f"data: {json.dumps(final).decode()}\n\n"
-                if _stream_include_usage(request.stream_options):
+                if _stream_include_usage(payload.stream_options):
                     usage = _chat_usage_chunk(completion_id, model)
                     yield f"data: {json.dumps(usage).decode()}\n\n"
                 yield "data: [DONE]\n\n"
@@ -3437,19 +3453,20 @@ def create_app(config: ServerConfig | None = None):
                 operation,
                 endpoint="/v1/chat/completions",
                 model=model,
+                job_id=request_id,
             )
         except Exception as exc:
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
 
         created = int(time.time())
         tool_calls = (
-            _tool_calls_from_output_text(output.text, request.tools)
-            if _tools_enabled(request)
+            _tool_calls_from_output_text(output.text, payload.tools)
+            if _tools_enabled(payload)
             else []
         )
         content_text = output.text
         if not tool_calls:
-            content_text, _ = _apply_stop_sequences(content_text, request.stop)
+            content_text, _ = _apply_stop_sequences(content_text, payload.stop)
         message: dict[str, Any] = {"role": "assistant", "content": content_text}
         finish_reason = "stop"
         if tool_calls:

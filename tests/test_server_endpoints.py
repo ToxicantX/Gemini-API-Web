@@ -313,6 +313,111 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(unauthenticated.status_code, 401)
             self.assertTrue(unauthenticated.headers["x-request-id"].startswith("req-"))
 
+    def test_openai_request_logs_correlate_with_response_request_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+
+            async def fake_init(self, *args, **kwargs):
+                self.client = FakeSession()
+                self.account_status = AccountStatus.AVAILABLE
+
+            async def fake_close(self):
+                self.client = None
+
+            async def fake_generate_content(self, prompt, **kwargs):
+                return ModelOutput(
+                    metadata=["cid", "rid"],
+                    candidates=[Candidate(rcid="rcid", text="ok")],
+                )
+
+            async def fake_generate_content_stream(self, prompt, **kwargs):
+                yield ModelOutput(
+                    metadata=["cid", "rid"],
+                    candidates=[Candidate(rcid="rcid", text="", text_delta="ok")],
+                )
+
+            with (
+                patch.object(GeminiClient, "init", fake_init),
+                patch.object(GeminiClient, "close", fake_close),
+                patch.object(GeminiClient, "generate_content", fake_generate_content),
+                patch.object(GeminiClient, "generate_content_stream", fake_generate_content_stream),
+                TestClient(app) as client,
+            ):
+                app.state.store.upsert_account(
+                    secure_1psid="psid-one",
+                    cookies={"__Secure-1PSID": "psid-one"},
+                    name="one",
+                )
+                # 请求号需要同时出现在响应头和持久化日志中，方便外部客户端按同一个 id 排障。
+                chat = client.post(
+                    "/v1/chat/completions",
+                    headers={
+                        "Authorization": "Bearer sk-external",
+                        "X-Request-ID": "client-chat-1",
+                    },
+                    json={
+                        "model": "gemini",
+                        "messages": [{"role": "user", "content": "hello"}],
+                    },
+                )
+                generated = client.post(
+                    "/v1/responses",
+                    headers={"Authorization": "Bearer sk-external"},
+                    json={"model": "gemini", "input": "hello"},
+                )
+                stream = client.post(
+                    "/v1/chat/completions",
+                    headers={
+                        "Authorization": "Bearer sk-external",
+                        "X-Request-ID": "client-chat-stream-1",
+                    },
+                    json={
+                        "model": "gemini",
+                        "stream": True,
+                        "messages": [{"role": "user", "content": "hello"}],
+                    },
+                )
+                logs = app.state.store.list_request_logs(limit=20)
+
+            self.assertEqual(chat.status_code, 200)
+            self.assertEqual(chat.headers["x-request-id"], "client-chat-1")
+            self.assertEqual(stream.status_code, 200)
+            self.assertEqual(stream.headers["x-request-id"], "client-chat-stream-1")
+            self.assertEqual(generated.status_code, 200)
+            generated_request_id = generated.headers["x-request-id"]
+            self.assertTrue(generated_request_id.startswith("req-"))
+
+            by_job_id = {log.job_id: log for log in logs}
+            self.assertEqual(
+                by_job_id["client-chat-1"].endpoint,
+                "/v1/chat/completions",
+            )
+            self.assertFalse(by_job_id["client-chat-1"].stream)
+            self.assertEqual(
+                by_job_id["client-chat-stream-1"].endpoint,
+                "/v1/chat/completions",
+            )
+            self.assertTrue(by_job_id["client-chat-stream-1"].stream)
+            self.assertEqual(by_job_id[generated_request_id].endpoint, "/v1/responses")
+
     def test_parse_candidate_falls_back_to_nested_video_urls(self):
         client = GeminiClient()
         candidate_data = [
