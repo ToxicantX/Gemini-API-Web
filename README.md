@@ -217,6 +217,8 @@ curl http://localhost:7860/v1/chat/completions \
 
 `response_format` 支持 OpenAI 常用的 `json_object` 和 `json_schema`。服务端会把 JSON 输出要求追加到 Gemini 提示词中，模型最终输出仍以原始文本返回给 OpenAI 兼容客户端。
 
+Chat Completions 中的 `system` 和新式 `developer` 角色都会作为 Gemini 的系统指令写入提示词；`tool` 角色会作为工具结果写入上下文。
+
 多模态消息中的 `image_url` 会被保留为图片链接提示，适合外部 OpenAI 兼容客户端传入图片 URL：
 
 ```sh

@@ -296,7 +296,7 @@ def _messages_to_prompt(messages: list[ChatMessage]) -> str:
     for message in messages:
         text = _message_content_to_text(message.content)
         role = message.role.lower()
-        if role == "system":
+        if role in {"system", "developer"}:
             if not text:
                 continue
             prompt_parts.append(f"System: {text}")

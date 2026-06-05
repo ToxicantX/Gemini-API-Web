@@ -92,6 +92,18 @@ class ServerToolCallTests(unittest.TestCase):
         self.assertEqual(data["output_text"], "hello")
         self.assertEqual(data["output"][0]["content"][0]["type"], "output_text")
 
+    def test_messages_treat_developer_role_as_system_instruction(self):
+        prompt = _messages_to_prompt(
+            [
+                ChatMessage(role="developer", content="始终返回简洁答案"),
+                ChatMessage(role="user", content="你好"),
+            ]
+        )
+
+        self.assertIn("System: 始终返回简洁答案", prompt)
+        self.assertIn("User: 你好", prompt)
+        self.assertNotIn("User: 始终返回简洁答案", prompt)
+
     def test_messages_include_multimodal_image_urls(self):
         prompt = _messages_to_prompt(
             [
