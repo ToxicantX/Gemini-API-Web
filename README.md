@@ -357,7 +357,7 @@ curl http://localhost:7860/v1/images/generations \
   }'
 ```
 
-`/v1/images/generations` 会调用 Gemini 图片生成模式，并返回本服务的媒体代理链接；当前仅支持 URL 返回，不支持 `response_format=b64_json`。返回的图片 URL 是随机 token 的内容下载地址，外部客户端展示图片时无需再次携带 API Key。
+`/v1/images/generations` 会调用 Gemini 图片生成模式，并返回本服务的媒体代理链接；支持 `response_format=url` 和 `response_format=b64_json`。URL 返回值是随机 token 的内容下载地址，外部客户端展示图片时无需再次携带 API Key；`b64_json` 会在生成后读取图片内容并返回 base64。
 
 OpenAI 兼容图片编辑：
 

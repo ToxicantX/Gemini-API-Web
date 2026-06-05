@@ -338,7 +338,7 @@ class ServerEndpointTests(unittest.TestCase):
                 patch.object(GeminiClient, "init", fake_init),
                 patch.object(GeminiClient, "close", fake_close),
                 patch.object(GeminiClient, "generate_content", fake_generate_content),
-                patch("gemini_webapi.server.app.AsyncSession", FakeAsyncMediaSession),
+                patch("gemini_webapi.server.app.httpx.Client", FakeMediaHTTPClient),
                 TestClient(app) as client,
             ):
                 app.state.store.upsert_account(
@@ -1246,7 +1246,7 @@ class ServerEndpointTests(unittest.TestCase):
                 patch.object(GeminiClient, "init", fake_init),
                 patch.object(GeminiClient, "close", fake_close),
                 patch.object(GeminiClient, "generate_content", fake_generate_content),
-                patch("gemini_webapi.server.app.AsyncSession", FakeAsyncMediaSession),
+                patch("gemini_webapi.server.app.httpx.Client", FakeMediaHTTPClient),
                 TestClient(app) as client,
             ):
                 app.state.store.upsert_account(
@@ -1273,7 +1273,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/gemini/media",
                     headers={"Authorization": "Bearer sk-external"},
                 )
-                unsupported = client.post(
+                base64_response = client.post(
                     "/v1/images/generations",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
@@ -1295,7 +1295,11 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(media_list_with_key.status_code, 200)
             self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
             self.assertEqual(calls[0][1]["generation_mode"], "image")
-            self.assertEqual(unsupported.status_code, 400)
+            self.assertEqual(base64_response.status_code, 200)
+            self.assertEqual(
+                base64_response.json()["data"][0]["b64_json"],
+                "aW1hZ2UtYnl0ZXM=",
+            )
             self.assertTrue(
                 any(
                     log.endpoint == "/v1/images/generations"
@@ -1357,7 +1361,7 @@ class ServerEndpointTests(unittest.TestCase):
                 patch.object(GeminiClient, "init", fake_init),
                 patch.object(GeminiClient, "close", fake_close),
                 patch.object(GeminiClient, "generate_content", fake_generate_content),
-                patch("gemini_webapi.server.app.AsyncSession", FakeAsyncMediaSession),
+                patch("gemini_webapi.server.app.httpx.Client", FakeMediaHTTPClient),
                 TestClient(app) as client,
             ):
                 app.state.store.upsert_account(
@@ -1379,7 +1383,7 @@ class ServerEndpointTests(unittest.TestCase):
                     },
                     files={"image": ("source.png", b"png-bytes", "image/png")},
                 )
-                unsupported = client.post(
+                base64_response = client.post(
                     "/v1/images/edits",
                     headers={"Authorization": "Bearer sk-external"},
                     data={
@@ -1398,7 +1402,11 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(calls[0][1]["generation_mode"], "image")
             self.assertEqual(len(calls[0][1]["files"]), 1)
             self.assertFalse(Path(calls[0][1]["files"][0]).exists())
-            self.assertEqual(unsupported.status_code, 400)
+            self.assertEqual(base64_response.status_code, 200)
+            self.assertEqual(
+                base64_response.json()["data"][0]["b64_json"],
+                "aW1hZ2UtYnl0ZXM=",
+            )
             self.assertTrue(
                 any(
                     log.endpoint == "/v1/images/edits"
@@ -1460,7 +1468,7 @@ class ServerEndpointTests(unittest.TestCase):
                 patch.object(GeminiClient, "init", fake_init),
                 patch.object(GeminiClient, "close", fake_close),
                 patch.object(GeminiClient, "generate_content", fake_generate_content),
-                patch("gemini_webapi.server.app.AsyncSession", FakeAsyncMediaSession),
+                patch("gemini_webapi.server.app.httpx.Client", FakeMediaHTTPClient),
                 TestClient(app) as client,
             ):
                 app.state.store.upsert_account(
@@ -1479,7 +1487,7 @@ class ServerEndpointTests(unittest.TestCase):
                     data={"model": "gemini-3.1-pro"},
                     files={"image": ("source.png", b"png-bytes", "image/png")},
                 )
-                unsupported = client.post(
+                base64_response = client.post(
                     "/v1/images/variations",
                     headers={"Authorization": "Bearer sk-external"},
                     data={"response_format": "b64_json"},
@@ -1495,7 +1503,11 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(calls[0][1]["generation_mode"], "image")
             self.assertEqual(len(calls[0][1]["files"]), 1)
             self.assertFalse(Path(calls[0][1]["files"][0]).exists())
-            self.assertEqual(unsupported.status_code, 400)
+            self.assertEqual(base64_response.status_code, 200)
+            self.assertEqual(
+                base64_response.json()["data"][0]["b64_json"],
+                "aW1hZ2UtYnl0ZXM=",
+            )
             self.assertTrue(
                 any(
                     log.endpoint == "/v1/images/variations"

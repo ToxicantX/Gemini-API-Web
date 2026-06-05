@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import mimetypes
 import asyncio
+import base64
 import hashlib
 import hmac
 import secrets
@@ -15,7 +16,6 @@ from urllib.parse import urlparse
 import orjson as json
 import websockets
 import httpx
-from curl_cffi.requests import AsyncSession
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
@@ -479,14 +479,26 @@ def _openai_image_generation_output(
     media_items: list[Any],
     *,
     revised_prompt: str | None = None,
+    response_format: str | None = None,
+    media_content_loader: Any | None = None,
 ) -> dict[str, Any]:
     data: list[dict[str, Any]] = []
     for item in media_items:
         media = _media_record_dict(item)
-        url = media.get("content_url") or media.get("url")
-        if not url:
-            continue
-        row: dict[str, Any] = {"url": url}
+        if response_format == "b64_json":
+            if media_content_loader is None:
+                continue
+            content = media_content_loader(item)
+            if not content:
+                continue
+            row: dict[str, Any] = {
+                "b64_json": base64.b64encode(content).decode("ascii"),
+            }
+        else:
+            url = media.get("content_url") or media.get("url")
+            if not url:
+                continue
+            row = {"url": url}
         if revised_prompt:
             row["revised_prompt"] = revised_prompt
         data.append(row)
@@ -1623,24 +1635,22 @@ def create_app(config: ServerConfig | None = None):
             ]
         }
 
-    @app.get("/v1/gemini/media/{media_token}/content")
-    async def gemini_media_content(media_token: str) -> Response:
-        item = store.get_media_output_by_token(media_token)
-        if item is None:
-            raise HTTPException(status_code=404, detail="Media not found.")
+    def _media_content_bytes(item: Any) -> tuple[bytes, str]:
+        """读取媒体内容；优先读本地缓存，缺失时按允许域名和账号 Cookie 拉取原始链接。"""
         if item.local_path:
             local_path = Path(item.local_path)
             if local_path.is_file():
-                return FileResponse(
-                    local_path,
-                    media_type=item.local_content_type or "application/octet-stream",
+                return (
+                    local_path.read_bytes(),
+                    item.local_content_type or "application/octet-stream",
                 )
         if not _media_host_allowed(item.url):
             raise HTTPException(status_code=400, detail="Media host is not allowed.")
         account = store.get_account(item.account_id) if item.account_id else None
         cookies = account.cookies if account else None
-        async with AsyncSession(timeout=120) as client:
-            response = await client.get(item.url, allow_redirects=True, cookies=cookies)
+        with httpx.Client(timeout=120, follow_redirects=True, cookies=cookies) as client:
+            response = client.get(item.url)
+            response.raise_for_status()
         content_type = response.headers.get("content-type") or "application/octet-stream"
         if not _media_content_type_allowed(item.kind, content_type):
             raise HTTPException(
@@ -1650,6 +1660,14 @@ def create_app(config: ServerConfig | None = None):
         content = response.content
         if len(content) > MEDIA_CONTENT_MAX_BYTES:
             raise HTTPException(status_code=413, detail="Media file is too large.")
+        return content, content_type
+
+    @app.get("/v1/gemini/media/{media_token}/content")
+    async def gemini_media_content(media_token: str) -> Response:
+        item = store.get_media_output_by_token(media_token)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Media not found.")
+        content, content_type = _media_content_bytes(item)
         return Response(
             content=content,
             media_type=content_type,
@@ -2742,10 +2760,11 @@ def create_app(config: ServerConfig | None = None):
         store_media: bool,
         files: list[str] | None = None,
     ) -> dict[str, Any]:
-        if response_format and response_format != "url":
+        response_format = response_format or "url"
+        if response_format not in {"url", "b64_json"}:
             raise HTTPException(
                 status_code=400,
-                detail=f"Only response_format=url is supported for {endpoint}.",
+                detail=f"response_format must be one of: url, b64_json for {endpoint}.",
             )
         if n is not None and n < 1:
             raise HTTPException(status_code=400, detail="n must be at least 1.")
@@ -2791,7 +2810,12 @@ def create_app(config: ServerConfig | None = None):
         ]
         if not media_items:
             raise HTTPException(status_code=502, detail="Image generation did not return a usable image URL.")
-        return _openai_image_generation_output(media_items, revised_prompt=prompt)
+        return _openai_image_generation_output(
+            media_items,
+            revised_prompt=prompt,
+            response_format=response_format,
+            media_content_loader=lambda item: _media_content_bytes(item)[0],
+        )
 
     @app.post("/v1/images/generations")
     async def image_generations(request: ImageGenerationRequest) -> dict[str, Any]:

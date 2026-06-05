@@ -86,6 +86,23 @@ class ServerModelTests(unittest.TestCase):
         self.assertEqual(data["data"][0]["url"], "/v1/gemini/media/tok-1/content")
         self.assertEqual(data["data"][0]["revised_prompt"], "make image")
 
+    def test_openai_image_generation_output_can_return_b64_json(self):
+        class MediaRecord:
+            token = "tok-1"
+            url = "https://lh3.googleusercontent.com/image.png"
+            kind = "image"
+            request_id = "img-1"
+
+        data = _openai_image_generation_output(
+            [MediaRecord()],
+            revised_prompt="make image",
+            response_format="b64_json",
+            media_content_loader=lambda item: b"image-bytes",
+        )
+
+        self.assertEqual(data["data"][0]["b64_json"], "aW1hZ2UtYnl0ZXM=")
+        self.assertEqual(data["data"][0]["revised_prompt"], "make image")
+
     def test_only_media_content_path_is_public(self):
         self.assertTrue(_public_media_content_path("/v1/gemini/media/token-1/content"))
         self.assertFalse(_public_media_content_path("/v1/gemini/media"))
