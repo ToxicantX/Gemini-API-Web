@@ -712,6 +712,7 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 response = client.post(
                     "/v1/gemini/generate",
+                    headers={"X-Request-ID": "client-native-image-1"},
                     json={
                         "prompt": "make image",
                         "model": "gemini-3.5-flash",
@@ -719,9 +720,12 @@ class ServerEndpointTests(unittest.TestCase):
                     },
                 )
                 logs = app.state.store.list_request_logs(limit=10)
+                media_records = app.state.store.list_media_outputs(limit=10, kind="image")
 
             self.assertEqual(response.status_code, 200)
             self.assertTrue(response.json()["ok"])
+            self.assertEqual(response.headers["x-request-id"], "client-native-image-1")
+            self.assertEqual(response.json()["request_id"], "client-native-image-1")
             self.assertEqual(response.json()["media_count"], 1)
             self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
             self.assertEqual(calls[0][1]["generation_mode"], "image")
@@ -730,8 +734,16 @@ class ServerEndpointTests(unittest.TestCase):
             )
             self.assertTrue(
                 any(
-                    log.output_type == "gemini_image" and log.media_count == 1
+                    log.job_id == "client-native-image-1"
+                    and log.output_type == "gemini_image"
+                    and log.media_count == 1
                     for log in logs
+                )
+            )
+            self.assertTrue(
+                any(
+                    item.request_id == "client-native-image-1"
+                    for item in media_records
                 )
             )
 
@@ -2966,15 +2978,29 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 response = client.post(
                     "/v1/gemini/stream",
-                    headers={"Authorization": "Bearer sk-external"},
+                    headers={
+                        "Authorization": "Bearer sk-external",
+                        "X-Request-ID": "client-native-stream-1",
+                    },
                     json={"model": "gemini", "prompt": "stream"},
                 )
+                logs = app.state.store.list_request_logs(limit=10)
 
             self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers["x-request-id"], "client-native-stream-1")
             self._assert_sse_headers(response)
             self.assertIn('"type":"delta"', response.text)
             self.assertIn('"text_delta":"hello"', response.text)
+            self.assertIn('"request_id":"client-native-stream-1"', response.text)
             self.assertIn("data: [DONE]", response.text)
+            self.assertTrue(
+                any(
+                    log.job_id == "client-native-stream-1"
+                    and log.endpoint == "/v1/gemini/stream"
+                    and log.stream
+                    for log in logs
+                )
+            )
 
 
 if __name__ == "__main__":

@@ -2303,8 +2303,11 @@ def create_app(config: ServerConfig | None = None):
         return count
 
     @app.post("/v1/gemini/generate")
-    async def gemini_generate(request: GeminiGenerateRequest) -> dict[str, Any]:
-        request_id = f"req-{uuid.uuid4().hex}"
+    async def gemini_generate(
+        http_request: Request,
+        request: GeminiGenerateRequest,
+    ) -> dict[str, Any]:
+        request_id = _request_id_from_request(http_request)
         try:
             generation_mode = _generation_mode_arg(request.mode)
             resolved_model = _resolve_model_arg(request.model)
@@ -2380,8 +2383,11 @@ def create_app(config: ServerConfig | None = None):
         }
 
     @app.post("/v1/gemini/stream")
-    async def gemini_stream(request: GeminiGenerateRequest):
-        request_id = f"req-{uuid.uuid4().hex}"
+    async def gemini_stream(
+        http_request: Request,
+        request: GeminiGenerateRequest,
+    ):
+        request_id = _request_id_from_request(http_request)
         try:
             generation_mode = _generation_mode_arg(request.mode)
             resolved_model = _resolve_model_arg(request.model)
