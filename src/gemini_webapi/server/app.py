@@ -1498,6 +1498,9 @@ def create_app(config: ServerConfig | None = None):
         # 管理端登录只保护控制台和管理接口；OpenAI 兼容接口仍由外部 API Key 鉴权。
         admin_public_paths = {
             "/health",
+            "/healthz",
+            "/readyz",
+            "/livez",
             "/v1/admin/status",
             "/v1/admin/login",
             "/static",
@@ -1666,8 +1669,8 @@ def create_app(config: ServerConfig | None = None):
     async def console() -> FileResponse:
         return FileResponse(static_dir / "index.html")
 
-    @app.get("/health")
-    async def health() -> dict[str, Any]:
+    def _health_payload() -> dict[str, Any]:
+        # 探活接口只返回部署排障需要的非敏感摘要，不暴露 Cookie、API Key 或账号明文。
         system_settings = _merge_system_settings(
             store.get_json_state(SYSTEM_SETTINGS_KEY, DEFAULT_SYSTEM_SETTINGS)
         )
@@ -1722,6 +1725,13 @@ def create_app(config: ServerConfig | None = None):
             },
             "warnings": warnings,
         }
+
+    @app.api_route("/health", methods=["GET", "HEAD"])
+    @app.api_route("/healthz", methods=["GET", "HEAD"])
+    @app.api_route("/readyz", methods=["GET", "HEAD"])
+    @app.api_route("/livez", methods=["GET", "HEAD"])
+    async def health() -> dict[str, Any]:
+        return _health_payload()
 
     @app.get("/v1/admin/status")
     async def admin_status(request: Request) -> dict[str, Any]:

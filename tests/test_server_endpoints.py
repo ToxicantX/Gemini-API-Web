@@ -175,8 +175,14 @@ class ServerEndpointTests(unittest.TestCase):
                     name="one",
                 )
                 response = client.get("/health")
+                healthz = client.get("/healthz")
+                readyz = client.head("/readyz")
+                livez = client.head("/livez")
 
             self.assertEqual(response.status_code, 200)
+            self.assertEqual(healthz.status_code, 200)
+            self.assertEqual(readyz.status_code, 200)
+            self.assertEqual(livez.status_code, 200)
             data = response.json()
             self.assertTrue(data["ok"])
             self.assertEqual(data["version"], "0.1.0")
@@ -188,6 +194,7 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertTrue(data["auth"]["api_key_configured"])
             self.assertEqual(data["warnings"], [])
             self.assertNotIn("psid-one", response.text)
+            self.assertFalse(readyz.text)
 
     def test_body_validation_errors_are_openai_compatible(self):
         with tempfile.TemporaryDirectory() as tmp:

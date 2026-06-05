@@ -93,7 +93,7 @@ docker compose ps
 curl http://localhost:7860/health
 ```
 
-`/health` 不需要管理员登录或 API Key，只返回非敏感摘要，适合反向代理和监控系统探活。
+`/health` 不需要管理员登录或 API Key，只返回非敏感摘要，适合反向代理和监控系统探活。为兼容常见部署平台，也支持 `GET/HEAD /healthz`、`GET/HEAD /readyz` 和 `GET/HEAD /livez`。
 
 ## 添加账号
 
@@ -616,6 +616,9 @@ curl http://localhost:7860/v1/gemini/stream \
 常用状态和管理接口：
 
 - `GET /health`
+- `GET/HEAD /healthz`
+- `GET/HEAD /readyz`
+- `GET/HEAD /livez`
 - `GET /v1/status`
 - `GET /v1/media-cooldowns`
 - `POST /v1/media-cooldowns/clear`
@@ -638,7 +641,7 @@ curl http://localhost:7860/v1/gemini/stream \
 
 账号列表和当前账号状态通过 `GET /v1/status` 返回。
 
-`GET /health` 不需要管理员登录或 API Key，适合 Docker、反向代理和监控系统探活。它只返回非敏感摘要，包括服务版本、公开模型列表、账号总数/可用数、当前账号 id、是否启用管理员登录以及外部 API Key 是否必需，不会返回 Cookie 或 API Key 明文。
+`GET /health` 不需要管理员登录或 API Key，适合 Docker、反向代理和监控系统探活。它只返回非敏感摘要，包括服务版本、公开模型列表、账号总数/可用数、当前账号 id、是否启用管理员登录以及外部 API Key 是否必需，不会返回 Cookie 或 API Key 明文。`/healthz`、`/readyz`、`/livez` 是同样内容的兼容别名，并支持 `HEAD` 探测。
 
 ## 持久化数据
 
