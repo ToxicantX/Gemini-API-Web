@@ -24,6 +24,20 @@
 docker compose up -d --build
 ```
 
+服务器部署建议先复制环境变量模板并修改其中的管理员密码、会话密钥和外部 API Key：
+
+```sh
+cp .env.example .env
+docker compose up -d --build
+```
+
+Windows PowerShell：
+
+```powershell
+Copy-Item .env.example .env
+docker compose up -d --build
+```
+
 访问管理端：
 
 ```text
@@ -109,7 +123,7 @@ cp data/accounts.example.json data/accounts.json
 
 ## 配置
 
-`docker-compose.yml` 中可调整：
+`.env` 或 `docker-compose.yml` 中可调整：
 
 ```yaml
 environment:
