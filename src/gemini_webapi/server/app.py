@@ -1286,6 +1286,7 @@ def create_app(config: ServerConfig | None = None):
                 "/v1/chat/completions",
                 "/v1/responses",
                 "/v1/audio/transcriptions",
+                "/v1/audio/translations",
                 "/v1/images/generations",
                 "/v1/images/edits",
                 "/v1/images/variations",
@@ -2802,23 +2803,28 @@ def create_app(config: ServerConfig | None = None):
         except OSError:
             pass
 
-    @app.post("/v1/audio/transcriptions", response_model=None)
-    async def audio_transcriptions(
-        file: UploadFile = File(...),
-        model: str | None = Form(None),
-        prompt: str | None = Form(None),
-        response_format: str | None = Form(None),
-        language: str | None = Form(None),
-        temperature: float | None = Form(None),
+    async def _run_openai_audio_request(
+        *,
+        endpoint: str,
+        output_type: str,
+        task: str,
+        base_instruction: str,
+        file: UploadFile,
+        model: str | None,
+        prompt: str | None,
+        response_format: str | None,
+        language: str | None,
+        temperature: float | None,
     ) -> Response | dict[str, Any]:
         if response_format and response_format not in {"json", "text", "verbose_json"}:
             raise HTTPException(
                 status_code=400,
                 detail="response_format must be one of: json, text, verbose_json.",
             )
+        prefix = "audio-translations" if task == "translate" else "audio-transcriptions"
         audio_dir, paths = await _save_temporary_upload_inputs(
             [file],
-            prefix="audio-transcriptions",
+            prefix=prefix,
         )
         try:
             try:
@@ -2826,7 +2832,7 @@ def create_app(config: ServerConfig | None = None):
             except Exception as exc:
                 raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
             instructions = [
-                "请转写上传的音频文件，只返回转写文本。",
+                base_instruction,
             ]
             if language:
                 instructions.append(f"音频语言提示：{language}。")
@@ -2845,9 +2851,9 @@ def create_app(config: ServerConfig | None = None):
             try:
                 output = await rotator.run(
                     operation,
-                    endpoint="/v1/audio/transcriptions",
+                    endpoint=endpoint,
                     model=model or "gemini",
-                    output_type="audio_transcription",
+                    output_type=output_type,
                 )
             except Exception as exc:
                 raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
@@ -2857,7 +2863,7 @@ def create_app(config: ServerConfig | None = None):
                 return Response(content=text, media_type="text/plain; charset=utf-8")
             if response_format == "verbose_json":
                 return {
-                    "task": "transcribe",
+                    "task": task,
                     "language": language,
                     "duration": None,
                     "text": text,
@@ -2866,6 +2872,50 @@ def create_app(config: ServerConfig | None = None):
             return {"text": text}
         finally:
             await _cleanup_temporary_upload_inputs(audio_dir, paths)
+
+    @app.post("/v1/audio/transcriptions", response_model=None)
+    async def audio_transcriptions(
+        file: UploadFile = File(...),
+        model: str | None = Form(None),
+        prompt: str | None = Form(None),
+        response_format: str | None = Form(None),
+        language: str | None = Form(None),
+        temperature: float | None = Form(None),
+    ) -> Response | dict[str, Any]:
+        return await _run_openai_audio_request(
+            endpoint="/v1/audio/transcriptions",
+            output_type="audio_transcription",
+            task="transcribe",
+            base_instruction="请转写上传的音频文件，只返回转写文本。",
+            file=file,
+            model=model,
+            prompt=prompt,
+            response_format=response_format,
+            language=language,
+            temperature=temperature,
+        )
+
+    @app.post("/v1/audio/translations", response_model=None)
+    async def audio_translations(
+        file: UploadFile = File(...),
+        model: str | None = Form(None),
+        prompt: str | None = Form(None),
+        response_format: str | None = Form(None),
+        language: str | None = Form(None),
+        temperature: float | None = Form(None),
+    ) -> Response | dict[str, Any]:
+        return await _run_openai_audio_request(
+            endpoint="/v1/audio/translations",
+            output_type="audio_translation",
+            task="translate",
+            base_instruction="请将上传音频中的内容翻译成英文，只返回英文翻译文本。",
+            file=file,
+            model=model,
+            prompt=prompt,
+            response_format=response_format,
+            language=language,
+            temperature=temperature,
+        )
 
     @app.post("/v1/images/edits")
     async def image_edits(
