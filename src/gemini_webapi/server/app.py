@@ -210,6 +210,7 @@ class ChatCompletionRequest(BaseModel):
     stream: bool = False
     temperature: float | None = None
     max_tokens: int | None = None
+    max_completion_tokens: int | None = None
     top_p: float | None = None
     n: int | None = None
     stop: str | list[str] | None = None
@@ -549,6 +550,20 @@ def _append_response_format_instructions(prompt: str, request: ChatCompletionReq
         lines.append("The response must follow this JSON schema:")
         lines.append(json.dumps(response_format.json_schema).decode())
     return f"{prompt}\n\nSystem: {' '.join(lines)}"
+
+
+def _append_chat_token_limit_instruction(prompt: str, request: ChatCompletionRequest) -> str:
+    # Gemini Web 没有稳定的 max_tokens 入参，这里通过系统提示兼容 OpenAI 客户端的长度约束。
+    limit = request.max_completion_tokens or request.max_tokens
+    if limit is None:
+        return prompt
+    try:
+        value = int(limit)
+    except Exception:
+        return prompt
+    if value <= 0:
+        return prompt
+    return f"{prompt}\n\nSystem: Keep the assistant response within approximately {value} tokens."
 
 
 def _stop_sequences(stop: str | list[str] | None) -> list[str]:
@@ -2804,6 +2819,7 @@ def create_app(config: ServerConfig | None = None):
             prompt = _append_response_format_instructions(prompt, request)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        prompt = _append_chat_token_limit_instruction(prompt, request)
         model = request.model or "gemini"
         try:
             resolved_model = _resolve_model_arg(request.model)

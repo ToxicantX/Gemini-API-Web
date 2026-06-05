@@ -584,6 +584,7 @@ class ServerEndpointTests(unittest.TestCase):
                     json={
                         "model": "gemini",
                         "stop": "<END>",
+                        "max_completion_tokens": 32,
                         "response_format": {"type": "json_object"},
                         "messages": [
                             {
@@ -638,6 +639,7 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["choices"][0]["message"]["content"], '{"ok":true}')
             self.assertIn("JSON response mode is enabled.", calls[0][0])
+            self.assertIn("approximately 32 tokens", calls[0][0])
             self.assertIn("Attached file:", calls[0][0])
             self.assertEqual(len(calls[0][1]["files"]), 1)
             self.assertTrue(Path(calls[0][1]["files"][0]).is_file())

@@ -4,6 +4,7 @@ from gemini_webapi.server.app import (
     ChatCompletionRequest,
     ChatMessage,
     ResponsesRequest,
+    _append_chat_token_limit_instruction,
     _append_response_format_instructions,
     _append_tool_instructions,
     _apply_stop_sequences,
@@ -185,6 +186,18 @@ class ServerToolCallTests(unittest.TestCase):
 
         self.assertIn("JSON response mode is enabled.", prompt)
         self.assertIn('"required":["ok"]', prompt)
+
+    def test_chat_request_accepts_max_completion_tokens_alias(self):
+        request = ChatCompletionRequest.model_validate(
+            {
+                "messages": [{"role": "user", "content": "短回答"}],
+                "max_completion_tokens": 32,
+            }
+        )
+        prompt = _append_chat_token_limit_instruction("User: hi", request)
+
+        self.assertEqual(request.max_completion_tokens, 32)
+        self.assertIn("approximately 32 tokens", prompt)
 
     def test_apply_stop_sequences_truncates_at_earliest_match(self):
         self.assertEqual(
