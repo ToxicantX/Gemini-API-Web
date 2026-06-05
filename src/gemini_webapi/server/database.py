@@ -123,6 +123,7 @@ class GeminiFileRecord:
     content_type: str | None
     path: str
     size: int
+    purpose: str
     created_at: str
 
 
@@ -241,6 +242,7 @@ class AccountStore:
                 content_type TEXT,
                 path TEXT NOT NULL,
                 size INTEGER NOT NULL,
+                purpose TEXT NOT NULL DEFAULT 'assistants',
                 created_at TEXT NOT NULL
             );
             """
@@ -252,6 +254,7 @@ class AccountStore:
         self._ensure_column("media_outputs", "local_path", "TEXT")
         self._ensure_column("media_outputs", "local_content_type", "TEXT")
         self._ensure_column("media_outputs", "local_size", "INTEGER")
+        self._ensure_column("gemini_files", "purpose", "TEXT NOT NULL DEFAULT 'assistants'")
         self._ensure_media_tokens()
         self._backfill_request_log_media_counts()
         self.conn.commit()
@@ -933,13 +936,14 @@ class AccountStore:
         content_type: str | None,
         path: str,
         size: int,
+        purpose: str = "assistants",
     ) -> None:
         self.conn.execute(
             """
-            INSERT INTO gemini_files (id, filename, content_type, path, size, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO gemini_files (id, filename, content_type, path, size, purpose, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (file_id, filename, content_type, path, size, utc_now()),
+            (file_id, filename, content_type, path, size, purpose or "assistants", utc_now()),
         )
         self.conn.commit()
 
@@ -1058,5 +1062,6 @@ class AccountStore:
             content_type=row["content_type"],
             path=row["path"],
             size=int(row["size"]),
+            purpose=row["purpose"] or "assistants",
             created_at=row["created_at"],
         )

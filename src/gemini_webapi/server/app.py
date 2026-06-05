@@ -1465,7 +1465,7 @@ def _openai_file_object(file_record: Any) -> dict[str, Any]:
         "bytes": file_record.size,
         "created_at": created_at,
         "filename": file_record.filename,
-        "purpose": "assistants",
+        "purpose": getattr(file_record, "purpose", None) or "assistants",
         "status": "processed",
     }
 
@@ -2069,7 +2069,7 @@ def create_app(config: ServerConfig | None = None):
             },
         }
 
-    async def _save_uploaded_file(file: UploadFile) -> Any:
+    async def _save_uploaded_file(file: UploadFile, purpose: str = "assistants") -> Any:
         # 上传文件统一落到 data/uploads，OpenAI 兼容和 Gemini 原生接口共享同一个 file_id。
         file_id = f"file-{uuid.uuid4().hex}"
         upload_dir = Path(config.database_path).resolve().parent / "uploads"
@@ -2085,6 +2085,7 @@ def create_app(config: ServerConfig | None = None):
             content_type=file.content_type,
             path=str(dest),
             size=len(data),
+            purpose=purpose or "assistants",
         )
         return store.get_file(file_id)
 
@@ -2109,9 +2110,10 @@ def create_app(config: ServerConfig | None = None):
     @app.post("/v1/files")
     async def openai_upload_file(
         file: UploadFile = File(...),
-        purpose: str | None = None,
+        purpose: str = Form("assistants"),
     ) -> dict[str, Any]:
-        record = await _save_uploaded_file(file)
+        # OpenAI 兼容客户端会回看 purpose 字段，这里保留调用方传入的用途。
+        record = await _save_uploaded_file(file, purpose=purpose or "assistants")
         return _openai_file_object(record)
 
     @app.get("/v1/files/{file_id}")

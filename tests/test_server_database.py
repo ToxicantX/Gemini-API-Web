@@ -62,8 +62,9 @@ class TestAccountStore(unittest.TestCase):
                     content_type="text/plain",
                     path=str(Path(tmp) / "demo.txt"),
                     size=4,
+                    purpose="fine-tune",
                 )
-                self.assertIsNotNone(store.get_file("file-test"))
+                self.assertEqual(store.get_file("file-test").purpose, "fine-tune")
                 self.assertTrue(store.delete_file("file-test"))
                 self.assertIsNone(store.get_file("file-test"))
                 self.assertFalse(store.delete_file("file-test"))
@@ -239,6 +240,7 @@ class TestAccountStore(unittest.TestCase):
                     size=3,
                 )
                 self.assertEqual(store.get_file("file-1").filename, "a.txt")
+                self.assertEqual(store.get_file("file-1").purpose, "assistants")
             finally:
                 store.close()
 

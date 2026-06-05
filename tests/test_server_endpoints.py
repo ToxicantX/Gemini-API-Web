@@ -1796,8 +1796,10 @@ class ServerEndpointTests(unittest.TestCase):
                 upload = client.post(
                     "/v1/files",
                     headers={"Authorization": "Bearer sk-external"},
-                    files={"file": ("demo.txt", b"hello", "text/plain")},
-                    data={"purpose": "assistants"},
+                    files={
+                        "file": ("demo.txt", b"hello", "text/plain"),
+                        "purpose": (None, "fine-tune"),
+                    },
                 )
                 file_id = upload.json()["id"]
                 record = app.state.store.get_file(file_id)
@@ -1832,13 +1834,17 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(upload.json()["object"], "file")
             self.assertEqual(upload.json()["filename"], "demo.txt")
             self.assertEqual(upload.json()["bytes"], 5)
+            self.assertEqual(upload.json()["purpose"], "fine-tune")
             self.assertIsNotNone(record)
+            self.assertEqual(record.purpose, "fine-tune")
             self.assertTrue(file_exists_before_delete)
             self.assertEqual(listed.status_code, 200)
             self.assertEqual(listed.json()["object"], "list")
             self.assertEqual(listed.json()["data"][0]["id"], file_id)
+            self.assertEqual(listed.json()["data"][0]["purpose"], "fine-tune")
             self.assertEqual(fetched.status_code, 200)
             self.assertEqual(fetched.json()["id"], file_id)
+            self.assertEqual(fetched.json()["purpose"], "fine-tune")
             self.assertEqual(content.status_code, 200)
             self.assertEqual(content.content, b"hello")
             self.assertEqual(native.status_code, 200)
