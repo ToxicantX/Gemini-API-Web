@@ -1086,6 +1086,49 @@ class ServerEndpointTests(unittest.TestCase):
             # 服务器 HTTPS 部署时允许强制 Secure Cookie，防止管理员会话在明文连接中发送。
             self.assertIn("Secure", login.headers["set-cookie"])
 
+    def test_admin_status_and_logout_clear_session_cookie(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                status_before = client.get("/v1/admin/status")
+                login = client.post(
+                    "/v1/admin/login",
+                    json={"password": "admin-pass"},
+                )
+                status_after = client.get("/v1/admin/status")
+                logout = client.post("/v1/admin/logout", json={})
+                protected = client.get("/v1/request-logs")
+
+            self.assertEqual(status_before.status_code, 200)
+            self.assertTrue(status_before.json()["enabled"])
+            self.assertFalse(status_before.json()["authenticated"])
+            self.assertEqual(login.status_code, 200)
+            self.assertTrue(status_after.json()["authenticated"])
+            self.assertEqual(logout.status_code, 200)
+            # 登出必须让后续管理接口重新要求登录，避免服务器会话残留。
+            self.assertIn("gemini_admin_session", logout.headers["set-cookie"])
+            self.assertIn("Max-Age=0", logout.headers["set-cookie"])
+            self.assertEqual(protected.status_code, 401)
+            self.assertEqual(protected.json()["detail"], "Admin login required.")
+
     def test_admin_login_allows_native_external_api_key_paths(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)

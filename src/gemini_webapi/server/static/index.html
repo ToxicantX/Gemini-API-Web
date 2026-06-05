@@ -882,12 +882,24 @@
     function closeModal(id) { $(id).classList.remove("open"); }
     function noVncUrl() { return `${window.location.origin}/novnc/vnc.html?autoconnect=true&resize=scale&path=websockify`; }
     async function checkAdmin() {
-      const response = await fetch("/v1/admin/status");
-      const data = await response.json();
-      state.adminReady = !data.enabled || data.authenticated;
-      $("logoutBtn").style.display = data.enabled && data.authenticated ? "" : "none";
-      $("loginBackdrop").classList.toggle("open", data.enabled && !data.authenticated);
-      return data;
+      try {
+        const response = await fetch("/v1/admin/status");
+        const data = await response.json();
+        state.adminReady = !data.enabled || data.authenticated;
+        $("logoutBtn").style.display = data.enabled && data.authenticated ? "" : "none";
+        $("loginBackdrop").classList.toggle("open", data.enabled && !data.authenticated);
+        if (data.enabled && !data.authenticated) {
+          $("loginMessage").textContent = "请输入管理员密码。";
+        }
+        return data;
+      } catch (error) {
+        // 管理端状态接口异常时保守停在登录层，避免公网部署时露出可操作界面。
+        state.adminReady = false;
+        $("logoutBtn").style.display = "none";
+        $("loginBackdrop").classList.add("open");
+        $("loginMessage").textContent = `无法确认管理员会话：${error.message}`;
+        return { enabled: true, authenticated: false };
+      }
     }
     async function boot() {
       const admin = await checkAdmin();

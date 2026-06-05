@@ -1875,7 +1875,14 @@ def create_app(config: ServerConfig | None = None):
     @app.post("/v1/admin/logout")
     async def admin_logout() -> Response:
         response = JSONResponse({"ok": True})
-        response.delete_cookie("gemini_admin_session", path="/")
+        # 删除 Cookie 时保持和登录写入一致的安全属性，避免 HTTPS 反代下浏览器残留旧会话。
+        response.delete_cookie(
+            "gemini_admin_session",
+            path="/",
+            secure=config.admin_cookie_secure,
+            httponly=True,
+            samesite="lax",
+        )
         return response
 
     @app.get("/v1/status")
