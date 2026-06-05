@@ -838,7 +838,10 @@ def _openai_model_object(model_id: str, created: int | None = None) -> dict[str,
 def _resolve_model_arg(model: str | None) -> str | None:
     if not model:
         return None
-    model_key = model.lower()
+    # 外部客户端配置模型名时偶尔会带大小写或首尾空白，这里做轻量归一化但不兼容旧模型映射。
+    model_key = model.strip().lower()
+    if not model_key:
+        return None
     if model_key == "unspecified":
         return None
     if model_key in REMOVED_MODEL_IDS:

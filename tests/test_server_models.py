@@ -31,16 +31,21 @@ class ServerModelTests(unittest.TestCase):
 
     def test_resolves_only_current_public_models(self):
         self.assertEqual(_resolve_model_arg("gemini"), "gemini-3.1-pro")
+        self.assertEqual(_resolve_model_arg(" GEMINI "), "gemini-3.1-pro")
         self.assertEqual(_resolve_model_arg("gemini-3.1-pro"), "gemini-3.1-pro")
+        self.assertEqual(_resolve_model_arg(" Gemini-3.1-Pro "), "gemini-3.1-pro")
         self.assertEqual(_resolve_model_arg("gemini-3.5-flash"), "gemini-3.5-flash")
         self.assertEqual(
             _resolve_model_arg("gemini-3.1-flash-lite"),
             "gemini-3.1-flash-lite",
         )
+        self.assertIsNone(_resolve_model_arg(" unspecified "))
+        self.assertIsNone(_resolve_model_arg("   "))
 
     def test_removed_old_models_are_rejected(self):
         for model in (
             "gemini-3-pro",
+            " GEMINI-3-PRO ",
             "gemini-3-pro-preview",
             "gemini-3.1-pro-preview",
             "gemini-3-flash",
