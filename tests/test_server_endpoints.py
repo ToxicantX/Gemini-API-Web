@@ -306,6 +306,14 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/models",
                     headers={"Authorization": "Bearer sk-external"},
                 )
+                rootless = client.get(
+                    "/models",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                rootless_detail = client.get(
+                    "/models/GEMINI",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
                 echoed = client.get(
                     "/v1/models",
                     headers={
@@ -314,12 +322,24 @@ class ServerEndpointTests(unittest.TestCase):
                     },
                 )
                 unauthenticated = client.get("/v1/models")
+                rootless_unauthenticated = client.get("/models")
+                rootless_head = client.head(
+                    "/models",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
 
             self.assertEqual(generated.status_code, 200)
+            self.assertEqual(rootless.status_code, 200)
+            self.assertEqual(rootless.json()["data"], generated.json()["data"])
+            self.assertEqual(rootless_detail.status_code, 200)
+            self.assertEqual(rootless_detail.json()["id"], "gemini-3.1-pro")
             self.assertTrue(generated.headers["x-request-id"].startswith("req-"))
             self.assertEqual(echoed.status_code, 200)
             self.assertEqual(echoed.headers["x-request-id"], "client-request-1")
             self.assertEqual(unauthenticated.status_code, 401)
+            self.assertEqual(rootless_unauthenticated.status_code, 401)
+            self.assertEqual(rootless_head.status_code, 200)
+            self.assertFalse(rootless_head.text)
             self.assertTrue(unauthenticated.headers["x-request-id"].startswith("req-"))
 
     def test_v1_root_is_api_key_protected_capability_summary(self):

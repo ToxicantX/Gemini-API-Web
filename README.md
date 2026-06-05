@@ -201,6 +201,8 @@ ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-se
 
 以下示例按服务器部署推荐配置编写，统一带 `Authorization: Bearer sk-your-external-key`。如果本地调试未开启 `REQUIRE_API_KEY` 且没有配置任何 API Key，可以临时省略该请求头。
 
+外部 OpenAI 兼容客户端的 `base_url` 推荐填写 `http://host:7860/v1`。如果客户端误填成根地址，本服务也提供只读兼容入口 `GET/HEAD /models` 和 `GET /models/{model_id}`，但聊天、图片、文件等业务接口仍使用 `/v1/...` 路径。
+
 列出模型：
 
 ```sh

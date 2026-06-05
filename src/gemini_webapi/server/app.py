@@ -1118,6 +1118,7 @@ def _external_api_path(path: str) -> bool:
     if _public_media_content_path(path):
         return True
     exact_paths = {
+        "/models",
         "/v1",
         "/v1/",
         "/v1/models",
@@ -1144,6 +1145,7 @@ def _external_api_path(path: str) -> bool:
         return True
     if path.startswith(
         (
+            "/models/",
             "/v1/models/",
             "/v1/files/",
             "/v1/gemini/gems/",
@@ -1555,7 +1557,11 @@ def create_app(config: ServerConfig | None = None):
         allowed_api_keys = set(config.api_keys) | set(system_settings["api_keys"])
         if (
             (allowed_api_keys or config.require_api_key)
-            and (path in {"/v1", "/v1/"} or path.startswith("/v1/"))
+            and (
+                path in {"/v1", "/v1/", "/models"}
+                or path.startswith("/v1/")
+                or path.startswith("/models/")
+            )
             and path not in {
                 "/v1/status",
                 "/v1/admin/status",
@@ -2637,6 +2643,7 @@ def create_app(config: ServerConfig | None = None):
         )
         return {"ok": True, "job": _job_dict(store.get_job(request.job_id)), "result": result_data}
 
+    @app.api_route("/models", methods=["GET", "HEAD"])
     @app.api_route("/v1/models", methods=["GET", "HEAD"])
     async def models() -> dict[str, Any]:
         now = int(time.time())
@@ -2645,6 +2652,7 @@ def create_app(config: ServerConfig | None = None):
             "data": [_openai_model_object(model_id, now) for model_id in _openai_model_ids()],
         }
 
+    @app.get("/models/{model_id}")
     @app.get("/v1/models/{model_id}")
     async def model_detail(model_id: str) -> dict[str, Any]:
         try:
