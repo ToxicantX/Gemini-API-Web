@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from gemini_webapi.constants import AccountStatus
 from gemini_webapi.client import GeminiClient
@@ -474,6 +475,43 @@ class ServerEndpointTests(unittest.TestCase):
                 self.assertTrue(login.cookies.get("gemini_admin_session"))
                 self.assertEqual(client.get("/v1/request-logs").status_code, 200)
                 self.assertEqual(client.post("/v1/admin/logout", json={}).status_code, 200)
+
+    def test_admin_login_guards_novnc_websocket(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                with self.assertRaises(WebSocketDisconnect) as raised:
+                    with client.websocket_connect("/novnc/websockify"):
+                        pass
+                self.assertEqual(raised.exception.code, 1008)
+
+                login = client.post(
+                    "/v1/admin/login",
+                    json={"password": "admin-pass"},
+                )
+                self.assertEqual(login.status_code, 200)
+                with patch("websockets.connect", side_effect=RuntimeError("stop")) as connect:
+                    with client.websocket_connect("/novnc/websockify"):
+                        pass
+                connect.assert_called_once_with("ws://127.0.0.1:6080/websockify")
 
     def test_model_detail_endpoint_is_openai_compatible(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -149,6 +149,30 @@ class ServerToolCallTests(unittest.TestCase):
         self.assertIn("Attached file: file-two", prompt)
         self.assertEqual(_messages_file_ids(messages), ["file-one", "file-two"])
 
+    def test_messages_include_audio_references_and_collect_file_ids(self):
+        messages = [
+            ChatMessage(
+                role="user",
+                content=[
+                    {"type": "input_text", "text": "转写这段音频"},
+                    {
+                        "type": "input_audio",
+                        "input_audio": {"file_id": "file-audio"},
+                    },
+                    {
+                        "type": "input_audio",
+                        "input_audio": {"url": "https://example.com/audio.mp3"},
+                    },
+                    {"type": "input_audio", "file_id": "file-audio"},
+                ],
+            )
+        ]
+        prompt = _messages_to_prompt(messages)
+
+        self.assertIn("Attached audio file: file-audio", prompt)
+        self.assertIn("Audio URL: https://example.com/audio.mp3", prompt)
+        self.assertEqual(_messages_file_ids(messages), ["file-audio"])
+
     def test_chat_request_accepts_openai_tools(self):
         request = ChatCompletionRequest.model_validate(
             {

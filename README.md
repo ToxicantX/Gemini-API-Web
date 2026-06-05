@@ -170,6 +170,7 @@ ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-se
 
 - `http://localhost:7860` 会显示管理员登录页。
 - 控制台和管理接口需要管理员 Cookie。
+- 网页授权使用的 noVNC 页面和 WebSocket 通道也需要管理员 Cookie，避免服务器部署时暴露授权浏览器。
 - `/v1/models`、`/v1/chat/completions`、`/v1/gemini/generate` 等外部接口不使用管理员登录鉴权，而是使用 `Authorization: Bearer <API_KEY>`。
 - 浏览器环境跨域调用会返回 CORS 头；服务器公网部署时建议把 `CORS_ALLOW_ORIGINS` 收紧为可信域名。
 - 未配置任何 `API_KEYS` 且管理端系统设置中没有 API Key 时，外部接口保持无密钥模式，便于本地调试；服务器部署建议生成或配置 API Key。
@@ -254,7 +255,7 @@ curl http://localhost:7860/v1/chat/completions \
   }'
 ```
 
-说明：OpenAI 兼容接口会把图片 URL 转成 Gemini 可读的文本引用，不会在服务端下载或转存图片；需要上传附件时可以使用 OpenAI 兼容 `/v1/files`，返回的 `file-...` 也可继续用于 Gemini 原生接口。
+说明：OpenAI 兼容接口会把图片 URL、音频 URL 转成 Gemini 可读的文本引用，不会在服务端下载或转存远程 URL；需要上传附件时可以使用 OpenAI 兼容 `/v1/files`，返回的 `file-...` 也可继续用于 Gemini 原生接口。
 
 OpenAI 兼容文件接口：
 
@@ -272,7 +273,7 @@ curl http://localhost:7860/v1/files/file-xxxx/content
 curl -X DELETE http://localhost:7860/v1/files/file-xxxx
 ```
 
-`/v1/files`、`/v1/files/{file_id}`、`/v1/files/{file_id}/content` 和 `DELETE /v1/files/{file_id}` 使用 OpenAI 常见的文件对象结构；文件内容保存在本地 `data/uploads/`。Chat Completions 和 Responses 可以在消息内容里通过 `input_file` 引用 `file-...`，服务端会把对应本地文件传给 Gemini。
+`/v1/files`、`/v1/files/{file_id}`、`/v1/files/{file_id}/content` 和 `DELETE /v1/files/{file_id}` 使用 OpenAI 常见的文件对象结构；文件内容保存在本地 `data/uploads/`。Chat Completions 和 Responses 可以在消息内容里通过 `input_file` 或 `input_audio.file_id` 引用 `file-...`，服务端会把对应本地文件传给 Gemini。
 
 ```json
 {
@@ -280,6 +281,19 @@ curl -X DELETE http://localhost:7860/v1/files/file-xxxx
   "content": [
     { "type": "input_text", "text": "总结这个文件" },
     { "type": "input_file", "file_id": "file-xxxx" }
+  ]
+}
+```
+
+音频可以引用已上传文件或远程 URL：
+
+```json
+{
+  "role": "user",
+  "content": [
+    { "type": "input_text", "text": "转写并总结这段音频" },
+    { "type": "input_audio", "input_audio": { "file_id": "file-audio-xxxx" } },
+    { "type": "input_audio", "input_audio": { "url": "https://example.com/audio.mp3" } }
   ]
 }
 ```

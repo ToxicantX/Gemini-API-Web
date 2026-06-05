@@ -293,6 +293,18 @@ def _message_content_to_text(content: str | list[dict[str, Any]] | None) -> str:
             file_id = item.get("file_id") or item.get("id")
             if isinstance(file_id, str) and file_id:
                 parts.append(f"Attached file: {file_id}")
+        elif item_type == "input_audio":
+            # OpenAI 多模态音频既可能引用已上传文件，也可能直接给 URL；这里转成 Gemini 可理解的附件提示。
+            audio = item.get("input_audio")
+            file_id = item.get("file_id")
+            url = item.get("url")
+            if isinstance(audio, dict):
+                file_id = file_id or audio.get("file_id")
+                url = url or audio.get("url")
+            if isinstance(file_id, str) and file_id:
+                parts.append(f"Attached audio file: {file_id}")
+            if isinstance(url, str) and url:
+                parts.append(f"Audio URL: {url}")
     return "\n".join(parts)
 
 
@@ -302,9 +314,12 @@ def _message_content_file_ids(content: str | list[dict[str, Any]] | None) -> lis
     file_ids: list[str] = []
     for item in content:
         item_type = item.get("type")
-        if item_type not in {"input_file", "file"}:
+        if item_type not in {"input_file", "file", "input_audio"}:
             continue
+        audio = item.get("input_audio") if item_type == "input_audio" else None
         file_id = item.get("file_id") or item.get("id")
+        if isinstance(audio, dict):
+            file_id = file_id or audio.get("file_id")
         if isinstance(file_id, str) and file_id:
             file_ids.append(file_id)
     return file_ids
@@ -1325,6 +1340,13 @@ def create_app(config: ServerConfig | None = None):
 
     async def _proxy_novnc_websocket(websocket: WebSocket) -> None:
         """把管理端同源 WebSocket 转发到容器内 noVNC，避免授权页跨端口不可用。"""
+        # noVNC 的 WebSocket 不会经过 HTTP 中间件；这里单独校验管理员会话，避免公网部署时绕过控制台登录。
+        if config.admin_password and not _admin_session_valid(
+            config,
+            websocket.cookies.get("gemini_admin_session"),
+        ):
+            await websocket.close(code=1008)
+            return
         await websocket.accept()
         try:
             async with websockets.connect("ws://127.0.0.1:6080/websockify") as upstream:
