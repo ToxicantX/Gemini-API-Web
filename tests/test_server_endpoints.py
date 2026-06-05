@@ -786,6 +786,109 @@ class ServerEndpointTests(unittest.TestCase):
                 )
             )
 
+    def test_openai_image_edits_endpoint_passes_uploaded_images(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            calls = []
+
+            async def fake_init(self, *args, **kwargs):
+                self.client = FakeSession()
+                self.account_status = AccountStatus.AVAILABLE
+
+            async def fake_close(self):
+                self.client = None
+
+            async def fake_generate_content(self, prompt, **kwargs):
+                calls.append((prompt, kwargs))
+                return ModelOutput(
+                    metadata=["cid", "rid"],
+                    candidates=[
+                        Candidate(
+                            rcid="rcid",
+                            text="ok",
+                            generated_images=[
+                                GeneratedImage(
+                                    url="https://lh3.googleusercontent.com/edited.png",
+                                    title="edited",
+                                )
+                            ],
+                        )
+                    ],
+                )
+
+            with (
+                patch.object(GeminiClient, "init", fake_init),
+                patch.object(GeminiClient, "close", fake_close),
+                patch.object(GeminiClient, "generate_content", fake_generate_content),
+                patch("gemini_webapi.server.app.AsyncSession", FakeAsyncMediaSession),
+                TestClient(app) as client,
+            ):
+                app.state.store.upsert_account(
+                    secure_1psid="psid-one",
+                    cookies={"__Secure-1PSID": "psid-one"},
+                    name="one",
+                )
+                unauthenticated = client.post(
+                    "/v1/images/edits",
+                    data={"prompt": "edit image", "model": "gemini"},
+                    files={"image": ("source.png", b"png-bytes", "image/png")},
+                )
+                response = client.post(
+                    "/v1/images/edits",
+                    headers={"Authorization": "Bearer sk-external"},
+                    data={
+                        "prompt": "edit image",
+                        "model": "gemini-3.5-flash",
+                    },
+                    files={"image": ("source.png", b"png-bytes", "image/png")},
+                )
+                unsupported = client.post(
+                    "/v1/images/edits",
+                    headers={"Authorization": "Bearer sk-external"},
+                    data={
+                        "prompt": "edit image",
+                        "response_format": "b64_json",
+                    },
+                    files={"image": ("source.png", b"png-bytes", "image/png")},
+                )
+                logs = app.state.store.list_request_logs(limit=20)
+
+            self.assertEqual(unauthenticated.status_code, 401)
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.json()["data"][0]["url"].startswith("/v1/gemini/media/"))
+            self.assertEqual(calls[0][0], "edit image")
+            self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
+            self.assertEqual(calls[0][1]["generation_mode"], "image")
+            self.assertEqual(len(calls[0][1]["files"]), 1)
+            self.assertFalse(Path(calls[0][1]["files"][0]).exists())
+            self.assertEqual(unsupported.status_code, 400)
+            self.assertTrue(
+                any(
+                    log.endpoint == "/v1/images/edits"
+                    and log.output_type == "gemini_image"
+                    and log.media_count == 1
+                    for log in logs
+                )
+            )
+
     def test_console_media_generation_can_store_media_to_object_storage(self):
         with tempfile.TemporaryDirectory() as tmp:
             app = create_app(self._config(tmp))

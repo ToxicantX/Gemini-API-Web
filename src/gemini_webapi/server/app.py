@@ -16,7 +16,7 @@ import orjson as json
 import websockets
 import httpx
 from curl_cffi.requests import AsyncSession
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -1110,6 +1110,7 @@ def create_app(config: ServerConfig | None = None):
                 "/v1/chat/completions",
                 "/v1/responses",
                 "/v1/images/generations",
+                "/v1/images/edits",
                 "/v1/generate",
                 "/v1/gemini/generate",
                 "/v1/gemini/stream",
@@ -2362,32 +2363,42 @@ def create_app(config: ServerConfig | None = None):
             text=output.text,
         )
 
-    @app.post("/v1/images/generations")
-    async def image_generations(request: ImageGenerationRequest) -> dict[str, Any]:
-        if request.response_format and request.response_format != "url":
+    async def _run_openai_image_request(
+        *,
+        endpoint: str,
+        prompt: str,
+        model: str | None,
+        n: int | None,
+        response_format: str | None,
+        store_media: bool,
+        files: list[str] | None = None,
+    ) -> dict[str, Any]:
+        if response_format and response_format != "url":
             raise HTTPException(
                 status_code=400,
-                detail="Only response_format=url is supported for /v1/images/generations.",
+                detail=f"Only response_format=url is supported for {endpoint}.",
             )
-        if request.n is not None and request.n < 1:
+        if n is not None and n < 1:
             raise HTTPException(status_code=400, detail="n must be at least 1.")
         request_id = f"img-{uuid.uuid4().hex}"
         generation_mode = "image"
         try:
-            resolved_model = _resolve_model_arg(request.model)
+            resolved_model = _resolve_model_arg(model)
 
             async def operation(client):
                 kwargs: dict[str, Any] = {"generation_mode": generation_mode}
                 if resolved_model:
                     kwargs["model"] = resolved_model
-                output = await client.generate_content(request.prompt, **kwargs)
+                if files:
+                    kwargs["files"] = files
+                output = await client.generate_content(prompt, **kwargs)
                 _ensure_media_generation_result(output, generation_mode)
                 return output
 
             output = await rotator.run(
                 operation,
-                endpoint="/v1/images/generations",
-                model=request.model or "gemini",
+                endpoint=endpoint,
+                model=model or "gemini",
                 output_type="gemini_image",
                 job_id=request_id,
                 media_generation_mode=generation_mode,
@@ -2400,7 +2411,7 @@ def create_app(config: ServerConfig | None = None):
             request_id=request_id,
             account_id=account_id,
             output=output,
-            store_media=request.store_media,
+            store_media=store_media,
         )
         if media_count:
             store.update_request_log_media_count(request_id, media_count)
@@ -2411,7 +2422,60 @@ def create_app(config: ServerConfig | None = None):
         ]
         if not media_items:
             raise HTTPException(status_code=502, detail="Image generation did not return a usable image URL.")
-        return _openai_image_generation_output(media_items, revised_prompt=request.prompt)
+        return _openai_image_generation_output(media_items, revised_prompt=prompt)
+
+    @app.post("/v1/images/generations")
+    async def image_generations(request: ImageGenerationRequest) -> dict[str, Any]:
+        return await _run_openai_image_request(
+            endpoint="/v1/images/generations",
+            prompt=request.prompt,
+            model=request.model,
+            n=request.n,
+            response_format=request.response_format,
+            store_media=request.store_media,
+        )
+
+    @app.post("/v1/images/edits")
+    async def image_edits(
+        prompt: str = Form(...),
+        image: list[UploadFile] = File(...),
+        mask: UploadFile | None = File(None),
+        model: str | None = Form(None),
+        n: int | None = Form(None),
+        size: str | None = Form(None),
+        response_format: str | None = Form(None),
+    ) -> dict[str, Any]:
+        edit_dir = Path(config.database_path).resolve().parent / "image-edits" / uuid.uuid4().hex
+        edit_dir.mkdir(parents=True, exist_ok=True)
+        paths: list[str] = []
+        try:
+            uploads: list[UploadFile] = list(image)
+            if mask is not None:
+                uploads.append(mask)
+            for index, upload in enumerate(uploads):
+                suffix = Path(upload.filename or f"image-{index}.png").suffix or ".png"
+                dest = edit_dir / f"{index}{suffix}"
+                dest.write_bytes(await upload.read())
+                paths.append(str(dest))
+            return await _run_openai_image_request(
+                endpoint="/v1/images/edits",
+                prompt=prompt,
+                model=model,
+                n=n,
+                response_format=response_format,
+                store_media=False,
+                files=paths,
+            )
+        finally:
+            for path in paths:
+                try:
+                    Path(path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+            try:
+                edit_dir.rmdir()
+            except OSError:
+                pass
 
     @app.post("/v1/chat/completions")
     async def chat_completions(request: ChatCompletionRequest):
