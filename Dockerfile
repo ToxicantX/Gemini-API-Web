@@ -26,7 +26,8 @@ COPY src ./src
 RUN pip install --no-cache-dir ".[server]"
 
 VOLUME ["/app/data"]
-EXPOSE 7860 6080
+# noVNC 只允许通过管理端同源代理访问，镜像层面也不声明 6080，避免服务器部署时误暴露授权浏览器。
+EXPOSE 7860
 
 # 服务器部署时让 Docker 能直接判断 API 进程是否真正可用，而不是只看容器进程是否还在。
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
