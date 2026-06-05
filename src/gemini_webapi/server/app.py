@@ -2941,10 +2941,21 @@ def create_app(config: ServerConfig | None = None):
             )
         except Exception as exc:
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
+        account_id = rotator.status()["current_account_id"]
+        media_count = await _save_media_index(
+            request_id=request_id,
+            account_id=account_id,
+            output=output,
+            store_media=False,
+        )
+        if media_count:
+            store.update_request_log_media_count(request_id, media_count)
         return {
             "text": output.text,
             "metadata": output.metadata,
-            "account": rotator.status()["current_account_id"],
+            "account": account_id,
+            "request_id": request_id,
+            "media_count": media_count,
         }
 
     @app.post("/v1/responses")

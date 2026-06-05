@@ -2648,6 +2648,7 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 response = client.post(
                     "/v1/generate",
+                    headers={"X-Request-ID": "client-legacy-video-1"},
                     json={
                         "prompt": "make video",
                         "model": "gemini",
@@ -2655,13 +2656,32 @@ class ServerEndpointTests(unittest.TestCase):
                     },
                 )
                 logs = app.state.store.list_request_logs(limit=10)
+                media_records = app.state.store.list_media_outputs(limit=10, kind="video")
 
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["text"], "ok")
+            self.assertEqual(response.headers["x-request-id"], "client-legacy-video-1")
+            self.assertEqual(response.json()["request_id"], "client-legacy-video-1")
+            self.assertEqual(response.json()["media_count"], 1)
             self.assertEqual(calls[0][1]["model"], "gemini-3.1-pro")
             self.assertEqual(calls[0][1]["generation_mode"], "video")
             self.assertTrue(
                 any(log.output_type == "video_generation_attempt" for log in logs)
+            )
+            self.assertTrue(
+                any(
+                    log.job_id == "client-legacy-video-1"
+                    and log.output_type == "gemini_video"
+                    and log.media_count == 1
+                    for log in logs
+                )
+            )
+            self.assertTrue(
+                any(
+                    item.request_id == "client-legacy-video-1"
+                    and item.kind == "video"
+                    for item in media_records
+                )
             )
 
     def test_clear_account_media_cooldowns_endpoint(self):

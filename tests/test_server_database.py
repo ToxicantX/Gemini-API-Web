@@ -96,6 +96,26 @@ class TestAccountStore(unittest.TestCase):
                 logs = store.list_request_logs()
                 self.assertEqual(logs[0].media_count, 3)
 
+                store.add_request_log(
+                    time="2026-01-01T00:00:01Z",
+                    duration_ms=99,
+                    account_id=1,
+                    account_name="one",
+                    endpoint="/v1/generate",
+                    model="gemini",
+                    ok=True,
+                    output_type="gemini_video",
+                    job_id="req-legacy-generate",
+                )
+                # 旧 /v1/generate 也会产出媒体，媒体数量需要能回填到请求日志。
+                updated = store.update_request_log_media_count("req-legacy-generate", 1)
+                self.assertEqual(updated, 1)
+                legacy_log = {
+                    log.job_id: log
+                    for log in store.list_request_logs()
+                }["req-legacy-generate"]
+                self.assertEqual(legacy_log.media_count, 1)
+
                 store.add_media_output(
                     request_id="req-1",
                     account_id=1,
