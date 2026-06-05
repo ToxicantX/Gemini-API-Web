@@ -208,6 +208,7 @@ class ChatCompletionRequest(BaseModel):
     model: str | None = None
     messages: list[ChatMessage]
     stream: bool = False
+    stream_options: dict[str, Any] | None = None
     temperature: float | None = None
     max_tokens: int | None = None
     max_completion_tokens: int | None = None
@@ -226,6 +227,7 @@ class ResponsesRequest(BaseModel):
     instructions: str | None = None
     text: dict[str, Any] | None = None
     stream: bool = False
+    stream_options: dict[str, Any] | None = None
     temperature: float | None = None
     max_output_tokens: int | None = None
     top_p: float | None = None
@@ -857,6 +859,30 @@ def _chat_chunk(
             }
         ],
     }
+
+
+def _chat_zero_usage() -> dict[str, int]:
+    return {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+    }
+
+
+def _chat_usage_chunk(completion_id: str, model: str) -> dict[str, Any]:
+    """OpenAI 流式 include_usage 会在结束前发送一个 choices 为空的 usage chunk。"""
+    return {
+        "id": completion_id,
+        "object": "chat.completion.chunk",
+        "created": int(time.time()),
+        "model": model,
+        "choices": [],
+        "usage": _chat_zero_usage(),
+    }
+
+
+def _stream_include_usage(stream_options: dict[str, Any] | None) -> bool:
+    return bool(isinstance(stream_options, dict) and stream_options.get("include_usage"))
 
 
 def _dump_model(value: Any) -> Any:
@@ -2909,6 +2935,9 @@ def create_app(config: ServerConfig | None = None):
                         yield f"data: {json.dumps(chunk).decode()}\n\n"
                 final = _chat_chunk(completion_id, model, finish_reason=finish_reason)
                 yield f"data: {json.dumps(final).decode()}\n\n"
+                if _stream_include_usage(request.stream_options):
+                    usage = _chat_usage_chunk(completion_id, model)
+                    yield f"data: {json.dumps(usage).decode()}\n\n"
                 yield "data: [DONE]\n\n"
 
             return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -2960,11 +2989,7 @@ def create_app(config: ServerConfig | None = None):
                     "finish_reason": finish_reason,
                 }
             ],
-            "usage": {
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_tokens": 0,
-            },
+            "usage": _chat_zero_usage(),
         }
 
     return app

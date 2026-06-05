@@ -641,6 +641,7 @@ class ServerEndpointTests(unittest.TestCase):
                     json={
                         "model": "gemini",
                         "stream": True,
+                        "stream_options": {"include_usage": True},
                         "stop": "<END>",
                         "response_format": {
                             "type": "json_schema",
@@ -683,6 +684,8 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertTrue(Path(calls[0][1]["files"][0]).is_file())
             self.assertEqual(stream.status_code, 200)
             self.assertIn("data: [DONE]", stream.text)
+            self.assertIn('"choices":[]', stream.text)
+            self.assertIn('"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}', stream.text)
             self.assertNotIn("hidden", stream.text)
             self.assertIn("JSON response mode is enabled.", stream_calls[0][0])
             self.assertIn('"required":["ok"]', stream_calls[0][0])
@@ -812,6 +815,7 @@ class ServerEndpointTests(unittest.TestCase):
                             }
                         },
                         "stream": True,
+                        "stream_options": {"include_usage": True},
                     },
                 )
                 invalid = client.post(
@@ -842,6 +846,7 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertIn('"delta":"one "', stream.text)
             self.assertIn('"delta":"two"', stream.text)
             self.assertIn("event: response.completed", stream.text)
+            self.assertIn('"usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}', stream.text)
             self.assertIn("data: [DONE]", stream.text)
             self.assertIn("System: 流式也保持 JSON", stream_calls[0][0])
             self.assertIn('"required":["ok"]', stream_calls[0][0])
