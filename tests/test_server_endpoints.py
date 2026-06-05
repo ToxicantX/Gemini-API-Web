@@ -1417,6 +1417,90 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(stream_calls[0][1]["files"], calls[0][1]["files"])
             self.assertEqual(invalid.status_code, 400)
 
+    def test_chat_completions_accepts_legacy_functions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            calls = []
+
+            async def fake_init(self, *args, **kwargs):
+                self.client = FakeSession()
+                self.account_status = AccountStatus.AVAILABLE
+
+            async def fake_close(self):
+                self.client = None
+
+            async def fake_generate_content(self, prompt, **kwargs):
+                calls.append((prompt, kwargs))
+                return ModelOutput(
+                    metadata=["cid", "rid"],
+                    candidates=[
+                        Candidate(
+                            rcid="rcid",
+                            text='{"tool_calls":[{"name":"get_weather","arguments":{"city":"北京"}}]}',
+                        )
+                    ],
+                )
+
+            with (
+                patch.object(GeminiClient, "init", fake_init),
+                patch.object(GeminiClient, "close", fake_close),
+                patch.object(GeminiClient, "generate_content", fake_generate_content),
+                TestClient(app) as client,
+            ):
+                app.state.store.upsert_account(
+                    secure_1psid="psid-one",
+                    cookies={"__Secure-1PSID": "psid-one"},
+                    name="one",
+                )
+                response = client.post(
+                    "/v1/chat/completions",
+                    headers={"Authorization": "Bearer sk-external"},
+                    json={
+                        "model": "gemini",
+                        "messages": [{"role": "user", "content": "北京天气怎么样？"}],
+                        "functions": [
+                            {
+                                "name": "get_weather",
+                                "description": "Get current weather for a city.",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {"city": {"type": "string"}},
+                                    "required": ["city"],
+                                },
+                            }
+                        ],
+                        "function_call": {"name": "get_weather"},
+                    },
+                )
+
+            self.assertEqual(response.status_code, 200)
+            message = response.json()["choices"][0]["message"]
+            self.assertIsNone(message["content"])
+            self.assertEqual(
+                message["tool_calls"][0]["function"]["name"],
+                "get_weather",
+            )
+            self.assertEqual(response.json()["choices"][0]["finish_reason"], "tool_calls")
+            self.assertIn("You must call the tool named get_weather.", calls[0][0])
+
     def test_responses_endpoint_is_openai_compatible(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)

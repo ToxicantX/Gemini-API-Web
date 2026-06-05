@@ -10,6 +10,7 @@ from gemini_webapi.server.app import (
     _apply_stop_sequences,
     _messages_to_prompt,
     _messages_file_ids,
+    _normalized_chat_request_tools,
     _responses_input_to_messages,
     _responses_output,
     _responses_prompt,
@@ -199,6 +200,26 @@ class ServerToolCallTests(unittest.TestCase):
 
         self.assertEqual(request.tools[0].function.name, "get_weather")
         self.assertIn("get_weather", _append_tool_instructions("User: hi", request))
+
+    def test_chat_request_accepts_legacy_functions(self):
+        request = ChatCompletionRequest.model_validate(
+            {
+                "model": "gemini",
+                "messages": [{"role": "user", "content": "北京天气怎么样？"}],
+                "functions": [WEATHER_TOOL["function"]],
+                "function_call": {"name": "get_weather"},
+            }
+        )
+
+        tools, tool_choice = _normalized_chat_request_tools(request)
+        self.assertEqual(tools[0].function.name, "get_weather")
+        self.assertEqual(tool_choice["function"]["name"], "get_weather")
+        self.assertIn("You must call the tool named get_weather.", _append_tool_instructions("User: hi", request))
+        calls = _tool_calls_from_output_text(
+            '{"tool_calls":[{"name":"get_weather","arguments":{"city":"北京"}}]}',
+            tools,
+        )
+        self.assertEqual(calls[0]["function"]["name"], "get_weather")
 
     def test_chat_request_accepts_response_format_json_schema(self):
         request = ChatCompletionRequest.model_validate(

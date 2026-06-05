@@ -219,6 +219,8 @@ class ChatCompletionRequest(BaseModel):
     stop: str | list[str] | None = None
     tools: list[ChatToolSpec] | None = None
     tool_choice: str | dict[str, Any] | None = None
+    functions: list[FunctionToolSpec] | None = None
+    function_call: str | dict[str, Any] | None = None
     parallel_tool_calls: bool | None = None
     response_format: ResponseFormatSpec | None = None
 
@@ -543,10 +545,29 @@ def _audio_vtt_text(text: str) -> str:
     return f"WEBVTT\n\n00:00:00.000 --> 00:00:00.000\n{text}\n"
 
 
+def _normalized_chat_request_tools(
+    request: ChatCompletionRequest,
+) -> tuple[list[ChatToolSpec], str | dict[str, Any] | None]:
+    # 兼容 OpenAI 旧版 functions/function_call 入参，内部统一走新版 tools/tool_choice 逻辑。
+    tools = list(request.tools or [])
+    if not tools and request.functions:
+        tools = [ChatToolSpec(type="function", function=function) for function in request.functions]
+    tool_choice = request.tool_choice
+    if tool_choice is None and request.function_call is not None:
+        if isinstance(request.function_call, dict):
+            name = request.function_call.get("name")
+            if isinstance(name, str) and name:
+                tool_choice = {"type": "function", "function": {"name": name}}
+        else:
+            tool_choice = request.function_call
+    return tools, tool_choice
+
+
 def _tools_enabled(request: ChatCompletionRequest) -> bool:
-    if not request.tools:
+    tools, tool_choice = _normalized_chat_request_tools(request)
+    if not tools:
         return False
-    return request.tool_choice != "none"
+    return tool_choice != "none"
 
 
 def _tool_choice_name(tool_choice: str | dict[str, Any] | None) -> str | None:
@@ -578,12 +599,12 @@ def _tool_specs_text(tools: list[ChatToolSpec]) -> str:
 
 
 def _append_tool_instructions(prompt: str, request: ChatCompletionRequest) -> str:
-    if not _tools_enabled(request):
+    tools, tool_choice = _normalized_chat_request_tools(request)
+    if not tools or tool_choice == "none":
         return prompt
-    tools = request.tools or []
-    forced_name = _tool_choice_name(request.tool_choice)
+    forced_name = _tool_choice_name(tool_choice)
     choice_line = "If no tool is needed, answer normally."
-    if request.tool_choice == "required":
+    if tool_choice == "required":
         choice_line = "You must call one of the available tools."
     if forced_name:
         choice_line = f"You must call the tool named {forced_name}."
@@ -3447,6 +3468,7 @@ def create_app(config: ServerConfig | None = None):
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         prompt = _append_chat_token_limit_instruction(prompt, payload)
         model = payload.model or "gemini"
+        normalized_tools, _ = _normalized_chat_request_tools(payload)
         try:
             resolved_model = _resolve_model_arg(payload.model)
         except Exception as exc:
@@ -3504,7 +3526,7 @@ def create_app(config: ServerConfig | None = None):
                 finish_reason = "stop"
                 if _tools_enabled(payload):
                     text = "".join(buffered_text)
-                    tool_calls = _tool_calls_from_output_text(text, payload.tools)
+                    tool_calls = _tool_calls_from_output_text(text, normalized_tools)
                     if tool_calls:
                         tool_chunk = _chat_tool_calls_chunk(completion_id, model, tool_calls)
                         yield f"data: {json.dumps(tool_chunk).decode()}\n\n"
@@ -3541,7 +3563,7 @@ def create_app(config: ServerConfig | None = None):
 
         created = int(time.time())
         tool_calls = (
-            _tool_calls_from_output_text(output.text, payload.tools)
+            _tool_calls_from_output_text(output.text, normalized_tools)
             if _tools_enabled(payload)
             else []
         )
