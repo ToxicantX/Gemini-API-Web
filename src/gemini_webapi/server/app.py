@@ -910,6 +910,17 @@ def _openai_model_object(model_id: str, created: int | None = None) -> dict[str,
     }
 
 
+def _openai_engine_object(model_id: str, created: int | None = None) -> dict[str, Any]:
+    # 旧版 OpenAI SDK 会探测 /engines；这里只做只读别名，不扩展真实模型映射。
+    return {
+        "id": model_id,
+        "object": "engine",
+        "created": created or int(time.time()),
+        "owner": "google",
+        "ready": True,
+    }
+
+
 def _resolve_model_arg(model: str | None) -> str | None:
     if not model:
         return None
@@ -1173,9 +1184,11 @@ def _external_api_path(path: str) -> bool:
         return True
     exact_paths = {
         "/models",
+        "/engines",
         "/v1",
         "/v1/",
         "/v1/models",
+        "/v1/engines",
         "/v1/completions",
         "/v1/chat/completions",
         "/v1/responses",
@@ -1200,7 +1213,9 @@ def _external_api_path(path: str) -> bool:
     if path.startswith(
         (
             "/models/",
+            "/engines/",
             "/v1/models/",
+            "/v1/engines/",
             "/v1/files/",
             "/v1/gemini/gems/",
             "/v1/gemini/deep-research/",
@@ -2801,6 +2816,24 @@ def create_app(config: ServerConfig | None = None):
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return _openai_model_object(resolved_model or "gemini")
+
+    @app.api_route("/engines", methods=["GET", "HEAD"])
+    @app.api_route("/v1/engines", methods=["GET", "HEAD"])
+    async def engines() -> dict[str, Any]:
+        now = int(time.time())
+        return {
+            "object": "list",
+            "data": [_openai_engine_object(model_id, now) for model_id in _openai_model_ids()],
+        }
+
+    @app.api_route("/engines/{model_id}", methods=["GET", "HEAD"])
+    @app.api_route("/v1/engines/{model_id}", methods=["GET", "HEAD"])
+    async def engine_detail(model_id: str) -> dict[str, Any]:
+        try:
+            resolved_model = _resolve_model_arg(model_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _openai_engine_object(resolved_model or "gemini")
 
     @app.get("/v1/accounts")
     async def list_accounts() -> dict[str, Any]:

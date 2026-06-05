@@ -1320,6 +1320,67 @@ class ServerEndpointTests(unittest.TestCase):
                 self.assertFalse(head_detail.text)
                 self.assertFalse(rootless_head_detail.text)
 
+    def test_legacy_engines_endpoint_is_openai_compatible(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                unauthenticated = client.get("/v1/engines")
+                engines = client.get(
+                    "/v1/engines",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                rootless = client.get(
+                    "/engines",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                detail = client.get(
+                    "/v1/engines/gemini",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                rootless_detail = client.get(
+                    "/engines/gemini-3.5-flash",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                head = client.head(
+                    "/v1/engines/gemini",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                missing = client.get(
+                    "/v1/engines/gemini-3-pro",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+
+            self.assertEqual(unauthenticated.status_code, 401)
+            self.assertEqual(engines.status_code, 200)
+            self.assertEqual(engines.json()["object"], "list")
+            self.assertEqual(engines.json()["data"][0]["object"], "engine")
+            self.assertTrue(engines.json()["data"][0]["ready"])
+            self.assertEqual(rootless.json()["data"], engines.json()["data"])
+            self.assertEqual(detail.status_code, 200)
+            self.assertEqual(detail.json()["id"], "gemini-3.1-pro")
+            self.assertEqual(rootless_detail.json()["id"], "gemini-3.5-flash")
+            self.assertEqual(head.status_code, 200)
+            self.assertFalse(head.text)
+            self.assertEqual(missing.status_code, 404)
+
     def test_legacy_completions_endpoint_is_openai_compatible(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)
