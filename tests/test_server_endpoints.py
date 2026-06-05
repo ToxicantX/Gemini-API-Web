@@ -135,6 +135,13 @@ class ServerEndpointTests(unittest.TestCase):
                         "Access-Control-Request-Headers": "authorization,content-type",
                     },
                 )
+                actual = client.get(
+                    "/v1/models",
+                    headers={
+                        "Origin": "https://panel.example.com",
+                        "Authorization": "Bearer sk-external",
+                    },
+                )
 
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(
@@ -145,6 +152,13 @@ class ServerEndpointTests(unittest.TestCase):
                     "authorization",
                     response.headers.get("access-control-allow-headers", "").lower(),
                 )
+                # 浏览器外部客户端需要读取请求号，才能把前端错误和服务端日志对应起来。
+                self.assertEqual(actual.status_code, 200)
+                self.assertIn(
+                    "x-request-id",
+                    actual.headers.get("access-control-expose-headers", "").lower(),
+                )
+                self.assertTrue(actual.headers["x-request-id"].startswith("req-"))
                 self.assertEqual(client.get("/v1/models").status_code, 401)
 
     def test_health_exposes_deployment_summary_without_auth(self):

@@ -1557,6 +1557,7 @@ def create_app(config: ServerConfig | None = None):
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Request-ID"],
     )
     static_dir = Path(__file__).resolve().parent / "static"
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
