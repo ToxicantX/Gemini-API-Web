@@ -933,6 +933,97 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertFalse(Path(record.path).exists())
             self.assertEqual(missing.status_code, 404)
 
+    def test_openai_audio_transcriptions_endpoint_passes_uploaded_audio(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            calls = []
+
+            async def fake_init(self, *args, **kwargs):
+                self.client = FakeSession()
+                self.account_status = AccountStatus.AVAILABLE
+
+            async def fake_close(self):
+                self.client = None
+
+            async def fake_generate_content(self, prompt, **kwargs):
+                calls.append((prompt, kwargs))
+                return ModelOutput(
+                    metadata=["cid", "rid"],
+                    candidates=[Candidate(rcid="rcid", text="你好，世界。")],
+                )
+
+            with (
+                patch.object(GeminiClient, "init", fake_init),
+                patch.object(GeminiClient, "close", fake_close),
+                patch.object(GeminiClient, "generate_content", fake_generate_content),
+                TestClient(app) as client,
+            ):
+                app.state.store.upsert_account(
+                    secure_1psid="psid-one",
+                    cookies={"__Secure-1PSID": "psid-one"},
+                    name="one",
+                )
+                unauthenticated = client.post(
+                    "/v1/audio/transcriptions",
+                    data={"model": "gemini"},
+                    files={"file": ("voice.mp3", b"mp3-bytes", "audio/mpeg")},
+                )
+                response = client.post(
+                    "/v1/audio/transcriptions",
+                    headers={"Authorization": "Bearer sk-external"},
+                    data={
+                        "model": "gemini-3.5-flash",
+                        "prompt": "这是一次问候",
+                        "language": "zh",
+                        "response_format": "text",
+                    },
+                    files={"file": ("voice.mp3", b"mp3-bytes", "audio/mpeg")},
+                )
+                invalid = client.post(
+                    "/v1/audio/transcriptions",
+                    headers={"Authorization": "Bearer sk-external"},
+                    data={"response_format": "srt"},
+                    files={"file": ("voice.mp3", b"mp3-bytes", "audio/mpeg")},
+                )
+                logs = app.state.store.list_request_logs(limit=20)
+
+            self.assertEqual(unauthenticated.status_code, 401)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.text, "你好，世界。")
+            self.assertEqual(response.headers["content-type"], "text/plain; charset=utf-8")
+            self.assertIn("请转写上传的音频文件", calls[0][0])
+            self.assertIn("音频语言提示：zh", calls[0][0])
+            self.assertIn("上下文提示：这是一次问候", calls[0][0])
+            self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
+            self.assertEqual(len(calls[0][1]["files"]), 1)
+            self.assertFalse(Path(calls[0][1]["files"][0]).exists())
+            self.assertEqual(invalid.status_code, 400)
+            self.assertTrue(
+                any(
+                    log.endpoint == "/v1/audio/transcriptions"
+                    and log.output_type == "audio_transcription"
+                    for log in logs
+                )
+            )
+
     def test_openai_image_generation_endpoint_returns_urls(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)

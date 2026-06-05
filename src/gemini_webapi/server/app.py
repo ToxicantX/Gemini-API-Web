@@ -1285,6 +1285,7 @@ def create_app(config: ServerConfig | None = None):
                 "/v1/models",
                 "/v1/chat/completions",
                 "/v1/responses",
+                "/v1/audio/transcriptions",
                 "/v1/images/generations",
                 "/v1/images/edits",
                 "/v1/images/variations",
@@ -2774,12 +2775,12 @@ def create_app(config: ServerConfig | None = None):
             store_media=request.store_media,
         )
 
-    async def _save_temporary_image_inputs(
+    async def _save_temporary_upload_inputs(
         uploads: list[UploadFile],
         *,
         prefix: str,
     ) -> tuple[Path, list[str]]:
-        # OpenAI 图片编辑/变体上传只作为本次 Gemini 调用输入，调用结束后立即清理。
+        # OpenAI 上传文件只作为本次 Gemini 调用输入，调用结束后立即清理，避免临时音频/图片占用磁盘。
         temp_dir = Path(config.database_path).resolve().parent / prefix / uuid.uuid4().hex
         temp_dir.mkdir(parents=True, exist_ok=True)
         saved: list[str] = []
@@ -2790,7 +2791,7 @@ def create_app(config: ServerConfig | None = None):
             saved.append(str(dest))
         return temp_dir, saved
 
-    async def _cleanup_temporary_image_inputs(temp_dir: Path, paths: list[str]) -> None:
+    async def _cleanup_temporary_upload_inputs(temp_dir: Path, paths: list[str]) -> None:
         for path in paths:
             try:
                 Path(path).unlink(missing_ok=True)
@@ -2800,6 +2801,71 @@ def create_app(config: ServerConfig | None = None):
             temp_dir.rmdir()
         except OSError:
             pass
+
+    @app.post("/v1/audio/transcriptions", response_model=None)
+    async def audio_transcriptions(
+        file: UploadFile = File(...),
+        model: str | None = Form(None),
+        prompt: str | None = Form(None),
+        response_format: str | None = Form(None),
+        language: str | None = Form(None),
+        temperature: float | None = Form(None),
+    ) -> Response | dict[str, Any]:
+        if response_format and response_format not in {"json", "text", "verbose_json"}:
+            raise HTTPException(
+                status_code=400,
+                detail="response_format must be one of: json, text, verbose_json.",
+            )
+        audio_dir, paths = await _save_temporary_upload_inputs(
+            [file],
+            prefix="audio-transcriptions",
+        )
+        try:
+            try:
+                resolved_model = _resolve_model_arg(model)
+            except Exception as exc:
+                raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
+            instructions = [
+                "请转写上传的音频文件，只返回转写文本。",
+            ]
+            if language:
+                instructions.append(f"音频语言提示：{language}。")
+            if prompt:
+                instructions.append(f"上下文提示：{prompt}")
+            if temperature is not None:
+                instructions.append(f"转写时尽量保持稳定，调用方 temperature={temperature}。")
+            transcription_prompt = "\n".join(instructions)
+
+            async def operation(client):
+                kwargs: dict[str, Any] = {"files": paths}
+                if resolved_model:
+                    kwargs["model"] = resolved_model
+                return await client.generate_content(transcription_prompt, **kwargs)
+
+            try:
+                output = await rotator.run(
+                    operation,
+                    endpoint="/v1/audio/transcriptions",
+                    model=model or "gemini",
+                    output_type="audio_transcription",
+                )
+            except Exception as exc:
+                raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
+
+            text = (output.text or "").strip()
+            if response_format == "text":
+                return Response(content=text, media_type="text/plain; charset=utf-8")
+            if response_format == "verbose_json":
+                return {
+                    "task": "transcribe",
+                    "language": language,
+                    "duration": None,
+                    "text": text,
+                    "segments": [],
+                }
+            return {"text": text}
+        finally:
+            await _cleanup_temporary_upload_inputs(audio_dir, paths)
 
     @app.post("/v1/images/edits")
     async def image_edits(
@@ -2814,7 +2880,7 @@ def create_app(config: ServerConfig | None = None):
         uploads: list[UploadFile] = list(image)
         if mask is not None:
             uploads.append(mask)
-        edit_dir, paths = await _save_temporary_image_inputs(uploads, prefix="image-edits")
+        edit_dir, paths = await _save_temporary_upload_inputs(uploads, prefix="image-edits")
         try:
             return await _run_openai_image_request(
                 endpoint="/v1/images/edits",
@@ -2826,7 +2892,7 @@ def create_app(config: ServerConfig | None = None):
                 files=paths,
             )
         finally:
-            await _cleanup_temporary_image_inputs(edit_dir, paths)
+            await _cleanup_temporary_upload_inputs(edit_dir, paths)
 
     @app.post("/v1/images/variations")
     async def image_variations(
@@ -2836,7 +2902,7 @@ def create_app(config: ServerConfig | None = None):
         size: str | None = Form(None),
         response_format: str | None = Form(None),
     ) -> dict[str, Any]:
-        variation_dir, paths = await _save_temporary_image_inputs(
+        variation_dir, paths = await _save_temporary_upload_inputs(
             [image],
             prefix="image-variations",
         )
@@ -2851,7 +2917,7 @@ def create_app(config: ServerConfig | None = None):
                 files=paths,
             )
         finally:
-            await _cleanup_temporary_image_inputs(variation_dir, paths)
+            await _cleanup_temporary_upload_inputs(variation_dir, paths)
 
     @app.post("/v1/chat/completions")
     async def chat_completions(request: ChatCompletionRequest):
