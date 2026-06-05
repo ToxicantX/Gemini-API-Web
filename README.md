@@ -329,7 +329,7 @@ curl -X DELETE http://localhost:7860/v1/files/file-xxxx \
   -H "Authorization: Bearer sk-your-external-key"
 ```
 
-`/v1/files`、`/v1/files/{file_id}`、`/v1/files/{file_id}/content` 和 `DELETE /v1/files/{file_id}` 使用 OpenAI 常见的文件对象结构；文件内容保存在本地 `data/uploads/`。Chat Completions 和 Responses 可以在消息内容里通过 `input_file` 或 `input_audio.file_id` 引用 `file-...`，服务端会把对应本地文件传给 Gemini。
+`/v1/files`、`/v1/files/{file_id}`、`/v1/files/{file_id}/content` 和 `DELETE /v1/files/{file_id}` 使用 OpenAI 常见的文件对象结构；文件内容保存在本地 `data/uploads/`。为兼容外部 SDK 和网关的探测请求，`/v1/files`、`/v1/files/{file_id}`、`/v1/files/{file_id}/content` 以及 Gemini 原生 `/v1/gemini/files` 均支持 `HEAD`，只返回状态和头部，不返回正文。Chat Completions 和 Responses 可以在消息内容里通过 `input_file` 或 `input_audio.file_id` 引用 `file-...`，服务端会把对应本地文件传给 Gemini。
 
 ```json
 {

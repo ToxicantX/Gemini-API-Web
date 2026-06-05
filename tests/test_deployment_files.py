@@ -34,6 +34,14 @@ class DeploymentFileTests(unittest.TestCase):
         self.assertIn("API_KEYS=sk-change-this-external-key", env_example)
         self.assertIn("CORS_ALLOW_ORIGINS=https://your-panel.example.com", env_example)
 
+    def test_readme_documents_file_head_probes(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+        # 外部 SDK 和 API 网关常用 HEAD 探测文件接口，README 需要和服务端行为保持一致。
+        self.assertIn("均支持 `HEAD`", readme)
+        self.assertIn("`/v1/gemini/files`", readme)
+        self.assertIn("只返回状态和头部", readme)
+
 
 if __name__ == "__main__":
     unittest.main()
