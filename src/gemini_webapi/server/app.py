@@ -839,6 +839,14 @@ def _chat_tool_calls_chunk(
     }
 
 
+def _legacy_function_call_from_tool_call(tool_call: dict[str, Any]) -> dict[str, Any]:
+    function = tool_call.get("function") or {}
+    return {
+        "name": function.get("name", ""),
+        "arguments": function.get("arguments", "{}"),
+    }
+
+
 def _openai_model_ids() -> list[str]:
     return [
         "gemini",
@@ -3586,6 +3594,10 @@ def create_app(config: ServerConfig | None = None):
                 "content": None,
                 "tool_calls": tool_calls,
             }
+            if payload.functions:
+                message["function_call"] = _legacy_function_call_from_tool_call(
+                    tool_calls[0]
+                )
             finish_reason = "tool_calls"
         return {
             "id": f"chatcmpl-{uuid.uuid4().hex}",

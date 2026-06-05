@@ -1518,6 +1518,11 @@ class ServerEndpointTests(unittest.TestCase):
                 message["tool_calls"][0]["function"]["name"],
                 "get_weather",
             )
+            self.assertEqual(message["function_call"]["name"], "get_weather")
+            self.assertEqual(
+                message["function_call"]["arguments"],
+                '{"city":"北京"}',
+            )
             self.assertEqual(response.json()["choices"][0]["finish_reason"], "tool_calls")
             self.assertIn("You must call the tool named get_weather.", calls[0][0])
 

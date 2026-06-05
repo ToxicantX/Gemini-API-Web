@@ -8,6 +8,7 @@ from gemini_webapi.server.app import (
     _append_response_format_instructions,
     _append_tool_instructions,
     _apply_stop_sequences,
+    _legacy_function_call_from_tool_call,
     _messages_to_prompt,
     _messages_file_ids,
     _normalized_chat_request_tools,
@@ -313,6 +314,10 @@ class ServerToolCallTests(unittest.TestCase):
         self.assertEqual(calls[0]["type"], "function")
         self.assertEqual(calls[0]["function"]["name"], "get_weather")
         self.assertEqual(calls[0]["function"]["arguments"], '{"city":"北京"}')
+        self.assertEqual(
+            _legacy_function_call_from_tool_call(calls[0]),
+            {"name": "get_weather", "arguments": '{"city":"北京"}'},
+        )
 
     def test_ignores_unknown_tool_names(self):
         request = ChatCompletionRequest.model_validate(
