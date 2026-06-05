@@ -1679,6 +1679,15 @@ def create_app(config: ServerConfig | None = None):
             warnings.append(
                 "REQUIRE_API_KEY is enabled but no API key or admin password is configured. Set API_KEYS or ADMIN_PASSWORD to bootstrap external access."
             )
+        if (
+            config.admin_password
+            and not config.require_api_key
+            and not config.api_keys
+            and not system_settings["api_keys"]
+        ):
+            warnings.append(
+                "Admin login protects the console, but external /v1/* APIs are currently open because no API key is configured and REQUIRE_API_KEY is disabled."
+            )
         return {
             "ok": True,
             "version": app.version,

@@ -805,6 +805,39 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertIn("ADMIN_PASSWORD", health.json()["warnings"][0])
             self.assertEqual(blocked.status_code, 401)
 
+    def test_health_warns_when_admin_login_does_not_protect_external_api(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=(),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                health = client.get("/health")
+                models = client.get("/v1/models")
+
+            self.assertEqual(health.status_code, 200)
+            self.assertTrue(health.json()["auth"]["admin_enabled"])
+            self.assertFalse(health.json()["auth"]["api_key_required"])
+            self.assertFalse(health.json()["auth"]["api_key_configured"])
+            self.assertTrue(health.json()["warnings"])
+            self.assertIn("external /v1/* APIs", health.json()["warnings"][0])
+            self.assertEqual(models.status_code, 200)
+
     def test_admin_login_guards_management_endpoints(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)
