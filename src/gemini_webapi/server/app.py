@@ -199,6 +199,11 @@ class ChatMessage(BaseModel):
     tool_calls: list[dict[str, Any]] | None = None
 
 
+class ResponseFormatSpec(BaseModel):
+    type: str
+    json_schema: dict[str, Any] | None = None
+
+
 class ChatCompletionRequest(BaseModel):
     model: str | None = None
     messages: list[ChatMessage]
@@ -211,6 +216,7 @@ class ChatCompletionRequest(BaseModel):
     tools: list[ChatToolSpec] | None = None
     tool_choice: str | dict[str, Any] | None = None
     parallel_tool_calls: bool | None = None
+    response_format: ResponseFormatSpec | None = None
 
 
 class ResponsesRequest(BaseModel):
@@ -453,6 +459,22 @@ Available tools:
 {_tool_specs_text(tools)}
 """
     return f"{prompt}\n\nSystem: {instructions.strip()}"
+
+
+def _append_response_format_instructions(prompt: str, request: ChatCompletionRequest) -> str:
+    response_format = request.response_format
+    if response_format is None or response_format.type == "text":
+        return prompt
+    if response_format.type not in {"json_object", "json_schema"}:
+        raise ValueError("response_format.type must be one of: text, json_object, json_schema.")
+    lines = [
+        "JSON response mode is enabled.",
+        "Respond with only valid JSON. Do not wrap the JSON in markdown. Do not include natural language outside JSON.",
+    ]
+    if response_format.type == "json_schema" and response_format.json_schema:
+        lines.append("The response must follow this JSON schema:")
+        lines.append(json.dumps(response_format.json_schema).decode())
+    return f"{prompt}\n\nSystem: {' '.join(lines)}"
 
 
 def _strip_json_fence(text: str) -> str:
@@ -2672,6 +2694,10 @@ def create_app(config: ServerConfig | None = None):
         if not prompt:
             raise HTTPException(status_code=400, detail="messages must contain text.")
         prompt = _append_tool_instructions(prompt, request)
+        try:
+            prompt = _append_response_format_instructions(prompt, request)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         model = request.model or "gemini"
         try:
             resolved_model = _resolve_model_arg(request.model)

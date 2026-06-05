@@ -3,6 +3,7 @@ import unittest
 from gemini_webapi.server.app import (
     ChatCompletionRequest,
     ChatMessage,
+    _append_response_format_instructions,
     _append_tool_instructions,
     _messages_to_prompt,
     _responses_input_to_messages,
@@ -101,6 +102,28 @@ class ServerToolCallTests(unittest.TestCase):
 
         self.assertEqual(request.tools[0].function.name, "get_weather")
         self.assertIn("get_weather", _append_tool_instructions("User: hi", request))
+
+    def test_chat_request_accepts_response_format_json_schema(self):
+        request = ChatCompletionRequest.model_validate(
+            {
+                "messages": [{"role": "user", "content": "返回 JSON"}],
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "answer",
+                        "schema": {
+                            "type": "object",
+                            "properties": {"ok": {"type": "boolean"}},
+                            "required": ["ok"],
+                        },
+                    },
+                },
+            }
+        )
+        prompt = _append_response_format_instructions("User: hi", request)
+
+        self.assertIn("JSON response mode is enabled.", prompt)
+        self.assertIn('"required":["ok"]', prompt)
 
     def test_messages_include_tool_history(self):
         prompt = _messages_to_prompt(

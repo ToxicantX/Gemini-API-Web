@@ -201,6 +201,22 @@ curl http://localhost:7860/v1/chat/completions \
   }'
 ```
 
+JSON 模式：
+
+```sh
+curl http://localhost:7860/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gemini",
+    "response_format": { "type": "json_object" },
+    "messages": [
+      { "role": "user", "content": "只返回 JSON：{\"ok\": true}" }
+    ]
+  }'
+```
+
+`response_format` 支持 OpenAI 常用的 `json_object` 和 `json_schema`。服务端会把 JSON 输出要求追加到 Gemini 提示词中，模型最终输出仍以原始文本返回给 OpenAI 兼容客户端。
+
 多模态消息中的 `image_url` 会被保留为图片链接提示，适合外部 OpenAI 兼容客户端传入图片 URL：
 
 ```sh
