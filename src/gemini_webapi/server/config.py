@@ -45,6 +45,13 @@ def _env_list(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(values)
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True)
 class ServerConfig:
     database_path: Path
@@ -64,6 +71,7 @@ class ServerConfig:
     admin_session_secret: str = ""
     admin_cookie_secure: bool = False
     cors_allow_origins: tuple[str, ...] = ("*",)
+    require_api_key: bool = False
 
     @classmethod
     def from_env(cls) -> "ServerConfig":
@@ -100,6 +108,8 @@ class ServerConfig:
                 for key in os.getenv("API_KEYS", os.getenv("OPENAI_API_KEYS", "")).split(",")
                 if key.strip()
             ),
+            # 服务器部署时建议开启；即使暂未生成 API Key，也不会让外部 /v1/* 接口裸奔。
+            require_api_key=_env_bool("REQUIRE_API_KEY", False),
             host=os.getenv("HOST", "0.0.0.0"),
             port=_env_int("PORT", 7860, minimum=1),
             admin_password=os.getenv("ADMIN_PASSWORD") or None,

@@ -136,6 +136,7 @@ environment:
   ADMIN_PASSWORD: ""
   ADMIN_SESSION_SECRET: ""
   ADMIN_COOKIE_SECURE: "false"
+  REQUIRE_API_KEY: "false"
   API_KEYS: ""
   CORS_ALLOW_ORIGINS: "*"
 ```
@@ -151,6 +152,7 @@ environment:
 - `ADMIN_PASSWORD`：管理员密码。为空时不启用管理端登录，适合本地自用；服务器部署建议设置。
 - `ADMIN_SESSION_SECRET`：管理员会话签名密钥。服务器部署建议设置为一段随机长字符串。
 - `ADMIN_COOKIE_SECURE`：管理员会话 Cookie 是否只允许 HTTPS 发送。直连本地 HTTP 保持 `false`；通过 HTTPS 域名反向代理部署时建议设为 `true`。
+- `REQUIRE_API_KEY`：是否强制外部 `/v1/*` 接口必须使用 API Key。服务器部署建议设为 `true`；即使暂未配置或生成 API Key，也不会让外部接口无密钥开放。
 - `API_KEYS`：外部调用鉴权密钥，多个值可用英文逗号分隔；也可以在管理端“系统设置”里生成和管理。
 - `CORS_ALLOW_ORIGINS`：允许浏览器跨域调用的来源，默认 `*`。公网部署时建议改成你的面板域名，多个来源用英文逗号分隔。
 
@@ -165,7 +167,7 @@ ADMIN_PASSWORD=your-admin-password docker compose up -d --build
 也可以同时配置固定会话密钥、HTTPS 安全 Cookie 和外部 API Key：
 
 ```sh
-ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-secret ADMIN_COOKIE_SECURE=true API_KEYS=sk-your-external-key CORS_ALLOW_ORIGINS=https://your-panel.example.com docker compose up -d --build
+ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-secret ADMIN_COOKIE_SECURE=true REQUIRE_API_KEY=true API_KEYS=sk-your-external-key CORS_ALLOW_ORIGINS=https://your-panel.example.com docker compose up -d --build
 ```
 
 启用后：
@@ -177,7 +179,7 @@ ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-se
 - 鉴权头兼容 `Authorization: Bearer <API_KEY>`、大小写不同的 `bearer`，以及 `X-API-Key: <API_KEY>`。
 - Gemini 原生的 Gems、Deep Research、文件、媒体和 Jobs 接口也属于外部 API Key 调用面；账户池、授权浏览器、系统设置和请求日志仍属于管理端。
 - 浏览器环境跨域调用会返回 CORS 头；服务器公网部署时建议把 `CORS_ALLOW_ORIGINS` 收紧为可信域名。
-- 未配置任何 `API_KEYS` 且管理端系统设置中没有 API Key 时，外部接口保持无密钥模式，便于本地调试；服务器部署建议生成或配置 API Key。
+- 未配置任何 `API_KEYS` 且管理端系统设置中没有 API Key 时，默认外部接口保持无密钥模式，便于本地调试；服务器部署建议设置 `REQUIRE_API_KEY=true`。开启后如果还没有任何 API Key，外部接口会返回 401，管理员登录控制台后可在“系统设置”里生成第一个 API Key。
 
 ## OpenAI 兼容接口
 

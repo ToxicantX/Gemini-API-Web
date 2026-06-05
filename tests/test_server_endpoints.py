@@ -185,6 +185,7 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(data["accounts"]["available"], 1)
             self.assertTrue(data["auth"]["admin_enabled"])
             self.assertTrue(data["auth"]["api_key_required"])
+            self.assertTrue(data["auth"]["api_key_configured"])
             self.assertNotIn("psid-one", response.text)
 
     def test_body_validation_errors_are_openai_compatible(self):
@@ -720,6 +721,56 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 self.assertEqual(deleted.status_code, 200)
                 self.assertEqual(deleted.json()["deleted"], 1)
+
+    def test_require_api_key_blocks_external_calls_until_key_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=(),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+                require_api_key=True,
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                health = client.get("/health")
+                blocked = client.get("/v1/models")
+                login = client.post(
+                    "/v1/admin/login",
+                    json={"password": "admin-pass"},
+                )
+                # 管理员会话仍可进入系统设置生成第一个外部调用 API Key。
+                generated = client.post("/v1/system-settings/api-keys", json={})
+                api_key = generated.json()["api_key"]
+                authorized = client.get(
+                    "/v1/models",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                )
+
+            self.assertEqual(health.status_code, 200)
+            self.assertTrue(health.json()["auth"]["api_key_required"])
+            self.assertFalse(health.json()["auth"]["api_key_configured"])
+            self.assertEqual(blocked.status_code, 401)
+            self.assertIn(
+                "no API key has been configured",
+                blocked.json()["error"]["message"],
+            )
+            self.assertEqual(login.status_code, 200)
+            self.assertEqual(generated.status_code, 200)
+            self.assertTrue(api_key.startswith("sk-gemini-"))
+            self.assertEqual(authorized.status_code, 200)
 
     def test_admin_login_guards_management_endpoints(self):
         with tempfile.TemporaryDirectory() as tmp:

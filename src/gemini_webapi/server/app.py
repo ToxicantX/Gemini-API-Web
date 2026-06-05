@@ -1521,7 +1521,7 @@ def create_app(config: ServerConfig | None = None):
         )
         allowed_api_keys = set(config.api_keys) | set(system_settings["api_keys"])
         if (
-            allowed_api_keys
+            (allowed_api_keys or config.require_api_key)
             and path.startswith("/v1/")
             and path not in {
                 "/v1/status",
@@ -1539,6 +1539,18 @@ def create_app(config: ServerConfig | None = None):
             )
         ):
             token = _api_key_from_request(request)
+            if not allowed_api_keys:
+                return _with_request_id(
+                    JSONResponse(
+                        status_code=401,
+                        content=_openai_error(
+                            "API key is required, but no API key has been configured. Log in to the admin console and generate one in System Settings.",
+                            401,
+                            "authentication_error",
+                        ),
+                    ),
+                    request,
+                )
             if token not in allowed_api_keys:
                 return _with_request_id(
                     JSONResponse(
@@ -1674,7 +1686,12 @@ def create_app(config: ServerConfig | None = None):
             },
             "auth": {
                 "admin_enabled": bool(config.admin_password),
-                "api_key_required": bool(config.api_keys or system_settings["api_keys"]),
+                "api_key_required": bool(
+                    config.require_api_key
+                    or config.api_keys
+                    or system_settings["api_keys"]
+                ),
+                "api_key_configured": bool(config.api_keys or system_settings["api_keys"]),
             },
         }
 
