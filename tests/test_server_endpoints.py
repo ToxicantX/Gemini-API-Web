@@ -353,6 +353,15 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/",
                     headers={"X-API-Key": "sk-external"},
                 )
+                unauthorized_head = client.head("/v1")
+                head_root = client.head(
+                    "/v1",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                head_models = client.head(
+                    "/v1/models",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
 
             self.assertEqual(unauthorized.status_code, 401)
             self.assertEqual(authorized.status_code, 200)
@@ -365,6 +374,11 @@ class ServerEndpointTests(unittest.TestCase):
                 "/v1/chat/completions",
             )
             self.assertEqual(authorized_slash.status_code, 200)
+            self.assertEqual(unauthorized_head.status_code, 401)
+            self.assertEqual(head_root.status_code, 200)
+            self.assertEqual(head_models.status_code, 200)
+            self.assertFalse(head_root.text)
+            self.assertFalse(head_models.text)
 
     def test_openai_request_logs_correlate_with_response_request_id(self):
         with tempfile.TemporaryDirectory() as tmp:

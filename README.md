@@ -643,6 +643,8 @@ curl http://localhost:7860/v1/gemini/stream \
 
 `GET /health` 不需要管理员登录或 API Key，适合 Docker、反向代理和监控系统探活。它只返回非敏感摘要，包括服务版本、公开模型列表、账号总数/可用数、当前账号 id、是否启用管理员登录以及外部 API Key 是否必需，不会返回 Cookie 或 API Key 明文。`/healthz`、`/readyz`、`/livez` 是同样内容的兼容别名，并支持 `HEAD` 探测。
 
+外部客户端或反向代理也可以使用 `HEAD /v1`、`HEAD /v1/models` 做轻量连通性探测；开启 API Key 后同样需要携带 `Authorization: Bearer <API_KEY>`。
+
 ## 持久化数据
 
 SQLite 表包括：

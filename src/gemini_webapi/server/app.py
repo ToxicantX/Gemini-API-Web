@@ -1943,8 +1943,8 @@ def create_app(config: ServerConfig | None = None):
     async def list_files(limit: int = 80) -> dict[str, Any]:
         return {"files": [_file_dict(item) for item in store.list_files(limit=limit)]}
 
-    @app.get("/v1")
-    @app.get("/v1/")
+    @app.api_route("/v1", methods=["GET", "HEAD"])
+    @app.api_route("/v1/", methods=["GET", "HEAD"])
     async def v1_root() -> dict[str, Any]:
         # 外部客户端有时会探测 base_url + "/v1"；这里返回非敏感能力摘要。
         return {
@@ -2615,7 +2615,7 @@ def create_app(config: ServerConfig | None = None):
         )
         return {"ok": True, "job": _job_dict(store.get_job(request.job_id)), "result": result_data}
 
-    @app.get("/v1/models")
+    @app.api_route("/v1/models", methods=["GET", "HEAD"])
     async def models() -> dict[str, Any]:
         now = int(time.time())
         return {
