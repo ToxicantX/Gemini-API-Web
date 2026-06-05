@@ -103,6 +103,16 @@ class ServerModelTests(unittest.TestCase):
         self.assertEqual(data["data"][0]["url"], "/v1/gemini/media/tok-1/content")
         self.assertEqual(data["data"][0]["revised_prompt"], "make image")
 
+        absolute = _openai_image_generation_output(
+            [MediaRecord()],
+            revised_prompt="make image",
+            base_url="https://api.example.com",
+        )
+        self.assertEqual(
+            absolute["data"][0]["url"],
+            "https://api.example.com/v1/gemini/media/tok-1/content",
+        )
+
     def test_openai_image_generation_output_can_return_b64_json(self):
         class MediaRecord:
             token = "tok-1"

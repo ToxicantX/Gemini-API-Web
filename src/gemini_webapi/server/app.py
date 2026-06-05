@@ -514,6 +514,7 @@ def _openai_image_generation_output(
     revised_prompt: str | None = None,
     response_format: str | None = None,
     media_content_loader: Any | None = None,
+    base_url: str | None = None,
 ) -> dict[str, Any]:
     data: list[dict[str, Any]] = []
     for item in media_items:
@@ -531,6 +532,8 @@ def _openai_image_generation_output(
             url = media.get("content_url") or media.get("url")
             if not url:
                 continue
+            if base_url and isinstance(url, str) and url.startswith("/"):
+                url = f"{base_url.rstrip('/')}{url}"
             row = {"url": url}
         if revised_prompt:
             row["revised_prompt"] = revised_prompt
@@ -3163,6 +3166,7 @@ def create_app(config: ServerConfig | None = None):
         store_media: bool,
         files: list[str] | None = None,
         request_id: str | None = None,
+        http_request: Request | None = None,
     ) -> dict[str, Any]:
         response_format = response_format or "url"
         if response_format not in {"url", "b64_json"}:
@@ -3222,6 +3226,8 @@ def create_app(config: ServerConfig | None = None):
             revised_prompt=prompt,
             response_format=response_format,
             media_content_loader=lambda item: _media_content_bytes(item)[0],
+            # 外部 OpenAI 客户端会直接使用返回 URL，带上当前服务根地址避免相对路径无法预览。
+            base_url=str(http_request.base_url).rstrip("/") if http_request else None,
         )
 
     @app.post("/v1/images/generations")
@@ -3237,6 +3243,7 @@ def create_app(config: ServerConfig | None = None):
             response_format=request.response_format,
             store_media=request.store_media,
             request_id=_request_id_from_request(http_request),
+            http_request=http_request,
         )
 
     async def _save_temporary_upload_inputs(
@@ -3422,6 +3429,7 @@ def create_app(config: ServerConfig | None = None):
                 store_media=False,
                 files=paths,
                 request_id=_request_id_from_request(request),
+                http_request=request,
             )
         finally:
             await _cleanup_temporary_upload_inputs(edit_dir, paths)
@@ -3449,6 +3457,7 @@ def create_app(config: ServerConfig | None = None):
                 store_media=False,
                 files=paths,
                 request_id=_request_id_from_request(request),
+                http_request=request,
             )
         finally:
             await _cleanup_temporary_upload_inputs(variation_dir, paths)

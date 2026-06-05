@@ -2139,7 +2139,9 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.headers["x-request-id"], "client-image-1")
             data = response.json()
-            self.assertTrue(data["data"][0]["url"].startswith("/v1/gemini/media/"))
+            self.assertTrue(
+                data["data"][0]["url"].startswith("http://testserver/v1/gemini/media/")
+            )
             self.assertEqual(data["data"][0]["revised_prompt"], "make image")
             self.assertEqual(content.status_code, 200)
             self.assertEqual(content.content, b"image-bytes")
@@ -2260,7 +2262,11 @@ class ServerEndpointTests(unittest.TestCase):
 
             self.assertEqual(unauthenticated.status_code, 401)
             self.assertEqual(response.status_code, 200)
-            self.assertTrue(response.json()["data"][0]["url"].startswith("/v1/gemini/media/"))
+            self.assertTrue(
+                response.json()["data"][0]["url"].startswith(
+                    "http://testserver/v1/gemini/media/"
+                )
+            )
             self.assertEqual(calls[0][0], "edit image")
             self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
             self.assertEqual(calls[0][1]["generation_mode"], "image")
@@ -2361,7 +2367,11 @@ class ServerEndpointTests(unittest.TestCase):
 
             self.assertEqual(unauthenticated.status_code, 401)
             self.assertEqual(response.status_code, 200)
-            self.assertTrue(response.json()["data"][0]["url"].startswith("/v1/gemini/media/"))
+            self.assertTrue(
+                response.json()["data"][0]["url"].startswith(
+                    "http://testserver/v1/gemini/media/"
+                )
+            )
             self.assertEqual(calls[0][0], "基于上传图片生成新的图片变体。")
             self.assertEqual(calls[0][1]["model"], "gemini-3.1-pro")
             self.assertEqual(calls[0][1]["generation_mode"], "image")
