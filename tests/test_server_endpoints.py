@@ -1233,7 +1233,26 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/models/gemini-3-pro",
                     headers={"Authorization": "Bearer sk-external"},
                 )
+                unauthenticated_head = client.head("/v1/models/gemini-3.1-pro")
+                head_detail = client.head(
+                    "/v1/models/gemini-3.1-pro",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                rootless_head_detail = client.head(
+                    "/models/gemini-3.1-pro",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                missing_head = client.head(
+                    "/v1/models/gemini-3-pro",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
                 self.assertEqual(missing.status_code, 404)
+                self.assertEqual(unauthenticated_head.status_code, 401)
+                self.assertEqual(head_detail.status_code, 200)
+                self.assertEqual(rootless_head_detail.status_code, 200)
+                self.assertEqual(missing_head.status_code, 404)
+                self.assertFalse(head_detail.text)
+                self.assertFalse(rootless_head_detail.text)
 
     def test_legacy_completions_endpoint_is_openai_compatible(self):
         with tempfile.TemporaryDirectory() as tmp:

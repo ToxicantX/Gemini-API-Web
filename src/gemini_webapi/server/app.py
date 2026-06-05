@@ -2731,8 +2731,8 @@ def create_app(config: ServerConfig | None = None):
             "data": [_openai_model_object(model_id, now) for model_id in _openai_model_ids()],
         }
 
-    @app.get("/models/{model_id}")
-    @app.get("/v1/models/{model_id}")
+    @app.api_route("/models/{model_id}", methods=["GET", "HEAD"])
+    @app.api_route("/v1/models/{model_id}", methods=["GET", "HEAD"])
     async def model_detail(model_id: str) -> dict[str, Any]:
         try:
             resolved_model = _resolve_model_arg(model_id)
