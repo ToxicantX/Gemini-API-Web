@@ -2020,14 +2020,14 @@ def create_app(config: ServerConfig | None = None):
             raise HTTPException(status_code=413, detail="Media file is too large.")
         return content, content_type
 
-    @app.get("/v1/gemini/media/{media_token}/content")
-    async def gemini_media_content(media_token: str) -> Response:
+    @app.api_route("/v1/gemini/media/{media_token}/content", methods=["GET", "HEAD"])
+    async def gemini_media_content(request: Request, media_token: str) -> Response:
         item = store.get_media_output_by_token(media_token)
         if item is None:
             raise HTTPException(status_code=404, detail="Media not found.")
         content, content_type = _media_content_bytes(item)
         return Response(
-            content=content,
+            content=b"" if request.method == "HEAD" else content,
             media_type=content_type,
         )
 

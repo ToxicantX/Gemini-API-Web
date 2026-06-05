@@ -514,7 +514,7 @@ curl http://localhost:7860/v1/gemini/generate \
 
 兼容旧脚本的 `/v1/generate` 也支持 `mode=image|video|audio`；指定媒体模式时同样会保存媒体结果索引，并在响应和请求日志中回填 `media_count`。
 
-`/v1/gemini/media` 媒体历史列表仍受 API Key 或管理员会话保护；只有 `/v1/gemini/media/{media_token}/content` 内容下载链接会按随机 token 公开访问，便于外部 OpenAI 兼容客户端直接预览图片或视频。
+`/v1/gemini/media` 媒体历史列表仍受 API Key 或管理员会话保护；只有 `/v1/gemini/media/{media_token}/content` 内容下载链接会按随机 token 公开访问，便于外部 OpenAI 兼容客户端直接预览图片或视频。该内容链接支持 `GET` 下载和 `HEAD` 探测媒体类型。
 
 查看媒体历史：
 
@@ -604,7 +604,7 @@ curl http://localhost:7860/v1/gemini/stream \
 - `POST /v1/gemini/files`
 - `GET /v1/gemini/files`
 - `GET /v1/gemini/media`
-- `GET /v1/gemini/media/{media_token}/content`
+- `GET/HEAD /v1/gemini/media/{media_token}/content`
 - `GET /v1/gemini/jobs`
 
 ## 管理端页面

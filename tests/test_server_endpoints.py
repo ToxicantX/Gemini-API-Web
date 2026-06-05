@@ -2108,6 +2108,7 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 media_url = response.json()["data"][0]["url"]
                 content = client.get(media_url)
+                content_head = client.head(media_url)
                 media_list_without_key = client.get("/v1/gemini/media")
                 media_list_with_key = client.get(
                     "/v1/gemini/media",
@@ -2142,6 +2143,9 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(data["data"][0]["revised_prompt"], "make image")
             self.assertEqual(content.status_code, 200)
             self.assertEqual(content.content, b"image-bytes")
+            self.assertEqual(content_head.status_code, 200)
+            self.assertEqual(content_head.headers["content-type"], "image/png")
+            self.assertFalse(content_head.content)
             self.assertEqual(media_list_without_key.status_code, 401)
             self.assertEqual(media_list_with_key.status_code, 200)
             self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
