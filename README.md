@@ -251,7 +251,17 @@ curl http://localhost:7860/v1/responses \
   }'
 ```
 
-`/v1/responses` 支持 `input` 字符串或 Responses 风格消息数组，并返回 `output_text`；当前暂不支持 `stream=true`，流式调用请继续使用 `/v1/chat/completions`。
+`/v1/responses` 支持 `input` 字符串或 Responses 风格消息数组，并返回 `output_text`。设置 `stream=true` 时会返回 Responses 风格 SSE 事件，包括 `response.output_text.delta` 和 `response.completed`：
+
+```sh
+curl http://localhost:7860/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gemini",
+    "stream": true,
+    "input": "按行输出 1 和 2"
+  }'
+```
 
 OpenAI 兼容图片生成：
 

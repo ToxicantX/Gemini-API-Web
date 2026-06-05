@@ -532,6 +532,7 @@ class ServerEndpointTests(unittest.TestCase):
             )
             app = create_app(config)
             calls = []
+            stream_calls = []
 
             async def fake_init(self, *args, **kwargs):
                 self.client = FakeSession()
@@ -547,10 +548,22 @@ class ServerEndpointTests(unittest.TestCase):
                     candidates=[Candidate(rcid="rcid", text="response ok")],
                 )
 
+            async def fake_generate_content_stream(self, prompt, **kwargs):
+                stream_calls.append((prompt, kwargs))
+                yield ModelOutput(
+                    metadata=["cid", "rid"],
+                    candidates=[Candidate(rcid="rcid", text="", text_delta="one ")],
+                )
+                yield ModelOutput(
+                    metadata=["cid", "rid"],
+                    candidates=[Candidate(rcid="rcid", text="", text_delta="two")],
+                )
+
             with (
                 patch.object(GeminiClient, "init", fake_init),
                 patch.object(GeminiClient, "close", fake_close),
                 patch.object(GeminiClient, "generate_content", fake_generate_content),
+                patch.object(GeminiClient, "generate_content_stream", fake_generate_content_stream),
                 TestClient(app) as client,
             ):
                 app.state.store.upsert_account(
@@ -595,7 +608,15 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(data["output"][0]["content"][0]["type"], "output_text")
             self.assertIn("Image URL: https://example.com/a.png", calls[0][0])
             self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
-            self.assertEqual(stream.status_code, 400)
+            self.assertEqual(stream.status_code, 200)
+            self.assertIn("event: response.created", stream.text)
+            self.assertIn("event: response.output_text.delta", stream.text)
+            self.assertIn('"delta":"one "', stream.text)
+            self.assertIn('"delta":"two"', stream.text)
+            self.assertIn("event: response.completed", stream.text)
+            self.assertIn("data: [DONE]", stream.text)
+            self.assertEqual(stream_calls[0][0], "User: hello")
+            self.assertEqual(stream_calls[0][1]["model"], "gemini-3.1-pro")
 
     def test_openai_files_endpoint_reuses_gemini_file_storage(self):
         with tempfile.TemporaryDirectory() as tmp:

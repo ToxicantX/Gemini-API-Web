@@ -373,6 +373,10 @@ def _responses_output(
     }
 
 
+def _responses_stream_event(event: str, data: dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data).decode()}\n\n"
+
+
 def _openai_image_generation_output(
     media_items: list[Any],
     *,
@@ -2328,11 +2332,6 @@ def create_app(config: ServerConfig | None = None):
 
     @app.post("/v1/responses")
     async def responses(request: ResponsesRequest) -> dict[str, Any]:
-        if request.stream:
-            raise HTTPException(
-                status_code=400,
-                detail="/v1/responses stream is not supported yet. Use /v1/chat/completions with stream=true.",
-            )
         messages = _responses_input_to_messages(request.input)
         prompt = _messages_to_prompt(messages)
         if not prompt:
@@ -2342,6 +2341,158 @@ def create_app(config: ServerConfig | None = None):
             resolved_model = _resolve_model_arg(request.model)
         except Exception as exc:
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
+
+        if request.stream:
+            response_id = f"resp_{uuid.uuid4().hex}"
+            output_id = f"msg_{uuid.uuid4().hex}"
+            content_id = f"out_{uuid.uuid4().hex}"
+            created = int(time.time())
+
+            async def event_stream():
+                yield _responses_stream_event(
+                    "response.created",
+                    {
+                        "type": "response.created",
+                        "response": {
+                            "id": response_id,
+                            "object": "response",
+                            "created_at": created,
+                            "status": "in_progress",
+                            "model": model,
+                        },
+                    },
+                )
+                yield _responses_stream_event(
+                    "response.output_item.added",
+                    {
+                        "type": "response.output_item.added",
+                        "output_index": 0,
+                        "item": {
+                            "id": output_id,
+                            "type": "message",
+                            "status": "in_progress",
+                            "role": "assistant",
+                            "content": [],
+                        },
+                    },
+                )
+                yield _responses_stream_event(
+                    "response.content_part.added",
+                    {
+                        "type": "response.content_part.added",
+                        "item_id": output_id,
+                        "output_index": 0,
+                        "content_index": 0,
+                        "part": {
+                            "id": content_id,
+                            "type": "output_text",
+                            "text": "",
+                            "annotations": [],
+                        },
+                    },
+                )
+                text_parts: list[str] = []
+
+                async def operation(client):
+                    kwargs: dict[str, Any] = {}
+                    if resolved_model:
+                        kwargs["model"] = resolved_model
+                    async for output in client.generate_content_stream(prompt, **kwargs):
+                        yield output
+
+                try:
+                    async for output in rotator.run_stream(
+                        operation,
+                        endpoint="/v1/responses",
+                        model=model,
+                    ):
+                        delta = output.text_delta or ""
+                        if not delta:
+                            continue
+                        text_parts.append(delta)
+                        yield _responses_stream_event(
+                            "response.output_text.delta",
+                            {
+                                "type": "response.output_text.delta",
+                                "item_id": output_id,
+                                "output_index": 0,
+                                "content_index": 0,
+                                "delta": delta,
+                            },
+                        )
+                except Exception as exc:
+                    yield _responses_stream_event(
+                        "response.failed",
+                        {
+                            "type": "response.failed",
+                            "response": {
+                                "id": response_id,
+                                "object": "response",
+                                "created_at": created,
+                                "status": "failed",
+                                "model": model,
+                                "error": _openai_error(
+                                    str(exc),
+                                    _error_status(exc),
+                                )["error"],
+                            },
+                        },
+                    )
+                    yield "data: [DONE]\n\n"
+                    return
+
+                text = "".join(text_parts)
+                yield _responses_stream_event(
+                    "response.content_part.done",
+                    {
+                        "type": "response.content_part.done",
+                        "item_id": output_id,
+                        "output_index": 0,
+                        "content_index": 0,
+                        "part": {
+                            "id": content_id,
+                            "type": "output_text",
+                            "text": text,
+                            "annotations": [],
+                        },
+                    },
+                )
+                yield _responses_stream_event(
+                    "response.output_item.done",
+                    {
+                        "type": "response.output_item.done",
+                        "output_index": 0,
+                        "item": {
+                            "id": output_id,
+                            "type": "message",
+                            "status": "completed",
+                            "role": "assistant",
+                            "content": [
+                                {
+                                    "id": content_id,
+                                    "type": "output_text",
+                                    "text": text,
+                                    "annotations": [],
+                                }
+                            ],
+                        },
+                    },
+                )
+                yield _responses_stream_event(
+                    "response.completed",
+                    {
+                        "type": "response.completed",
+                        "response": _responses_output(
+                            response_id=response_id,
+                            model=model,
+                            text=text,
+                            created=created,
+                        ),
+                    },
+                )
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(event_stream(), media_type="text/event-stream")
 
         async def operation(client):
             kwargs: dict[str, Any] = {}
