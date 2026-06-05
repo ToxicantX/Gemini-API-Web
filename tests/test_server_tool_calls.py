@@ -81,6 +81,17 @@ class ServerToolCallTests(unittest.TestCase):
         self.assertIn("JSON response mode is enabled.", prompt)
         self.assertIn('"required":["status"]', prompt)
 
+    def test_responses_prompt_accepts_token_limit_aliases(self):
+        official = ResponsesRequest.model_validate(
+            {"input": "短回答", "max_output_tokens": 48}
+        )
+        compatible = ResponsesRequest.model_validate(
+            {"input": "短回答", "max_tokens": 32}
+        )
+
+        self.assertIn("approximately 48 tokens", _responses_prompt(official))
+        self.assertIn("approximately 32 tokens", _responses_prompt(compatible))
+
     def test_responses_output_shape(self):
         data = _responses_output(
             response_id="resp_1",

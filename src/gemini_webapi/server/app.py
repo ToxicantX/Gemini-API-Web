@@ -245,6 +245,7 @@ class ResponsesRequest(BaseModel):
     stream_options: dict[str, Any] | None = None
     temperature: float | None = None
     max_output_tokens: int | None = None
+    max_tokens: int | None = None
     top_p: float | None = None
 
 
@@ -436,13 +437,13 @@ def _responses_prompt(request: ResponsesRequest) -> str:
     messages = _responses_messages(request)
     prompt = _messages_to_prompt(messages)
     response_format = _response_format_from_responses_text(request.text)
-    if response_format is None:
-        return prompt
-    shim_request = ChatCompletionRequest(
-        messages=[ChatMessage(role="user", content="placeholder")],
-        response_format=response_format,
-    )
-    return _append_response_format_instructions(prompt, shim_request)
+    if response_format is not None:
+        shim_request = ChatCompletionRequest(
+            messages=[ChatMessage(role="user", content="placeholder")],
+            response_format=response_format,
+        )
+        prompt = _append_response_format_instructions(prompt, shim_request)
+    return _append_responses_token_limit_instruction(prompt, request)
 
 
 def _responses_output(
@@ -630,6 +631,20 @@ def _append_chat_token_limit_instruction(prompt: str, request: ChatCompletionReq
     if value <= 0:
         return prompt
     return f"{prompt}\n\nSystem: Keep the assistant response within approximately {value} tokens."
+
+
+def _append_responses_token_limit_instruction(prompt: str, request: ResponsesRequest) -> str:
+    # Responses API 常用 max_output_tokens；部分兼容客户端仍会传 max_tokens。
+    limit = request.max_output_tokens or request.max_tokens
+    if limit is None:
+        return prompt
+    try:
+        value = int(limit)
+    except Exception:
+        return prompt
+    if value <= 0:
+        return prompt
+    return f"{prompt}\n\nSystem: Keep the final response within approximately {value} tokens."
 
 
 def _append_completion_token_limit_instruction(prompt: str, request: CompletionRequest) -> str:
