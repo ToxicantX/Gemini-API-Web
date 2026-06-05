@@ -1669,6 +1669,16 @@ def create_app(config: ServerConfig | None = None):
         )
         status_data = rotator.status()
         accounts = status_data.get("accounts") or []
+        warnings: list[str] = []
+        if (
+            config.require_api_key
+            and not config.api_keys
+            and not system_settings["api_keys"]
+            and not config.admin_password
+        ):
+            warnings.append(
+                "REQUIRE_API_KEY is enabled but no API key or admin password is configured. Set API_KEYS or ADMIN_PASSWORD to bootstrap external access."
+            )
         return {
             "ok": True,
             "version": app.version,
@@ -1693,6 +1703,7 @@ def create_app(config: ServerConfig | None = None):
                 ),
                 "api_key_configured": bool(config.api_keys or system_settings["api_keys"]),
             },
+            "warnings": warnings,
         }
 
     @app.get("/v1/admin/status")

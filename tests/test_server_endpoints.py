@@ -186,6 +186,7 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertTrue(data["auth"]["admin_enabled"])
             self.assertTrue(data["auth"]["api_key_required"])
             self.assertTrue(data["auth"]["api_key_configured"])
+            self.assertEqual(data["warnings"], [])
             self.assertNotIn("psid-one", response.text)
 
     def test_body_validation_errors_are_openai_compatible(self):
@@ -762,6 +763,7 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(health.status_code, 200)
             self.assertTrue(health.json()["auth"]["api_key_required"])
             self.assertFalse(health.json()["auth"]["api_key_configured"])
+            self.assertEqual(health.json()["warnings"], [])
             self.assertEqual(blocked.status_code, 401)
             self.assertIn(
                 "no API key has been configured",
@@ -771,6 +773,37 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(generated.status_code, 200)
             self.assertTrue(api_key.startswith("sk-gemini-"))
             self.assertEqual(authorized.status_code, 200)
+
+    def test_health_warns_when_api_key_requirement_cannot_be_bootstrapped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=(),
+                host=config.host,
+                port=config.port,
+                require_api_key=True,
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                health = client.get("/health")
+                blocked = client.get("/v1/models")
+
+            self.assertEqual(health.status_code, 200)
+            self.assertTrue(health.json()["auth"]["api_key_required"])
+            self.assertFalse(health.json()["auth"]["api_key_configured"])
+            self.assertTrue(health.json()["warnings"])
+            self.assertIn("ADMIN_PASSWORD", health.json()["warnings"][0])
+            self.assertEqual(blocked.status_code, 401)
 
     def test_admin_login_guards_management_endpoints(self):
         with tempfile.TemporaryDirectory() as tmp:
