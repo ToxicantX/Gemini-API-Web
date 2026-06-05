@@ -993,6 +993,51 @@ class ServerEndpointTests(unittest.TestCase):
                 self.assertEqual(client.get("/v1/request-logs").status_code, 200)
                 self.assertEqual(client.post("/v1/admin/logout", json={}).status_code, 200)
 
+    def test_admin_login_rate_limits_repeated_failures(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                for _ in range(5):
+                    response = client.post(
+                        "/v1/admin/login",
+                        json={"password": "bad"},
+                    )
+                    self.assertEqual(response.status_code, 401)
+
+                limited = client.post(
+                    "/v1/admin/login",
+                    json={"password": "admin-pass"},
+                )
+                other_source = client.post(
+                    "/v1/admin/login",
+                    headers={"X-Forwarded-For": "203.0.113.10"},
+                    json={"password": "admin-pass"},
+                )
+
+            # 连续输错后同一来源会被短时间限速，避免服务器管理端被简单爆破。
+            self.assertEqual(limited.status_code, 429)
+            self.assertEqual(limited.json()["detail"], "管理员登录失败次数过多，请稍后再试。")
+            self.assertIn("Retry-After", limited.headers)
+            self.assertEqual(other_source.status_code, 200)
+
     def test_admin_login_can_set_secure_cookie_for_https_deployments(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)

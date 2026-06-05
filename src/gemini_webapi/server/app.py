@@ -71,6 +71,8 @@ DEFAULT_SYSTEM_SETTINGS = {
         "force_path_style": True,
     },
 }
+ADMIN_LOGIN_FAILURE_LIMIT = 5
+ADMIN_LOGIN_FAILURE_WINDOW_SECONDS = 10 * 60
 
 
 class GenerateRequest(BaseModel):
@@ -1257,6 +1259,46 @@ def _admin_session_valid(config: ServerConfig, value: str | None) -> bool:
     return hmac.compare_digest(signature, expected)
 
 
+def _admin_login_client_key(request: Request) -> str:
+    """按客户端来源聚合管理员登录失败次数，避免公网部署时被简单爆破。"""
+    forwarded_for = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+    if forwarded_for:
+        return forwarded_for
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _admin_login_limited(
+    failures: dict[str, list[float]],
+    key: str,
+    now: float,
+) -> tuple[bool, int]:
+    # 只统计窗口内失败记录；达到阈值后短时间拒绝继续尝试。
+    recent = [
+        item
+        for item in failures.get(key, [])
+        if now - item < ADMIN_LOGIN_FAILURE_WINDOW_SECONDS
+    ]
+    failures[key] = recent
+    if len(recent) < ADMIN_LOGIN_FAILURE_LIMIT:
+        return False, 0
+    retry_after = max(1, int(ADMIN_LOGIN_FAILURE_WINDOW_SECONDS - (now - recent[0])))
+    return True, retry_after
+
+
+def _record_admin_login_failure(
+    failures: dict[str, list[float]],
+    key: str,
+    now: float,
+) -> None:
+    failures[key] = [
+        item
+        for item in failures.get(key, [])
+        if now - item < ADMIN_LOGIN_FAILURE_WINDOW_SECONDS
+    ] + [now]
+
+
 def _normalize_api_keys(values: list[str] | tuple[str, ...] | None) -> list[str]:
     seen: set[str] = set()
     keys: list[str] = []
@@ -1466,6 +1508,7 @@ def create_app(config: ServerConfig | None = None):
         app.state.store = store
         app.state.rotator = rotator
         app.state.auth_browser = auth_browser
+        app.state.admin_login_failures = {}
         yield
         await auth_browser.close()
         await rotator.close()
@@ -1785,11 +1828,33 @@ def create_app(config: ServerConfig | None = None):
         }
 
     @app.post("/v1/admin/login")
-    async def admin_login(request: AdminLoginRequest) -> Response:
+    async def admin_login(request: AdminLoginRequest, http_request: Request) -> Response:
         if not config.admin_password:
             return JSONResponse({"ok": True, "enabled": False, "authenticated": True})
+        client_key = _admin_login_client_key(http_request)
+        now = time.time()
+        limited, retry_after = _admin_login_limited(
+            app.state.admin_login_failures,
+            client_key,
+            now,
+        )
+        if limited:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "ok": False,
+                    "detail": "管理员登录失败次数过多，请稍后再试。",
+                },
+                headers={"Retry-After": str(retry_after)},
+            )
         if not hmac.compare_digest(request.password, config.admin_password):
+            _record_admin_login_failure(
+                app.state.admin_login_failures,
+                client_key,
+                now,
+            )
             raise HTTPException(status_code=401, detail="管理员密码错误。")
+        app.state.admin_login_failures.pop(client_key, None)
         response = JSONResponse(
             {"ok": True, "enabled": True, "authenticated": True}
         )

@@ -189,6 +189,7 @@ ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-se
 
 - `http://localhost:7860` 会显示管理员登录页。
 - 控制台和管理接口需要管理员 Cookie。
+- 管理员登录连续输错会按客户端来源短时间限速，响应 `429` 和 `Retry-After`，避免公网部署时被简单爆破。
 - 网页授权使用的 noVNC 页面和 WebSocket 通道也需要管理员 Cookie，避免服务器部署时暴露授权浏览器。
 - `/v1/models`、`/v1/chat/completions`、`/v1/gemini/generate` 等外部接口不使用管理员登录鉴权，而是使用 `Authorization: Bearer <API_KEY>`。
 - 只配置 `ADMIN_PASSWORD` 不会自动保护外部 `/v1/*` API；服务器部署请同时配置 `API_KEYS`，或设置 `REQUIRE_API_KEY=true` 后在管理端生成 API Key。
