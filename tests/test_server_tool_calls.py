@@ -7,6 +7,7 @@ from gemini_webapi.server.app import (
     _append_response_format_instructions,
     _append_tool_instructions,
     _messages_to_prompt,
+    _messages_file_ids,
     _responses_input_to_messages,
     _responses_output,
     _responses_prompt,
@@ -127,6 +128,24 @@ class ServerToolCallTests(unittest.TestCase):
         self.assertIn("请分析这张图", prompt)
         self.assertIn("Image URL: https://example.com/cat.png", prompt)
         self.assertIn("Image URL: https://example.com/dog.png", prompt)
+
+    def test_messages_include_file_references_and_collect_file_ids(self):
+        messages = [
+            ChatMessage(
+                role="user",
+                content=[
+                    {"type": "input_text", "text": "总结附件"},
+                    {"type": "input_file", "file_id": "file-one"},
+                    {"type": "file", "id": "file-two"},
+                    {"type": "input_file", "file_id": "file-one"},
+                ],
+            )
+        ]
+        prompt = _messages_to_prompt(messages)
+
+        self.assertIn("Attached file: file-one", prompt)
+        self.assertIn("Attached file: file-two", prompt)
+        self.assertEqual(_messages_file_ids(messages), ["file-one", "file-two"])
 
     def test_chat_request_accepts_openai_tools(self):
         request = ChatCompletionRequest.model_validate(

@@ -288,7 +288,37 @@ def _message_content_to_text(content: str | list[dict[str, Any]] | None) -> str:
                 url = item["url"]
             if url:
                 parts.append(f"Image URL: {url}")
+        elif item_type in {"input_file", "file"}:
+            file_id = item.get("file_id") or item.get("id")
+            if isinstance(file_id, str) and file_id:
+                parts.append(f"Attached file: {file_id}")
     return "\n".join(parts)
+
+
+def _message_content_file_ids(content: str | list[dict[str, Any]] | None) -> list[str]:
+    if not isinstance(content, list):
+        return []
+    file_ids: list[str] = []
+    for item in content:
+        item_type = item.get("type")
+        if item_type not in {"input_file", "file"}:
+            continue
+        file_id = item.get("file_id") or item.get("id")
+        if isinstance(file_id, str) and file_id:
+            file_ids.append(file_id)
+    return file_ids
+
+
+def _messages_file_ids(messages: list[ChatMessage]) -> list[str]:
+    seen: set[str] = set()
+    file_ids: list[str] = []
+    for message in messages:
+        for file_id in _message_content_file_ids(message.content):
+            if file_id in seen:
+                continue
+            seen.add(file_id)
+            file_ids.append(file_id)
+    return file_ids
 
 
 def _messages_to_prompt(messages: list[ChatMessage]) -> str:
@@ -359,13 +389,18 @@ def _response_format_from_responses_text(text_options: dict[str, Any] | None) ->
     raise ValueError("text.format must be a string or object.")
 
 
-def _responses_prompt(request: ResponsesRequest) -> str:
+def _responses_messages(request: ResponsesRequest) -> list[ChatMessage]:
     messages = _responses_input_to_messages(request.input)
     if request.instructions:
-        messages = [
+        return [
             ChatMessage(role="system", content=request.instructions),
             *messages,
         ]
+    return messages
+
+
+def _responses_prompt(request: ResponsesRequest) -> str:
+    messages = _responses_messages(request)
     prompt = _messages_to_prompt(messages)
     response_format = _response_format_from_responses_text(request.text)
     if response_format is None:
@@ -2395,7 +2430,9 @@ def create_app(config: ServerConfig | None = None):
     @app.post("/v1/responses")
     async def responses(request: ResponsesRequest) -> dict[str, Any]:
         try:
+            response_messages = _responses_messages(request)
             prompt = _responses_prompt(request)
+            files = _file_paths(_messages_file_ids(response_messages))
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if not prompt:
@@ -2461,6 +2498,8 @@ def create_app(config: ServerConfig | None = None):
                     kwargs: dict[str, Any] = {}
                     if resolved_model:
                         kwargs["model"] = resolved_model
+                    if files:
+                        kwargs["files"] = files
                     async for output in client.generate_content_stream(prompt, **kwargs):
                         yield output
 
@@ -2562,6 +2601,8 @@ def create_app(config: ServerConfig | None = None):
             kwargs: dict[str, Any] = {}
             if resolved_model:
                 kwargs["model"] = resolved_model
+            if files:
+                kwargs["files"] = files
             return await client.generate_content(prompt, **kwargs)
 
         try:
@@ -2731,6 +2772,10 @@ def create_app(config: ServerConfig | None = None):
 
     @app.post("/v1/chat/completions")
     async def chat_completions(request: ChatCompletionRequest):
+        try:
+            files = _file_paths(_messages_file_ids(request.messages))
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         prompt = _messages_to_prompt(request.messages)
         if not prompt:
             raise HTTPException(status_code=400, detail="messages must contain text.")
@@ -2757,6 +2802,8 @@ def create_app(config: ServerConfig | None = None):
                     kwargs: dict[str, Any] = {}
                     if resolved_model:
                         kwargs["model"] = resolved_model
+                    if files:
+                        kwargs["files"] = files
                     async for output in client.generate_content_stream(prompt, **kwargs):
                         yield output
 
@@ -2800,6 +2847,8 @@ def create_app(config: ServerConfig | None = None):
             kwargs: dict[str, Any] = {}
             if resolved_model:
                 kwargs["model"] = resolved_model
+            if files:
+                kwargs["files"] = files
             return await client.generate_content(prompt, **kwargs)
 
         try:

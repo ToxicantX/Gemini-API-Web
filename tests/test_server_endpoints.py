@@ -571,13 +571,28 @@ class ServerEndpointTests(unittest.TestCase):
                     cookies={"__Secure-1PSID": "psid-one"},
                     name="one",
                 )
+                upload = client.post(
+                    "/v1/files",
+                    headers={"Authorization": "Bearer sk-external"},
+                    files={"file": ("demo.txt", b"hello", "text/plain")},
+                    data={"purpose": "assistants"},
+                )
+                file_id = upload.json()["id"]
                 response = client.post(
                     "/v1/chat/completions",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
                         "model": "gemini",
                         "response_format": {"type": "json_object"},
-                        "messages": [{"role": "user", "content": "返回 JSON"}],
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": "返回 JSON"},
+                                    {"type": "input_file", "file_id": file_id},
+                                ],
+                            }
+                        ],
                     },
                 )
                 stream = client.post(
@@ -597,7 +612,15 @@ class ServerEndpointTests(unittest.TestCase):
                                 },
                             },
                         },
-                        "messages": [{"role": "user", "content": "返回 JSON"}],
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": "返回 JSON"},
+                                    {"type": "input_file", "file_id": file_id},
+                                ],
+                            }
+                        ],
                     },
                 )
                 invalid = client.post(
@@ -613,10 +636,14 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["choices"][0]["message"]["content"], '{"ok":true}')
             self.assertIn("JSON response mode is enabled.", calls[0][0])
+            self.assertIn("Attached file:", calls[0][0])
+            self.assertEqual(len(calls[0][1]["files"]), 1)
+            self.assertTrue(Path(calls[0][1]["files"][0]).is_file())
             self.assertEqual(stream.status_code, 200)
             self.assertIn("data: [DONE]", stream.text)
             self.assertIn("JSON response mode is enabled.", stream_calls[0][0])
             self.assertIn('"required":["ok"]', stream_calls[0][0])
+            self.assertEqual(stream_calls[0][1]["files"], calls[0][1]["files"])
             self.assertEqual(invalid.status_code, 400)
 
     def test_responses_endpoint_is_openai_compatible(self):
@@ -680,6 +707,13 @@ class ServerEndpointTests(unittest.TestCase):
                     cookies={"__Secure-1PSID": "psid-one"},
                     name="one",
                 )
+                upload = client.post(
+                    "/v1/files",
+                    headers={"Authorization": "Bearer sk-external"},
+                    files={"file": ("response.txt", b"hello", "text/plain")},
+                    data={"purpose": "assistants"},
+                )
+                file_id = upload.json()["id"]
                 unauthenticated = client.post(
                     "/v1/responses",
                     json={"model": "gemini", "input": "hello"},
@@ -700,6 +734,7 @@ class ServerEndpointTests(unittest.TestCase):
                                         "type": "input_image",
                                         "image_url": "https://example.com/a.png",
                                     },
+                                    {"type": "input_file", "file_id": file_id},
                                 ],
                             }
                         ],
@@ -710,7 +745,15 @@ class ServerEndpointTests(unittest.TestCase):
                     headers={"Authorization": "Bearer sk-external"},
                     json={
                         "model": "gemini",
-                        "input": "hello",
+                        "input": [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "input_text", "text": "hello"},
+                                    {"type": "input_file", "file_id": file_id},
+                                ],
+                            }
+                        ],
                         "instructions": "流式也保持 JSON",
                         "text": {
                             "format": {
@@ -746,8 +789,10 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(data["output"][0]["content"][0]["type"], "output_text")
             self.assertIn("System: 保持简洁，只输出 JSON", calls[0][0])
             self.assertIn("Image URL: https://example.com/a.png", calls[0][0])
+            self.assertIn("Attached file:", calls[0][0])
             self.assertIn("JSON response mode is enabled.", calls[0][0])
             self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
+            self.assertEqual(len(calls[0][1]["files"]), 1)
             self.assertEqual(stream.status_code, 200)
             self.assertIn("event: response.created", stream.text)
             self.assertIn("event: response.output_text.delta", stream.text)
@@ -758,6 +803,7 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertIn("System: 流式也保持 JSON", stream_calls[0][0])
             self.assertIn('"required":["ok"]', stream_calls[0][0])
             self.assertIn("User: hello", stream_calls[0][0])
+            self.assertEqual(stream_calls[0][1]["files"], calls[0][1]["files"])
             self.assertEqual(stream_calls[0][1]["model"], "gemini-3.1-pro")
             self.assertEqual(invalid.status_code, 400)
 
