@@ -147,6 +147,46 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 self.assertEqual(client.get("/v1/models").status_code, 401)
 
+    def test_health_exposes_deployment_summary_without_auth(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                app.state.store.upsert_account(
+                    secure_1psid="psid-one",
+                    cookies={"__Secure-1PSID": "psid-one"},
+                    name="one",
+                )
+                response = client.get("/health")
+
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertTrue(data["ok"])
+            self.assertEqual(data["version"], "0.1.0")
+            self.assertIn("gemini-3.1-pro", data["models"])
+            self.assertEqual(data["accounts"]["total"], 1)
+            self.assertEqual(data["accounts"]["available"], 1)
+            self.assertTrue(data["auth"]["admin_enabled"])
+            self.assertTrue(data["auth"]["api_key_required"])
+            self.assertNotIn("psid-one", response.text)
+
     def test_body_validation_errors_are_openai_compatible(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)

@@ -1652,7 +1652,31 @@ def create_app(config: ServerConfig | None = None):
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
-        return {"ok": True}
+        system_settings = _merge_system_settings(
+            store.get_json_state(SYSTEM_SETTINGS_KEY, DEFAULT_SYSTEM_SETTINGS)
+        )
+        status_data = rotator.status()
+        accounts = status_data.get("accounts") or []
+        return {
+            "ok": True,
+            "version": app.version,
+            "models": _openai_model_ids(),
+            "accounts": {
+                "total": len(accounts),
+                "available": len(
+                    [
+                        account
+                        for account in accounts
+                        if account.get("enabled") and not account.get("expired")
+                    ]
+                ),
+                "current_account_id": status_data.get("current_account_id"),
+            },
+            "auth": {
+                "admin_enabled": bool(config.admin_password),
+                "api_key_required": bool(config.api_keys or system_settings["api_keys"]),
+            },
+        }
 
     @app.get("/v1/admin/status")
     async def admin_status(request: Request) -> dict[str, Any]:
