@@ -22,6 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..constants import Model
 from ..exceptions import (
@@ -1098,14 +1099,27 @@ def _external_api_path(path: str) -> bool:
     }
     if path in exact_paths:
         return True
-    return path.startswith(
+    if path.startswith(
         (
             "/v1/models/",
             "/v1/files/",
             "/v1/gemini/gems/",
             "/v1/gemini/deep-research/",
         )
+    ):
+        return True
+    management_prefixes = (
+        "/v1/admin",
+        "/v1/status",
+        "/v1/media-cooldowns",
+        "/v1/settings",
+        "/v1/system-settings",
+        "/v1/request-logs",
+        "/v1/accounts",
+        "/v1/auth",
     )
+    # 未知 /v1 路径仍属于外部客户端调用面；让有效 API Key 通过后返回真实 404/405。
+    return path.startswith("/v1/") and not path.startswith(management_prefixes)
 
 
 def _api_key_from_request(request: Request) -> str:
@@ -1398,8 +1412,13 @@ def create_app(config: ServerConfig | None = None):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException):
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException | StarletteHTTPException):
         detail = exc.detail if isinstance(exc.detail, str) else str(exc.detail)
+        if exc.status_code == 404 and detail == "Not Found":
+            detail = "The requested endpoint was not found."
+        elif exc.status_code == 405 and detail == "Method Not Allowed":
+            detail = "The requested method is not allowed for this endpoint."
         error_type = "invalid_request_error"
         if exc.status_code in {401, 403}:
             error_type = "authentication_error"

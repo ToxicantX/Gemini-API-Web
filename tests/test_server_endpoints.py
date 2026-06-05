@@ -181,6 +181,56 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(data["error"]["code"], 400)
             self.assertIn("messages", data["error"]["message"])
 
+    def test_not_found_and_method_errors_are_openai_compatible(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                missing = client.get(
+                    "/v1/not-a-route",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                wrong_method = client.get(
+                    "/v1/chat/completions",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                protected_management = client.get(
+                    "/v1/accounts/not-a-route",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+
+            self.assertEqual(missing.status_code, 404)
+            self.assertEqual(missing.json()["error"]["type"], "invalid_request_error")
+            self.assertIn("not found", missing.json()["error"]["message"])
+            self.assertEqual(wrong_method.status_code, 405)
+            self.assertEqual(
+                wrong_method.json()["error"]["type"],
+                "invalid_request_error",
+            )
+            self.assertIn("method is not allowed", wrong_method.json()["error"]["message"])
+            self.assertEqual(protected_management.status_code, 401)
+            self.assertEqual(
+                protected_management.json()["detail"],
+                "Admin login required.",
+            )
+
     def test_parse_candidate_falls_back_to_nested_video_urls(self):
         client = GeminiClient()
         candidate_data = [
