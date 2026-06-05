@@ -476,6 +476,81 @@ class ServerEndpointTests(unittest.TestCase):
                 self.assertEqual(client.get("/v1/request-logs").status_code, 200)
                 self.assertEqual(client.post("/v1/admin/logout", json={}).status_code, 200)
 
+    def test_admin_login_allows_native_external_api_key_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                native_paths = [
+                    ("GET", "/v1/gemini/gems", None),
+                    ("GET", "/v1/gemini/jobs", None),
+                    ("GET", "/v1/gemini/deep-research/job-missing/status", None),
+                    ("POST", "/v1/gemini/deep-research/plan", {"prompt": "research"}),
+                    (
+                        "POST",
+                        "/v1/gemini/gems",
+                        {"name": "reviewer", "prompt": "review code"},
+                    ),
+                    (
+                        "PATCH",
+                        "/v1/gemini/gems/gem-missing",
+                        {"name": "reviewer", "prompt": "review code"},
+                    ),
+                    ("DELETE", "/v1/gemini/gems/gem-missing", None),
+                ]
+                for method, path, payload in native_paths:
+                    with self.subTest(method=method, path=path):
+                        response = client.request(method, path, json=payload)
+                        self.assertEqual(response.status_code, 401)
+                        self.assertEqual(
+                            response.json()["error"]["message"],
+                            "Invalid or missing API key.",
+                        )
+
+                gems = client.get(
+                    "/v1/gemini/gems",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                self.assertEqual(gems.status_code, 200)
+                self.assertIn("gems", gems.json())
+
+                jobs = client.get(
+                    "/v1/gemini/jobs",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                self.assertEqual(jobs.status_code, 200)
+                self.assertIn("jobs", jobs.json())
+
+                missing_job = client.get(
+                    "/v1/gemini/deep-research/job-missing/status",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                self.assertEqual(missing_job.status_code, 404)
+
+                protected_management = client.get("/v1/accounts")
+                self.assertEqual(protected_management.status_code, 401)
+                self.assertEqual(
+                    protected_management.json()["detail"],
+                    "Admin login required.",
+                )
+
     def test_admin_login_guards_novnc_websocket(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)

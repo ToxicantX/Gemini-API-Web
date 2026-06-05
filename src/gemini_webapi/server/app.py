@@ -972,6 +972,40 @@ def _public_media_content_path(path: str) -> bool:
     return path.startswith("/v1/gemini/media/") and path.endswith("/content")
 
 
+def _external_api_path(path: str) -> bool:
+    """判断哪些接口属于外部 API Key 调用面，避免被管理员网页登录态误拦截。"""
+    if _public_media_content_path(path):
+        return True
+    exact_paths = {
+        "/v1/models",
+        "/v1/chat/completions",
+        "/v1/responses",
+        "/v1/audio/transcriptions",
+        "/v1/audio/translations",
+        "/v1/images/generations",
+        "/v1/images/edits",
+        "/v1/images/variations",
+        "/v1/generate",
+        "/v1/gemini/generate",
+        "/v1/gemini/stream",
+        "/v1/gemini/media",
+        "/v1/gemini/files",
+        "/v1/gemini/gems",
+        "/v1/gemini/jobs",
+        "/v1/files",
+    }
+    if path in exact_paths:
+        return True
+    return path.startswith(
+        (
+            "/v1/models/",
+            "/v1/files/",
+            "/v1/gemini/gems/",
+            "/v1/gemini/deep-research/",
+        )
+    )
+
+
 def _mask_secret(value: str | None) -> str:
     if not value:
         return ""
@@ -1281,24 +1315,7 @@ def create_app(config: ServerConfig | None = None):
                 config,
                 request.cookies.get("gemini_admin_session"),
             )
-            external_api_path = path in {
-                "/v1/models",
-                "/v1/chat/completions",
-                "/v1/responses",
-                "/v1/audio/transcriptions",
-                "/v1/audio/translations",
-                "/v1/images/generations",
-                "/v1/images/edits",
-                "/v1/images/variations",
-                "/v1/generate",
-                "/v1/gemini/generate",
-                "/v1/gemini/stream",
-                "/v1/gemini/media",
-                "/v1/gemini/files",
-                "/v1/files",
-            } or path.startswith("/v1/models/") or _public_media_content_path(path)
-            external_api_path = external_api_path or path.startswith("/v1/files/")
-            if not admin_ok and not external_api_path:
+            if not admin_ok and not _external_api_path(path):
                 return JSONResponse(
                     status_code=401,
                     content={"ok": False, "detail": "Admin login required."},
