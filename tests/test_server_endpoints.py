@@ -800,6 +800,11 @@ class ServerEndpointTests(unittest.TestCase):
                     headers={"X-API-Key": "sk-local-secret"},
                 )
                 self.assertEqual(x_api_key.status_code, 200)
+                api_key = client.get(
+                    "/v1/request-logs",
+                    headers={"API-Key": "sk-local-secret"},
+                )
+                self.assertEqual(api_key.status_code, 200)
                 openai_api_key = client.get(
                     "/v1/request-logs",
                     headers={"OpenAI-API-Key": "sk-local-secret"},
