@@ -1134,6 +1134,23 @@ def _api_key_from_request(request: Request) -> str:
     return auth
 
 
+def _request_id_from_request(request: Request) -> str:
+    """提取或生成外部请求号，便于客户端与服务端日志关联。"""
+    existing = getattr(request.state, "request_id", "")
+    if existing:
+        return existing
+    request_id = request.headers.get("x-request-id", "").strip()
+    if not request_id:
+        request_id = f"req-{uuid.uuid4().hex}"
+    request.state.request_id = request_id
+    return request_id
+
+
+def _with_request_id(response: Response, request: Request) -> Response:
+    response.headers["X-Request-ID"] = _request_id_from_request(request)
+    return response
+
+
 def _mask_secret(value: str | None) -> str:
     if not value:
         return ""
@@ -1447,6 +1464,14 @@ def create_app(config: ServerConfig | None = None):
         )
 
     @app.middleware("http")
+    async def request_id_header(request: Request, call_next):
+        # 外部调用排障时需要一个稳定请求号；若客户端自带 X-Request-ID 则原样回传。
+        request_id = _request_id_from_request(request)
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+    @app.middleware("http")
     async def bearer_auth(request: Request, call_next):
         path = request.url.path
         if request.method == "OPTIONS":
@@ -1468,9 +1493,12 @@ def create_app(config: ServerConfig | None = None):
                 request.cookies.get("gemini_admin_session"),
             )
             if not admin_ok and not _external_api_path(path):
-                return JSONResponse(
-                    status_code=401,
-                    content={"ok": False, "detail": "Admin login required."},
+                return _with_request_id(
+                    JSONResponse(
+                        status_code=401,
+                        content={"ok": False, "detail": "Admin login required."},
+                    ),
+                    request,
                 )
 
         system_settings = _merge_system_settings(
@@ -1497,13 +1525,16 @@ def create_app(config: ServerConfig | None = None):
         ):
             token = _api_key_from_request(request)
             if token not in allowed_api_keys:
-                return JSONResponse(
-                    status_code=401,
-                    content=_openai_error(
-                        "Invalid or missing API key.",
-                        401,
-                        "authentication_error",
+                return _with_request_id(
+                    JSONResponse(
+                        status_code=401,
+                        content=_openai_error(
+                            "Invalid or missing API key.",
+                            401,
+                            "authentication_error",
+                        ),
                     ),
+                    request,
                 )
         return await call_next(request)
 

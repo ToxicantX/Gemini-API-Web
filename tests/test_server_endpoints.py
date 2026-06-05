@@ -231,6 +231,48 @@ class ServerEndpointTests(unittest.TestCase):
                 "Admin login required.",
             )
 
+    def test_external_responses_include_request_id_header(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                generated = client.get(
+                    "/v1/models",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                echoed = client.get(
+                    "/v1/models",
+                    headers={
+                        "Authorization": "Bearer sk-external",
+                        "X-Request-ID": "client-request-1",
+                    },
+                )
+                unauthenticated = client.get("/v1/models")
+
+            self.assertEqual(generated.status_code, 200)
+            self.assertTrue(generated.headers["x-request-id"].startswith("req-"))
+            self.assertEqual(echoed.status_code, 200)
+            self.assertEqual(echoed.headers["x-request-id"], "client-request-1")
+            self.assertEqual(unauthenticated.status_code, 401)
+            self.assertTrue(unauthenticated.headers["x-request-id"].startswith("req-"))
+
     def test_parse_candidate_falls_back_to_nested_video_urls(self):
         client = GeminiClient()
         candidate_data = [
