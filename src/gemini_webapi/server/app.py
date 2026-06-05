@@ -1094,6 +1094,8 @@ def _external_api_path(path: str) -> bool:
     if _public_media_content_path(path):
         return True
     exact_paths = {
+        "/v1",
+        "/v1/",
         "/v1/models",
         "/v1/completions",
         "/v1/chat/completions",
@@ -1134,7 +1136,9 @@ def _external_api_path(path: str) -> bool:
         "/v1/auth",
     )
     # 未知 /v1 路径仍属于外部客户端调用面；让有效 API Key 通过后返回真实 404/405。
-    return path.startswith("/v1/") and not path.startswith(management_prefixes)
+    return path in {"/v1", "/v1/"} or (
+        path.startswith("/v1/") and not path.startswith(management_prefixes)
+    )
 
 
 def _api_key_from_request(request: Request) -> str:
@@ -1522,7 +1526,7 @@ def create_app(config: ServerConfig | None = None):
         allowed_api_keys = set(config.api_keys) | set(system_settings["api_keys"])
         if (
             (allowed_api_keys or config.require_api_key)
-            and path.startswith("/v1/")
+            and (path in {"/v1", "/v1/"} or path.startswith("/v1/"))
             and path not in {
                 "/v1/status",
                 "/v1/admin/status",
@@ -1924,6 +1928,27 @@ def create_app(config: ServerConfig | None = None):
     @app.get("/v1/gemini/files")
     async def list_files(limit: int = 80) -> dict[str, Any]:
         return {"files": [_file_dict(item) for item in store.list_files(limit=limit)]}
+
+    @app.get("/v1")
+    @app.get("/v1/")
+    async def v1_root() -> dict[str, Any]:
+        # 外部客户端有时会探测 base_url + "/v1"；这里返回非敏感能力摘要。
+        return {
+            "ok": True,
+            "object": "api.root",
+            "models": _openai_model_ids(),
+            "endpoints": {
+                "models": "/v1/models",
+                "chat_completions": "/v1/chat/completions",
+                "completions": "/v1/completions",
+                "responses": "/v1/responses",
+                "images": "/v1/images/generations",
+                "audio_transcriptions": "/v1/audio/transcriptions",
+                "gemini_generate": "/v1/gemini/generate",
+                "gemini_stream": "/v1/gemini/stream",
+                "gemini_media": "/v1/gemini/media",
+            },
+        }
 
     async def _save_uploaded_file(file: UploadFile) -> Any:
         # 上传文件统一落到 data/uploads，OpenAI 兼容和 Gemini 原生接口共享同一个 file_id。

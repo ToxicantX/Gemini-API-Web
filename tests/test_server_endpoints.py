@@ -315,6 +315,50 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(unauthenticated.status_code, 401)
             self.assertTrue(unauthenticated.headers["x-request-id"].startswith("req-"))
 
+    def test_v1_root_is_api_key_protected_capability_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                unauthorized = client.get("/v1")
+                authorized = client.get(
+                    "/v1",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                authorized_slash = client.get(
+                    "/v1/",
+                    headers={"X-API-Key": "sk-external"},
+                )
+
+            self.assertEqual(unauthorized.status_code, 401)
+            self.assertEqual(authorized.status_code, 200)
+            data = authorized.json()
+            self.assertTrue(data["ok"])
+            self.assertEqual(data["object"], "api.root")
+            self.assertIn("gemini-3.1-pro", data["models"])
+            self.assertEqual(
+                data["endpoints"]["chat_completions"],
+                "/v1/chat/completions",
+            )
+            self.assertEqual(authorized_slash.status_code, 200)
+
     def test_openai_request_logs_correlate_with_response_request_id(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)
