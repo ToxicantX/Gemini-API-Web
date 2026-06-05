@@ -28,4 +28,8 @@ RUN pip install --no-cache-dir ".[server]"
 VOLUME ["/app/data"]
 EXPOSE 7860 6080
 
+# 服务器部署时让 Docker 能直接判断 API 进程是否真正可用，而不是只看容器进程是否还在。
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import os, sys, urllib.request; port=os.getenv('PORT','7860'); urllib.request.urlopen(f'http://127.0.0.1:{port}/health', timeout=3).read(); sys.exit(0)"
+
 CMD ["gemini-webapi-server"]

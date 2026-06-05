@@ -82,6 +82,15 @@ docker compose up -d --build
 
 运行数据保存在 `data/`，重建镜像不会清空 SQLite、媒体缓存或已保存账号。
 
+镜像内置 Docker 健康检查，会定时访问容器内 `/health`。更新或重启后可以查看：
+
+```sh
+docker compose ps
+curl http://localhost:7860/health
+```
+
+`/health` 不需要管理员登录或 API Key，只返回非敏感摘要，适合反向代理和监控系统探活。
+
 ## 添加账号
 
 推荐使用管理端的“网页授权”：
