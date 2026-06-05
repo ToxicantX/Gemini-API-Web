@@ -9,7 +9,7 @@
 - Docker 一键部署，数据持久化到 SQLite。
 - 多账号 Cookie 池，支持导入、手动添加、网页登录授权保存。
 - 支持按调用次数轮换、按错误次数轮换、手动切换账号。
-- OpenAI 兼容接口：`/v1/chat/completions`、`/v1/models`。
+- OpenAI 兼容接口：`/v1/chat/completions`、`/v1/completions`、`/v1/responses`、`/v1/models`。
 - Gemini 原生接口：生成、流式生成、Gems、Deep Research、文件上传、媒体结果索引。
 - 管理端控制台：请求看板、账户设置、授权登录、Gems、Deep Research、媒体生成和媒体结果。
 - 服务器部署可开启管理员登录，保护网页控制台和管理接口；外部调用继续使用 API Key。
@@ -190,6 +190,20 @@ curl http://localhost:7860/v1/models
 ```sh
 curl http://localhost:7860/v1/models/gemini-3.1-pro
 ```
+
+文本补全：
+
+```sh
+curl http://localhost:7860/v1/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gemini",
+    "prompt": "只回复 OK",
+    "max_tokens": 32
+  }'
+```
+
+`/v1/completions` 用于兼容旧 OpenAI 文本补全客户端，支持 `prompt`、`stream`、`stop`、`max_tokens` 和 `stream_options.include_usage`。多候选 `n>1` 暂不支持。
 
 聊天补全：
 

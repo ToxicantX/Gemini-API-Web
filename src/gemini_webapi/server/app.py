@@ -221,6 +221,19 @@ class ChatCompletionRequest(BaseModel):
     response_format: ResponseFormatSpec | None = None
 
 
+class CompletionRequest(BaseModel):
+    model: str | None = None
+    prompt: str | list[str]
+    stream: bool = False
+    stream_options: dict[str, Any] | None = None
+    temperature: float | None = None
+    max_tokens: int | None = None
+    top_p: float | None = None
+    n: int | None = None
+    stop: str | list[str] | None = None
+    suffix: str | None = None
+
+
 class ResponsesRequest(BaseModel):
     model: str | None = None
     input: str | list[Any]
@@ -604,6 +617,18 @@ def _append_chat_token_limit_instruction(prompt: str, request: ChatCompletionReq
     return f"{prompt}\n\nSystem: Keep the assistant response within approximately {value} tokens."
 
 
+def _append_completion_token_limit_instruction(prompt: str, request: CompletionRequest) -> str:
+    if request.max_tokens is None:
+        return prompt
+    try:
+        value = int(request.max_tokens)
+    except Exception:
+        return prompt
+    if value <= 0:
+        return prompt
+    return f"{prompt}\n\nSystem: Keep the completion within approximately {value} tokens."
+
+
 def _stop_sequences(stop: str | list[str] | None) -> list[str]:
     if stop is None:
         return []
@@ -890,6 +915,14 @@ def _chat_zero_usage() -> dict[str, int]:
     }
 
 
+def _completion_zero_usage() -> dict[str, int]:
+    return {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+    }
+
+
 def _chat_usage_chunk(completion_id: str, model: str) -> dict[str, Any]:
     """OpenAI 流式 include_usage 会在结束前发送一个 choices 为空的 usage chunk。"""
     return {
@@ -899,6 +932,39 @@ def _chat_usage_chunk(completion_id: str, model: str) -> dict[str, Any]:
         "model": model,
         "choices": [],
         "usage": _chat_zero_usage(),
+    }
+
+
+def _completion_chunk(
+    completion_id: str,
+    model: str,
+    text: str = "",
+    *,
+    finish_reason: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "id": completion_id,
+        "object": "text_completion.chunk",
+        "created": int(time.time()),
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "text": text,
+                "finish_reason": finish_reason,
+            }
+        ],
+    }
+
+
+def _completion_usage_chunk(completion_id: str, model: str) -> dict[str, Any]:
+    return {
+        "id": completion_id,
+        "object": "text_completion.chunk",
+        "created": int(time.time()),
+        "model": model,
+        "choices": [],
+        "usage": _completion_zero_usage(),
     }
 
 
@@ -999,6 +1065,7 @@ def _external_api_path(path: str) -> bool:
         return True
     exact_paths = {
         "/v1/models",
+        "/v1/completions",
         "/v1/chat/completions",
         "/v1/responses",
         "/v1/audio/transcriptions",
@@ -3040,6 +3107,109 @@ def create_app(config: ServerConfig | None = None):
             )
         finally:
             await _cleanup_temporary_upload_inputs(variation_dir, paths)
+
+    @app.post("/v1/completions")
+    async def completions(request: CompletionRequest):
+        if request.n is not None and request.n < 1:
+            raise HTTPException(status_code=400, detail="n must be at least 1.")
+        if request.n and request.n > 1:
+            raise HTTPException(status_code=400, detail="Only n=1 is supported.")
+        prompt_value = request.prompt[0] if isinstance(request.prompt, list) else request.prompt
+        if not isinstance(prompt_value, str) or not prompt_value:
+            raise HTTPException(status_code=400, detail="prompt must contain text.")
+        prompt = prompt_value
+        if request.suffix:
+            prompt = f"{prompt}\n{request.suffix}"
+        prompt = _append_completion_token_limit_instruction(prompt, request)
+        model = request.model or "gemini"
+        try:
+            resolved_model = _resolve_model_arg(request.model)
+        except Exception as exc:
+            raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
+
+        if request.stream:
+            completion_id = f"cmpl-{uuid.uuid4().hex}"
+
+            async def event_stream():
+                emitted_text = ""
+                stopped_by_sequence = False
+
+                async def operation(client):
+                    kwargs: dict[str, Any] = {}
+                    if resolved_model:
+                        kwargs["model"] = resolved_model
+                    async for output in client.generate_content_stream(prompt, **kwargs):
+                        yield output
+
+                try:
+                    async for output in rotator.run_stream(
+                        operation,
+                        endpoint="/v1/completions",
+                        model=model,
+                    ):
+                        delta = output.text_delta or ""
+                        if not delta:
+                            continue
+                        next_text = f"{emitted_text}{delta}"
+                        truncated, stopped_by_sequence = _apply_stop_sequences(
+                            next_text,
+                            request.stop,
+                        )
+                        send_delta = truncated[len(emitted_text) :]
+                        emitted_text = truncated
+                        if send_delta:
+                            chunk = _completion_chunk(completion_id, model, text=send_delta)
+                            yield f"data: {json.dumps(chunk).decode()}\n\n"
+                        if stopped_by_sequence:
+                            break
+                except Exception as exc:
+                    error = _openai_error(str(exc), _error_status(exc))
+                    yield f"data: {json.dumps(error).decode()}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+                final = _completion_chunk(
+                    completion_id,
+                    model,
+                    finish_reason="stop",
+                )
+                yield f"data: {json.dumps(final).decode()}\n\n"
+                if _stream_include_usage(request.stream_options):
+                    usage = _completion_usage_chunk(completion_id, model)
+                    yield f"data: {json.dumps(usage).decode()}\n\n"
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+        async def operation(client):
+            kwargs: dict[str, Any] = {}
+            if resolved_model:
+                kwargs["model"] = resolved_model
+            return await client.generate_content(prompt, **kwargs)
+
+        try:
+            output = await rotator.run(
+                operation,
+                endpoint="/v1/completions",
+                model=model,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
+        text, _ = _apply_stop_sequences(output.text, request.stop)
+        return {
+            "id": f"cmpl-{uuid.uuid4().hex}",
+            "object": "text_completion",
+            "created": int(time.time()),
+            "model": model,
+            "choices": [
+                {
+                    "index": 0,
+                    "text": text,
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": _completion_zero_usage(),
+        }
 
     @app.post("/v1/chat/completions")
     async def chat_completions(request: ChatCompletionRequest):
