@@ -183,22 +183,27 @@ ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-se
 
 ## OpenAI 兼容接口
 
+以下示例按服务器部署推荐配置编写，统一带 `Authorization: Bearer sk-your-external-key`。如果本地调试未开启 `REQUIRE_API_KEY` 且没有配置任何 API Key，可以临时省略该请求头。
+
 列出模型：
 
 ```sh
-curl http://localhost:7860/v1/models
+curl http://localhost:7860/v1/models \
+  -H "Authorization: Bearer sk-your-external-key"
 ```
 
 查询单个模型：
 
 ```sh
-curl http://localhost:7860/v1/models/gemini-3.1-pro
+curl http://localhost:7860/v1/models/gemini-3.1-pro \
+  -H "Authorization: Bearer sk-your-external-key"
 ```
 
 文本补全：
 
 ```sh
 curl http://localhost:7860/v1/completions \
+  -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gemini",
@@ -213,6 +218,7 @@ curl http://localhost:7860/v1/completions \
 
 ```sh
 curl http://localhost:7860/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gemini",
@@ -226,6 +232,7 @@ curl http://localhost:7860/v1/chat/completions \
 
 ```sh
 curl http://localhost:7860/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gemini",
@@ -240,6 +247,7 @@ JSON 模式：
 
 ```sh
 curl http://localhost:7860/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gemini",
@@ -260,6 +268,7 @@ Chat Completions 中的 `system` 和新式 `developer` 角色都会作为 Gemini
 
 ```sh
 curl http://localhost:7860/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gemini",
@@ -287,10 +296,14 @@ curl http://localhost:7860/v1/files \
 ```
 
 ```sh
-curl http://localhost:7860/v1/files
-curl http://localhost:7860/v1/files/file-xxxx
-curl http://localhost:7860/v1/files/file-xxxx/content
-curl -X DELETE http://localhost:7860/v1/files/file-xxxx
+curl http://localhost:7860/v1/files \
+  -H "Authorization: Bearer sk-your-external-key"
+curl http://localhost:7860/v1/files/file-xxxx \
+  -H "Authorization: Bearer sk-your-external-key"
+curl http://localhost:7860/v1/files/file-xxxx/content \
+  -H "Authorization: Bearer sk-your-external-key"
+curl -X DELETE http://localhost:7860/v1/files/file-xxxx \
+  -H "Authorization: Bearer sk-your-external-key"
 ```
 
 `/v1/files`、`/v1/files/{file_id}`、`/v1/files/{file_id}/content` 和 `DELETE /v1/files/{file_id}` 使用 OpenAI 常见的文件对象结构；文件内容保存在本地 `data/uploads/`。Chat Completions 和 Responses 可以在消息内容里通过 `input_file` 或 `input_audio.file_id` 引用 `file-...`，服务端会把对应本地文件传给 Gemini。
@@ -322,6 +335,7 @@ Responses API：
 
 ```sh
 curl http://localhost:7860/v1/responses \
+  -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gemini",
@@ -335,6 +349,7 @@ curl http://localhost:7860/v1/responses \
 
 ```sh
 curl http://localhost:7860/v1/responses \
+  -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gemini",
@@ -368,6 +383,7 @@ OpenAI 兼容图片生成：
 
 ```sh
 curl http://localhost:7860/v1/images/generations \
+  -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gemini",
@@ -415,6 +431,7 @@ curl http://localhost:7860/v1/images/variations \
 
 ```sh
 curl http://localhost:7860/v1/gemini/generate \
+  -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gemini",
@@ -426,6 +443,7 @@ curl http://localhost:7860/v1/gemini/generate \
 
 ```sh
 curl http://localhost:7860/v1/gemini/generate \
+  -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gemini",
@@ -476,7 +494,8 @@ curl http://localhost:7860/v1/gemini/generate \
 查看媒体历史：
 
 ```sh
-curl "http://localhost:7860/v1/gemini/media?limit=20"
+curl "http://localhost:7860/v1/gemini/media?limit=20" \
+  -H "Authorization: Bearer sk-your-external-key"
 ```
 
 访问媒体内容：
@@ -499,7 +518,8 @@ http://localhost:7860/v1/gemini/media/{media_token}/content
 媒体冷却汇总示例：
 
 ```sh
-curl http://localhost:7860/v1/media-cooldowns
+curl http://localhost:7860/v1/media-cooldowns \
+  -H "Authorization: Bearer sk-your-external-key"
 ```
 
 ```json
@@ -527,6 +547,7 @@ curl http://localhost:7860/v1/media-cooldowns
 
 ```sh
 curl http://localhost:7860/v1/media-cooldowns/clear \
+  -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{"kind":"video"}'
 ```
@@ -537,6 +558,7 @@ curl http://localhost:7860/v1/media-cooldowns/clear \
 
 ```sh
 curl http://localhost:7860/v1/gemini/stream \
+  -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gemini",
