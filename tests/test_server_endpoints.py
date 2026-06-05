@@ -1654,6 +1654,67 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(response.json()["choices"][0]["finish_reason"], "tool_calls")
             self.assertIn("You must call the tool named get_weather.", calls[0][0])
 
+    def test_chat_completions_stream_errors_emit_sse_error_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+
+            async def fake_init(self, *args, **kwargs):
+                self.client = FakeSession()
+                self.account_status = AccountStatus.AVAILABLE
+
+            async def fake_close(self):
+                self.client = None
+
+            async def fake_generate_content_stream(self, prompt, **kwargs):
+                raise RuntimeError("stream boom")
+                yield
+
+            with (
+                patch.object(GeminiClient, "init", fake_init),
+                patch.object(GeminiClient, "close", fake_close),
+                patch.object(GeminiClient, "generate_content_stream", fake_generate_content_stream),
+                TestClient(app) as client,
+            ):
+                app.state.store.upsert_account(
+                    secure_1psid="psid-one",
+                    cookies={"__Secure-1PSID": "psid-one"},
+                    name="one",
+                )
+                response = client.post(
+                    "/v1/chat/completions",
+                    headers={"Authorization": "Bearer sk-external"},
+                    json={
+                        "model": "gemini",
+                        "stream": True,
+                        "messages": [{"role": "user", "content": "hello"}],
+                    },
+                )
+
+            self.assertEqual(response.status_code, 200)
+            self._assert_sse_headers(response)
+            # 流式错误使用 SSE error 事件，方便 EventSource/SDK 直接监听。
+            self.assertIn("event: error", response.text)
+            self.assertIn("stream boom", response.text)
+            self.assertIn("data: [DONE]", response.text)
+
     def test_responses_endpoint_is_openai_compatible(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)

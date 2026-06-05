@@ -504,6 +504,11 @@ def _responses_stream_event(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data).decode()}\n\n"
 
 
+def _sse_error_event(data: dict[str, Any]) -> str:
+    # EventSource 客户端可以直接监听 error 事件；data 仍保持原有 JSON，兼容逐行解析客户端。
+    return f"event: error\ndata: {json.dumps(data).decode()}\n\n"
+
+
 def _sse_response(event_stream: Any) -> StreamingResponse:
     """统一 SSE 响应头，减少反向代理或浏览器客户端缓冲流式数据。"""
     return StreamingResponse(
@@ -2482,7 +2487,7 @@ def create_app(config: ServerConfig | None = None):
                     yield f"data: {json.dumps(chunk).decode()}\n\n"
             except Exception as exc:
                 error = {"ok": False, "error": str(exc), "status": _error_status(exc)}
-                yield f"data: {json.dumps(error).decode()}\n\n"
+                yield _sse_error_event(error)
                 yield "data: [DONE]\n\n"
                 return
 
@@ -2491,7 +2496,7 @@ def create_app(config: ServerConfig | None = None):
                     _ensure_media_generation_result(final_output, generation_mode)
                 except Exception as exc:
                     error = {"ok": False, "error": str(exc), "status": _error_status(exc)}
-                    yield f"data: {json.dumps(error).decode()}\n\n"
+                    yield _sse_error_event(error)
                     yield "data: [DONE]\n\n"
                     return
                 account_id = rotator.status()["current_account_id"]
@@ -3566,7 +3571,7 @@ def create_app(config: ServerConfig | None = None):
                             break
                 except Exception as exc:
                     error = _openai_error(str(exc), _error_status(exc))
-                    yield f"data: {json.dumps(error).decode()}\n\n"
+                    yield _sse_error_event(error)
                     yield "data: [DONE]\n\n"
                     return
 
@@ -3683,7 +3688,7 @@ def create_app(config: ServerConfig | None = None):
                                 break
                 except Exception as exc:
                     error = _openai_error(str(exc), _error_status(exc))
-                    yield f"data: {json.dumps(error).decode()}\n\n"
+                    yield _sse_error_event(error)
                     yield "data: [DONE]\n\n"
                     return
 
