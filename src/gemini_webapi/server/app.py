@@ -2626,10 +2626,10 @@ def create_app(config: ServerConfig | None = None):
     @app.get("/v1/models/{model_id}")
     async def model_detail(model_id: str) -> dict[str, Any]:
         try:
-            _resolve_model_arg(model_id)
+            resolved_model = _resolve_model_arg(model_id)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        return _openai_model_object(model_id)
+        return _openai_model_object(resolved_model or "gemini")
 
     @app.get("/v1/accounts")
     async def list_accounts() -> dict[str, Any]:

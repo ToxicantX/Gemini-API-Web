@@ -1127,6 +1127,12 @@ class ServerEndpointTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.json()["id"], "gemini-3.1-pro")
                 self.assertEqual(response.json()["object"], "model")
+                alias = client.get(
+                    "/v1/models/GEMINI",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                self.assertEqual(alias.status_code, 200)
+                self.assertEqual(alias.json()["id"], "gemini-3.1-pro")
                 missing = client.get(
                     "/v1/models/gemini-3-pro",
                     headers={"Authorization": "Bearer sk-external"},
