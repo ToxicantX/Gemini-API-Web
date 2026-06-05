@@ -288,6 +288,17 @@ curl http://localhost:7860/v1/images/edits \
 
 `/v1/images/edits` 会把上传的 `image` 和可选 `mask` 临时传给 Gemini 图片模式，返回格式与 `/v1/images/generations` 一致；当前同样只支持 URL 返回。
 
+OpenAI 兼容图片变体：
+
+```sh
+curl http://localhost:7860/v1/images/variations \
+  -H "Authorization: Bearer sk-your-external-key" \
+  -F "model=gemini" \
+  -F "image=@./source.png"
+```
+
+`/v1/images/variations` 会把上传图片作为 Gemini 图片模式输入，并使用默认变体提示生成新图，返回格式与 `/v1/images/generations` 一致。
+
 常用模型：
 
 - `gemini`：默认映射到 Gemini 3.1 Pro。

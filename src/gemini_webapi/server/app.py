@@ -1115,6 +1115,7 @@ def create_app(config: ServerConfig | None = None):
                 "/v1/responses",
                 "/v1/images/generations",
                 "/v1/images/edits",
+                "/v1/images/variations",
                 "/v1/generate",
                 "/v1/gemini/generate",
                 "/v1/gemini/stream",
@@ -2586,6 +2587,33 @@ def create_app(config: ServerConfig | None = None):
             store_media=request.store_media,
         )
 
+    async def _save_temporary_image_inputs(
+        uploads: list[UploadFile],
+        *,
+        prefix: str,
+    ) -> tuple[Path, list[str]]:
+        # OpenAI 图片编辑/变体上传只作为本次 Gemini 调用输入，调用结束后立即清理。
+        temp_dir = Path(config.database_path).resolve().parent / prefix / uuid.uuid4().hex
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        saved: list[str] = []
+        for index, upload in enumerate(uploads):
+            suffix = Path(upload.filename or f"image-{index}.png").suffix or ".png"
+            dest = temp_dir / f"{index}{suffix}"
+            dest.write_bytes(await upload.read())
+            saved.append(str(dest))
+        return temp_dir, saved
+
+    async def _cleanup_temporary_image_inputs(temp_dir: Path, paths: list[str]) -> None:
+        for path in paths:
+            try:
+                Path(path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        try:
+            temp_dir.rmdir()
+        except OSError:
+            pass
+
     @app.post("/v1/images/edits")
     async def image_edits(
         prompt: str = Form(...),
@@ -2596,18 +2624,11 @@ def create_app(config: ServerConfig | None = None):
         size: str | None = Form(None),
         response_format: str | None = Form(None),
     ) -> dict[str, Any]:
-        edit_dir = Path(config.database_path).resolve().parent / "image-edits" / uuid.uuid4().hex
-        edit_dir.mkdir(parents=True, exist_ok=True)
-        paths: list[str] = []
+        uploads: list[UploadFile] = list(image)
+        if mask is not None:
+            uploads.append(mask)
+        edit_dir, paths = await _save_temporary_image_inputs(uploads, prefix="image-edits")
         try:
-            uploads: list[UploadFile] = list(image)
-            if mask is not None:
-                uploads.append(mask)
-            for index, upload in enumerate(uploads):
-                suffix = Path(upload.filename or f"image-{index}.png").suffix or ".png"
-                dest = edit_dir / f"{index}{suffix}"
-                dest.write_bytes(await upload.read())
-                paths.append(str(dest))
             return await _run_openai_image_request(
                 endpoint="/v1/images/edits",
                 prompt=prompt,
@@ -2618,15 +2639,32 @@ def create_app(config: ServerConfig | None = None):
                 files=paths,
             )
         finally:
-            for path in paths:
-                try:
-                    Path(path).unlink(missing_ok=True)
-                except OSError:
-                    pass
-            try:
-                edit_dir.rmdir()
-            except OSError:
-                pass
+            await _cleanup_temporary_image_inputs(edit_dir, paths)
+
+    @app.post("/v1/images/variations")
+    async def image_variations(
+        image: UploadFile = File(...),
+        model: str | None = Form(None),
+        n: int | None = Form(None),
+        size: str | None = Form(None),
+        response_format: str | None = Form(None),
+    ) -> dict[str, Any]:
+        variation_dir, paths = await _save_temporary_image_inputs(
+            [image],
+            prefix="image-variations",
+        )
+        try:
+            return await _run_openai_image_request(
+                endpoint="/v1/images/variations",
+                prompt="基于上传图片生成新的图片变体。",
+                model=model,
+                n=n,
+                response_format=response_format,
+                store_media=False,
+                files=paths,
+            )
+        finally:
+            await _cleanup_temporary_image_inputs(variation_dir, paths)
 
     @app.post("/v1/chat/completions")
     async def chat_completions(request: ChatCompletionRequest):

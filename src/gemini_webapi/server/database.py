@@ -670,7 +670,7 @@ class AccountStore:
             """
             UPDATE request_logs
             SET media_count = ?
-            WHERE endpoint IN ('/v1/gemini/generate', '/v1/gemini/stream', '/v1/images/generations', '/v1/images/edits')
+            WHERE endpoint IN ('/v1/gemini/generate', '/v1/gemini/stream', '/v1/images/generations', '/v1/images/edits', '/v1/images/variations')
               AND job_id = ?
               AND ok = 1
             """,
