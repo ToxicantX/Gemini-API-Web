@@ -1,6 +1,7 @@
 services:
   gemini-api:
     build: .
+    restart: unless-stopped
     ports:
       - "7860:7860"
     volumes:

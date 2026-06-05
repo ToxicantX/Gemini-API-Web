@@ -84,6 +84,8 @@ docker compose up -d --build
 
 运行数据保存在 `data/`，重建镜像不会清空 SQLite、媒体缓存或已保存账号。
 
+`docker-compose.yml` 默认使用 `restart: unless-stopped`，适合服务器长期运行；宿主机重启或进程异常退出后会自动拉起，手动执行 `docker compose stop` 时不会反复重启。
+
 镜像内置 Docker 健康检查，会定时访问容器内 `/health`。更新或重启后可以查看：
 
 ```sh
