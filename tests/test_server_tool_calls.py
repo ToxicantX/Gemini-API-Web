@@ -3,9 +3,11 @@ import unittest
 from gemini_webapi.server.app import (
     ChatCompletionRequest,
     ChatMessage,
+    CompletionRequest,
     ResponsesRequest,
     _append_chat_token_limit_instruction,
     _append_response_format_instructions,
+    _append_sampling_parameter_instructions,
     _append_tool_instructions,
     _apply_stop_sequences,
     _legacy_function_call_from_tool_call,
@@ -255,6 +257,46 @@ class ServerToolCallTests(unittest.TestCase):
 
         self.assertEqual(request.max_completion_tokens, 32)
         self.assertIn("approximately 32 tokens", prompt)
+
+    def test_openai_sampling_parameters_are_explicitly_prompted(self):
+        chat = ChatCompletionRequest.model_validate(
+            {
+                "messages": [{"role": "user", "content": "写一段文案"}],
+                "temperature": 0.2,
+                "top_p": 0.8,
+                "presence_penalty": 0.3,
+                "frequency_penalty": 0.4,
+                "seed": 123,
+            }
+        )
+        completion = CompletionRequest.model_validate(
+            {
+                "prompt": "补全文案",
+                "presence_penalty": 0.1,
+                "frequency_penalty": 0.2,
+            }
+        )
+        responses = ResponsesRequest.model_validate(
+            {
+                "input": "生成标题",
+                "seed": 456,
+                "temperature": 0,
+            }
+        )
+
+        chat_prompt = _append_sampling_parameter_instructions("User: hi", chat)
+        completion_prompt = _append_sampling_parameter_instructions("User: hi", completion)
+        responses_prompt = _append_sampling_parameter_instructions("User: hi", responses)
+
+        self.assertIn("temperature=0.2", chat_prompt)
+        self.assertIn("top_p=0.8", chat_prompt)
+        self.assertIn("presence_penalty=0.3", chat_prompt)
+        self.assertIn("frequency_penalty=0.4", chat_prompt)
+        self.assertIn("seed=123", chat_prompt)
+        self.assertIn("presence_penalty=0.1", completion_prompt)
+        self.assertIn("frequency_penalty=0.2", completion_prompt)
+        self.assertIn("temperature=0", responses_prompt)
+        self.assertIn("seed=456", responses_prompt)
 
     def test_apply_stop_sequences_truncates_at_earliest_match(self):
         self.assertEqual(

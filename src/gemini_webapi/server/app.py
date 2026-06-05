@@ -217,6 +217,9 @@ class ChatCompletionRequest(BaseModel):
     max_tokens: int | None = None
     max_completion_tokens: int | None = None
     top_p: float | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
+    seed: int | None = None
     n: int | None = None
     stop: str | list[str] | None = None
     tools: list[ChatToolSpec] | None = None
@@ -235,6 +238,9 @@ class CompletionRequest(BaseModel):
     temperature: float | None = None
     max_tokens: int | None = None
     top_p: float | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
+    seed: int | None = None
     n: int | None = None
     stop: str | list[str] | None = None
     suffix: str | None = None
@@ -251,6 +257,9 @@ class ResponsesRequest(BaseModel):
     max_output_tokens: int | None = None
     max_tokens: int | None = None
     top_p: float | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
+    seed: int | None = None
 
 
 class ImageGenerationRequest(BaseModel):
@@ -683,6 +692,24 @@ def _append_completion_token_limit_instruction(prompt: str, request: CompletionR
     if value <= 0:
         return prompt
     return f"{prompt}\n\nSystem: Keep the completion within approximately {value} tokens."
+
+
+def _append_sampling_parameter_instructions(prompt: str, request: Any) -> str:
+    # Gemini Web API 没有稳定公开的采样参数入口，这里把 OpenAI 常见参数转成提示词约束。
+    lines: list[str] = []
+    if getattr(request, "temperature", None) is not None:
+        lines.append(f"temperature={getattr(request, 'temperature')}")
+    if getattr(request, "top_p", None) is not None:
+        lines.append(f"top_p={getattr(request, 'top_p')}")
+    if getattr(request, "presence_penalty", None) is not None:
+        lines.append(f"presence_penalty={getattr(request, 'presence_penalty')}")
+    if getattr(request, "frequency_penalty", None) is not None:
+        lines.append(f"frequency_penalty={getattr(request, 'frequency_penalty')}")
+    if getattr(request, "seed", None) is not None:
+        lines.append(f"seed={getattr(request, 'seed')}")
+    if not lines:
+        return prompt
+    return f"{prompt}\n\nSystem: Follow these caller generation preferences when possible: {', '.join(lines)}."
 
 
 def _stop_sequences(stop: str | list[str] | None) -> list[str]:
@@ -2984,6 +3011,7 @@ def create_app(config: ServerConfig | None = None):
         try:
             response_messages = _responses_messages(payload)
             prompt = _responses_prompt(payload)
+            prompt = _append_sampling_parameter_instructions(prompt, payload)
             files = _file_paths(_messages_file_ids(response_messages))
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -3493,6 +3521,7 @@ def create_app(config: ServerConfig | None = None):
         if payload.suffix:
             prompt = f"{prompt}\n{payload.suffix}"
         prompt = _append_completion_token_limit_instruction(prompt, payload)
+        prompt = _append_sampling_parameter_instructions(prompt, payload)
         model = payload.model or "gemini"
         try:
             resolved_model = _resolve_model_arg(payload.model)
@@ -3601,6 +3630,7 @@ def create_app(config: ServerConfig | None = None):
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         prompt = _append_chat_token_limit_instruction(prompt, payload)
+        prompt = _append_sampling_parameter_instructions(prompt, payload)
         model = payload.model or "gemini"
         normalized_tools, _ = _normalized_chat_request_tools(payload)
         try:

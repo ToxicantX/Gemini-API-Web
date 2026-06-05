@@ -233,7 +233,7 @@ curl http://localhost:7860/v1/completions \
   }'
 ```
 
-`/v1/completions` 用于兼容旧 OpenAI 文本补全客户端，支持 `prompt`、`stream`、`stop`、`max_tokens` 和 `stream_options.include_usage`。多候选 `n>1` 暂不支持。
+`/v1/completions` 用于兼容旧 OpenAI 文本补全客户端，支持 `prompt`、`stream`、`stop`、`max_tokens`、`temperature`、`top_p`、`presence_penalty`、`frequency_penalty`、`seed` 和 `stream_options.include_usage`。多候选 `n>1` 暂不支持。
 
 聊天补全：
 
@@ -283,7 +283,7 @@ curl http://localhost:7860/v1/chat/completions \
 
 `response_format` 支持 OpenAI 常用的 `json_object` 和 `json_schema`。服务端会把 JSON 输出要求追加到 Gemini 提示词中，模型最终输出仍以原始文本返回给 OpenAI 兼容客户端。
 
-Chat Completions 中的 `system` 和新式 `developer` 角色都会作为 Gemini 的系统指令写入提示词；`tool` 角色会作为工具结果写入上下文。`stop` 支持字符串或字符串数组，服务端会在返回给客户端前按最早匹配位置截断文本。`max_tokens` 和 `max_completion_tokens` 会作为长度约束提示传给 Gemini。流式调用支持 `stream_options.include_usage=true`，结束前会额外返回一个 OpenAI 风格的 usage chunk；由于 Gemini Web 无稳定 token 计数，当前 usage 字段为 0 占位。
+Chat Completions 中的 `system` 和新式 `developer` 角色都会作为 Gemini 的系统指令写入提示词；`tool` 角色会作为工具结果写入上下文。`stop` 支持字符串或字符串数组，服务端会在返回给客户端前按最早匹配位置截断文本。`max_tokens` 和 `max_completion_tokens` 会作为长度约束提示传给 Gemini。`temperature`、`top_p`、`presence_penalty`、`frequency_penalty` 和 `seed` 会被显式接收，并作为调用方生成偏好追加到提示词中；Gemini Web 没有稳定公开的原生采样参数入口，因此这些参数不是底层强制采样配置。流式调用支持 `stream_options.include_usage=true`，结束前会额外返回一个 OpenAI 风格的 usage chunk；由于 Gemini Web 无稳定 token 计数，当前 usage 字段为 0 占位。
 
 工具调用支持新版 `tools` / `tool_choice`，也兼容旧版 `functions` / `function_call` 入参；模型需要调用工具时会返回 OpenAI Chat Completions 格式的 `tool_calls`。当请求使用旧版 `functions` 时，非流式响应会额外带上旧版 `message.function_call` 字段，方便旧客户端读取。
 
@@ -368,7 +368,7 @@ curl http://localhost:7860/v1/responses \
   }'
 ```
 
-`/v1/responses` 支持 `input` 字符串或 Responses 风格消息数组，并返回 `output_text`；也支持常见的 `instructions`、`text.format`、`max_output_tokens`，其中 `text.format` 可使用 `json_object` 或 `json_schema`。为兼容部分旧客户端，`max_tokens` 也会作为 `max_output_tokens` 的别名处理。设置 `stream=true` 时会返回 Responses 风格 SSE 事件，包括 `response.output_text.delta` 和 `response.completed`：
+`/v1/responses` 支持 `input` 字符串或 Responses 风格消息数组，并返回 `output_text`；也支持常见的 `instructions`、`text.format`、`max_output_tokens`、`temperature`、`top_p`、`presence_penalty`、`frequency_penalty` 和 `seed`，其中 `text.format` 可使用 `json_object` 或 `json_schema`。为兼容部分旧客户端，`max_tokens` 也会作为 `max_output_tokens` 的别名处理。设置 `stream=true` 时会返回 Responses 风格 SSE 事件，包括 `response.output_text.delta` 和 `response.completed`：
 
 ```sh
 curl http://localhost:7860/v1/responses \
