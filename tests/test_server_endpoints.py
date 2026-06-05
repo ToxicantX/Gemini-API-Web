@@ -1082,7 +1082,7 @@ class ServerEndpointTests(unittest.TestCase):
                     },
                     files={"file": ("voice.mp3", b"mp3-bytes", "audio/mpeg")},
                 )
-                invalid = client.post(
+                srt_response = client.post(
                     "/v1/audio/transcriptions",
                     headers={"Authorization": "Bearer sk-external"},
                     data={"response_format": "srt"},
@@ -1100,7 +1100,9 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
             self.assertEqual(len(calls[0][1]["files"]), 1)
             self.assertFalse(Path(calls[0][1]["files"][0]).exists())
-            self.assertEqual(invalid.status_code, 400)
+            self.assertEqual(srt_response.status_code, 200)
+            self.assertIn("00:00:00,000 --> 00:00:00,000", srt_response.text)
+            self.assertIn("你好，世界。", srt_response.text)
             self.assertTrue(
                 any(
                     log.endpoint == "/v1/audio/transcriptions"
@@ -1173,6 +1175,12 @@ class ServerEndpointTests(unittest.TestCase):
                     },
                     files={"file": ("voice.mp3", b"mp3-bytes", "audio/mpeg")},
                 )
+                vtt_response = client.post(
+                    "/v1/audio/translations",
+                    headers={"Authorization": "Bearer sk-external"},
+                    data={"response_format": "vtt"},
+                    files={"file": ("voice.mp3", b"mp3-bytes", "audio/mpeg")},
+                )
                 logs = app.state.store.list_request_logs(limit=20)
 
             self.assertEqual(unauthenticated.status_code, 401)
@@ -1181,6 +1189,9 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(data["task"], "translate")
             self.assertEqual(data["text"], "Hello, world.")
             self.assertEqual(data["segments"], [])
+            self.assertEqual(vtt_response.status_code, 200)
+            self.assertTrue(vtt_response.text.startswith("WEBVTT"))
+            self.assertIn("Hello, world.", vtt_response.text)
             self.assertIn("请将上传音频中的内容翻译成英文", calls[0][0])
             self.assertIn("上下文提示：口语问候", calls[0][0])
             self.assertEqual(calls[0][1]["model"], "gemini-3.1-pro")

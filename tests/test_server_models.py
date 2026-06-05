@@ -2,6 +2,8 @@ import unittest
 
 from gemini_webapi.exceptions import VideoGenerationFailed, VideoGenerationNotSubmitted
 from gemini_webapi.server.app import (
+    _audio_srt_text,
+    _audio_vtt_text,
     _media_content_type_allowed,
     _error_status,
     _generation_mode_arg,
@@ -17,6 +19,16 @@ from gemini_webapi.constants import Model
 
 
 class ServerModelTests(unittest.TestCase):
+    def test_audio_subtitle_helpers_use_zero_timestamp(self):
+        self.assertEqual(
+            _audio_srt_text("hello").splitlines(),
+            ["1", "00:00:00,000 --> 00:00:00,000", "hello"],
+        )
+        self.assertEqual(
+            _audio_vtt_text("hello").splitlines(),
+            ["WEBVTT", "", "00:00:00.000 --> 00:00:00.000", "hello"],
+        )
+
     def test_resolves_only_current_public_models(self):
         self.assertEqual(_resolve_model_arg("gemini"), "gemini-3.1-pro")
         self.assertEqual(_resolve_model_arg("gemini-3.1-pro"), "gemini-3.1-pro")

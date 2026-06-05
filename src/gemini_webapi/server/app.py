@@ -505,6 +505,15 @@ def _openai_image_generation_output(
     return {"created": int(time.time()), "data": data}
 
 
+def _audio_srt_text(text: str) -> str:
+    # Gemini Web 无稳定音频时间戳；SRT/VTT 兼容返回使用零时长整段文本。
+    return f"1\n00:00:00,000 --> 00:00:00,000\n{text}\n"
+
+
+def _audio_vtt_text(text: str) -> str:
+    return f"WEBVTT\n\n00:00:00.000 --> 00:00:00.000\n{text}\n"
+
+
 def _tools_enabled(request: ChatCompletionRequest) -> bool:
     if not request.tools:
         return False
@@ -2868,10 +2877,11 @@ def create_app(config: ServerConfig | None = None):
         language: str | None,
         temperature: float | None,
     ) -> Response | dict[str, Any]:
-        if response_format and response_format not in {"json", "text", "verbose_json"}:
+        allowed_formats = {"json", "text", "verbose_json", "srt", "vtt"}
+        if response_format and response_format not in allowed_formats:
             raise HTTPException(
                 status_code=400,
-                detail="response_format must be one of: json, text, verbose_json.",
+                detail="response_format must be one of: json, text, verbose_json, srt, vtt.",
             )
         prefix = "audio-translations" if task == "translate" else "audio-transcriptions"
         audio_dir, paths = await _save_temporary_upload_inputs(
@@ -2913,6 +2923,16 @@ def create_app(config: ServerConfig | None = None):
             text = (output.text or "").strip()
             if response_format == "text":
                 return Response(content=text, media_type="text/plain; charset=utf-8")
+            if response_format == "srt":
+                return Response(
+                    content=_audio_srt_text(text),
+                    media_type="text/plain; charset=utf-8",
+                )
+            if response_format == "vtt":
+                return Response(
+                    content=_audio_vtt_text(text),
+                    media_type="text/vtt; charset=utf-8",
+                )
             if response_format == "verbose_json":
                 return {
                     "task": task,

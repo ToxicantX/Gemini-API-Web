@@ -344,7 +344,7 @@ curl http://localhost:7860/v1/audio/translations \
   -F "response_format=text"
 ```
 
-`/v1/audio/transcriptions` 和 `/v1/audio/translations` 会把上传音频作为一次性 Gemini 输入文件，不写入长期文件库；支持 `json`、`text`、`verbose_json` 三种 `response_format`。翻译接口会要求 Gemini 输出英文翻译文本。由于 Gemini Web 没有 Whisper 风格的分段和时长元数据，`verbose_json` 中的 `segments` 暂为空数组。
+`/v1/audio/transcriptions` 和 `/v1/audio/translations` 会把上传音频作为一次性 Gemini 输入文件，不写入长期文件库；支持 `json`、`text`、`verbose_json`、`srt`、`vtt` 五种 `response_format`。翻译接口会要求 Gemini 输出英文翻译文本。由于 Gemini Web 没有 Whisper 风格的分段和时长元数据，`verbose_json` 中的 `segments` 暂为空数组，`srt`/`vtt` 会把整段文本放入零时间戳字幕块。
 
 OpenAI 兼容图片生成：
 
