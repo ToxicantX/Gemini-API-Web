@@ -1816,6 +1816,10 @@ class ServerEndpointTests(unittest.TestCase):
                     f"/v1/files/{file_id}/content",
                     headers={"Authorization": "Bearer sk-external"},
                 )
+                content_head = client.head(
+                    f"/v1/files/{file_id}/content",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
                 native = client.get(
                     "/v1/gemini/files",
                     headers={"Authorization": "Bearer sk-external"},
@@ -1847,6 +1851,9 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(fetched.json()["purpose"], "fine-tune")
             self.assertEqual(content.status_code, 200)
             self.assertEqual(content.content, b"hello")
+            self.assertEqual(content_head.status_code, 200)
+            self.assertEqual(content_head.headers["content-type"], "text/plain; charset=utf-8")
+            self.assertFalse(content_head.content)
             self.assertEqual(native.status_code, 200)
             self.assertEqual(native.json()["files"][0]["id"], file_id)
             self.assertEqual(deleted.status_code, 200)

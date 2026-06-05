@@ -2123,14 +2123,21 @@ def create_app(config: ServerConfig | None = None):
             raise HTTPException(status_code=404, detail="File not found.")
         return _openai_file_object(record)
 
-    @app.get("/v1/files/{file_id}/content")
-    async def openai_get_file_content(file_id: str) -> Response:
+    @app.api_route("/v1/files/{file_id}/content", methods=["GET", "HEAD"])
+    async def openai_get_file_content(request: Request, file_id: str) -> Response:
         record = store.get_file(file_id)
         if record is None:
             raise HTTPException(status_code=404, detail="File not found.")
         path = Path(record.path)
         if not path.is_file():
             raise HTTPException(status_code=404, detail="File content not found.")
+        if request.method == "HEAD":
+            # 外部客户端和反向代理常用 HEAD 探测文件类型；这里避免读取文件正文。
+            return Response(
+                content=b"",
+                media_type=record.content_type or "application/octet-stream",
+                headers={"Content-Disposition": f'attachment; filename="{record.filename}"'},
+            )
         return FileResponse(
             path,
             media_type=record.content_type or "application/octet-stream",
