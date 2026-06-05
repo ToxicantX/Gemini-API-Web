@@ -3,11 +3,13 @@ import unittest
 from gemini_webapi.server.app import (
     ChatCompletionRequest,
     ChatMessage,
+    ResponsesRequest,
     _append_response_format_instructions,
     _append_tool_instructions,
     _messages_to_prompt,
     _responses_input_to_messages,
     _responses_output,
+    _responses_prompt,
     _tool_calls_from_output_text,
 )
 
@@ -48,6 +50,33 @@ class ServerToolCallTests(unittest.TestCase):
         self.assertIn("System: 保持简洁", prompt)
         self.assertIn("User: 看图", prompt)
         self.assertIn("Image URL: https://example.com/a.png", prompt)
+
+    def test_responses_prompt_supports_instructions_and_text_format(self):
+        request = ResponsesRequest.model_validate(
+            {
+                "instructions": "保持简洁，只输出结构化结果",
+                "input": "返回状态",
+                "text": {
+                    "format": {
+                        "type": "json_schema",
+                        "schema": {
+                            "name": "status",
+                            "schema": {
+                                "type": "object",
+                                "properties": {"status": {"type": "string"}},
+                                "required": ["status"],
+                            },
+                        },
+                    }
+                },
+            }
+        )
+        prompt = _responses_prompt(request)
+
+        self.assertIn("System: 保持简洁，只输出结构化结果", prompt)
+        self.assertIn("User: 返回状态", prompt)
+        self.assertIn("JSON response mode is enabled.", prompt)
+        self.assertIn('"required":["status"]', prompt)
 
     def test_responses_output_shape(self):
         data = _responses_output(

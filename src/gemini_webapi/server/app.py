@@ -222,6 +222,8 @@ class ChatCompletionRequest(BaseModel):
 class ResponsesRequest(BaseModel):
     model: str | None = None
     input: str | list[Any]
+    instructions: str | None = None
+    text: dict[str, Any] | None = None
     stream: bool = False
     temperature: float | None = None
     max_output_tokens: int | None = None
@@ -336,6 +338,43 @@ def _responses_input_to_messages(input_value: str | list[Any]) -> list[ChatMessa
             parts = [part for part in content if isinstance(part, dict)]
             messages.append(ChatMessage(role=role, content=parts))
     return messages
+
+
+def _response_format_from_responses_text(text_options: dict[str, Any] | None) -> ResponseFormatSpec | None:
+    if not isinstance(text_options, dict):
+        return None
+    raw_format = text_options.get("format")
+    if raw_format is None:
+        return None
+    if isinstance(raw_format, str):
+        return ResponseFormatSpec(type=raw_format)
+    if isinstance(raw_format, dict):
+        format_type = raw_format.get("type")
+        if not isinstance(format_type, str):
+            raise ValueError("text.format.type is required.")
+        return ResponseFormatSpec(
+            type=format_type,
+            json_schema=raw_format.get("json_schema") or raw_format.get("schema"),
+        )
+    raise ValueError("text.format must be a string or object.")
+
+
+def _responses_prompt(request: ResponsesRequest) -> str:
+    messages = _responses_input_to_messages(request.input)
+    if request.instructions:
+        messages = [
+            ChatMessage(role="system", content=request.instructions),
+            *messages,
+        ]
+    prompt = _messages_to_prompt(messages)
+    response_format = _response_format_from_responses_text(request.text)
+    if response_format is None:
+        return prompt
+    shim_request = ChatCompletionRequest(
+        messages=[ChatMessage(role="user", content="placeholder")],
+        response_format=response_format,
+    )
+    return _append_response_format_instructions(prompt, shim_request)
 
 
 def _responses_output(
@@ -2355,8 +2394,10 @@ def create_app(config: ServerConfig | None = None):
 
     @app.post("/v1/responses")
     async def responses(request: ResponsesRequest) -> dict[str, Any]:
-        messages = _responses_input_to_messages(request.input)
-        prompt = _messages_to_prompt(messages)
+        try:
+            prompt = _responses_prompt(request)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         if not prompt:
             raise HTTPException(status_code=400, detail="input must contain text.")
         model = request.model or "gemini"

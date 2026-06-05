@@ -689,6 +689,8 @@ class ServerEndpointTests(unittest.TestCase):
                     headers={"Authorization": "Bearer sk-external"},
                     json={
                         "model": "gemini-3.5-flash",
+                        "instructions": "保持简洁，只输出 JSON",
+                        "text": {"format": {"type": "json_object"}},
                         "input": [
                             {
                                 "role": "user",
@@ -706,7 +708,34 @@ class ServerEndpointTests(unittest.TestCase):
                 stream = client.post(
                     "/v1/responses",
                     headers={"Authorization": "Bearer sk-external"},
-                    json={"model": "gemini", "input": "hello", "stream": True},
+                    json={
+                        "model": "gemini",
+                        "input": "hello",
+                        "instructions": "流式也保持 JSON",
+                        "text": {
+                            "format": {
+                                "type": "json_schema",
+                                "json_schema": {
+                                    "name": "answer",
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {"ok": {"type": "boolean"}},
+                                        "required": ["ok"],
+                                    },
+                                },
+                            }
+                        },
+                        "stream": True,
+                    },
+                )
+                invalid = client.post(
+                    "/v1/responses",
+                    headers={"Authorization": "Bearer sk-external"},
+                    json={
+                        "model": "gemini",
+                        "input": "hello",
+                        "text": {"format": {"type": "xml"}},
+                    },
                 )
 
             self.assertEqual(unauthenticated.status_code, 401)
@@ -715,7 +744,9 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(data["object"], "response")
             self.assertEqual(data["output_text"], "response ok")
             self.assertEqual(data["output"][0]["content"][0]["type"], "output_text")
+            self.assertIn("System: 保持简洁，只输出 JSON", calls[0][0])
             self.assertIn("Image URL: https://example.com/a.png", calls[0][0])
+            self.assertIn("JSON response mode is enabled.", calls[0][0])
             self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
             self.assertEqual(stream.status_code, 200)
             self.assertIn("event: response.created", stream.text)
@@ -724,8 +755,11 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertIn('"delta":"two"', stream.text)
             self.assertIn("event: response.completed", stream.text)
             self.assertIn("data: [DONE]", stream.text)
-            self.assertEqual(stream_calls[0][0], "User: hello")
+            self.assertIn("System: 流式也保持 JSON", stream_calls[0][0])
+            self.assertIn('"required":["ok"]', stream_calls[0][0])
+            self.assertIn("User: hello", stream_calls[0][0])
             self.assertEqual(stream_calls[0][1]["model"], "gemini-3.1-pro")
+            self.assertEqual(invalid.status_code, 400)
 
     def test_openai_files_endpoint_reuses_gemini_file_storage(self):
         with tempfile.TemporaryDirectory() as tmp:

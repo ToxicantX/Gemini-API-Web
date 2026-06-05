@@ -263,11 +263,13 @@ curl http://localhost:7860/v1/responses \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gemini",
+    "instructions": "保持简洁，只输出 JSON",
+    "text": { "format": { "type": "json_object" } },
     "input": "只回复 OK"
   }'
 ```
 
-`/v1/responses` 支持 `input` 字符串或 Responses 风格消息数组，并返回 `output_text`。设置 `stream=true` 时会返回 Responses 风格 SSE 事件，包括 `response.output_text.delta` 和 `response.completed`：
+`/v1/responses` 支持 `input` 字符串或 Responses 风格消息数组，并返回 `output_text`；也支持常见的 `instructions` 和 `text.format`，其中 `text.format` 可使用 `json_object` 或 `json_schema`。设置 `stream=true` 时会返回 Responses 风格 SSE 事件，包括 `response.output_text.delta` 和 `response.completed`：
 
 ```sh
 curl http://localhost:7860/v1/responses \
