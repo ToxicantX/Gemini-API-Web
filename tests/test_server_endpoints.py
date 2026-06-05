@@ -1573,6 +1573,15 @@ class ServerEndpointTests(unittest.TestCase):
                         "response_format": "b64_json",
                     },
                 )
+                too_many = client.post(
+                    "/v1/images/generations",
+                    headers={"Authorization": "Bearer sk-external"},
+                    json={
+                        "model": "gemini",
+                        "prompt": "make image",
+                        "n": 2,
+                    },
+                )
                 logs = app.state.store.list_request_logs(limit=20)
 
             self.assertEqual(unauthenticated.status_code, 401)
@@ -1591,6 +1600,8 @@ class ServerEndpointTests(unittest.TestCase):
                 base64_response.json()["data"][0]["b64_json"],
                 "aW1hZ2UtYnl0ZXM=",
             )
+            self.assertEqual(too_many.status_code, 400)
+            self.assertIn("n>1", too_many.json()["error"]["message"])
             self.assertTrue(
                 any(
                     log.endpoint == "/v1/images/generations"

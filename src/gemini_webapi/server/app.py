@@ -2942,6 +2942,8 @@ def create_app(config: ServerConfig | None = None):
             )
         if n is not None and n < 1:
             raise HTTPException(status_code=400, detail="n must be at least 1.")
+        if n is not None and n > 1:
+            raise HTTPException(status_code=400, detail="n>1 is not supported for image endpoints.")
         request_id = f"img-{uuid.uuid4().hex}"
         generation_mode = "image"
         try:
