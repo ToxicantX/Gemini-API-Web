@@ -551,6 +551,26 @@ def _append_response_format_instructions(prompt: str, request: ChatCompletionReq
     return f"{prompt}\n\nSystem: {' '.join(lines)}"
 
 
+def _stop_sequences(stop: str | list[str] | None) -> list[str]:
+    if stop is None:
+        return []
+    values = [stop] if isinstance(stop, str) else stop
+    return [value for value in values if isinstance(value, str) and value]
+
+
+def _apply_stop_sequences(text: str, stop: str | list[str] | None) -> tuple[str, bool]:
+    earliest: int | None = None
+    for sequence in _stop_sequences(stop):
+        index = text.find(sequence)
+        if index < 0:
+            continue
+        if earliest is None or index < earliest:
+            earliest = index
+    if earliest is None:
+        return text, False
+    return text[:earliest], True
+
+
 def _strip_json_fence(text: str) -> str:
     stripped = text.strip()
     if not stripped.startswith("```"):
@@ -2797,6 +2817,8 @@ def create_app(config: ServerConfig | None = None):
                 first = _chat_chunk(completion_id, model, role="assistant")
                 yield f"data: {json.dumps(first).decode()}\n\n"
                 buffered_text: list[str] = []
+                emitted_text = ""
+                stopped_by_sequence = False
 
                 async def operation(client):
                     kwargs: dict[str, Any] = {}
@@ -2818,8 +2840,18 @@ def create_app(config: ServerConfig | None = None):
                             if _tools_enabled(request):
                                 buffered_text.append(delta)
                                 continue
-                            chunk = _chat_chunk(completion_id, model, content=delta)
-                            yield f"data: {json.dumps(chunk).decode()}\n\n"
+                            next_text = f"{emitted_text}{delta}"
+                            truncated, stopped_by_sequence = _apply_stop_sequences(
+                                next_text,
+                                request.stop,
+                            )
+                            send_delta = truncated[len(emitted_text) :]
+                            emitted_text = truncated
+                            if send_delta:
+                                chunk = _chat_chunk(completion_id, model, content=send_delta)
+                                yield f"data: {json.dumps(chunk).decode()}\n\n"
+                            if stopped_by_sequence:
+                                break
                 except Exception as exc:
                     error = _openai_error(str(exc), _error_status(exc))
                     yield f"data: {json.dumps(error).decode()}\n\n"
@@ -2866,7 +2898,10 @@ def create_app(config: ServerConfig | None = None):
             if _tools_enabled(request)
             else []
         )
-        message: dict[str, Any] = {"role": "assistant", "content": output.text}
+        content_text = output.text
+        if not tool_calls:
+            content_text, _ = _apply_stop_sequences(content_text, request.stop)
+        message: dict[str, Any] = {"role": "assistant", "content": content_text}
         finish_reason = "stop"
         if tool_calls:
             message = {

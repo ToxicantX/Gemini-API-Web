@@ -545,7 +545,7 @@ class ServerEndpointTests(unittest.TestCase):
                 calls.append((prompt, kwargs))
                 return ModelOutput(
                     metadata=["cid", "rid"],
-                    candidates=[Candidate(rcid="rcid", text='{"ok":true}')],
+                    candidates=[Candidate(rcid="rcid", text='{"ok":true}<END>hidden')],
                 )
 
             async def fake_generate_content_stream(self, prompt, **kwargs):
@@ -556,7 +556,7 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 yield ModelOutput(
                     metadata=["cid", "rid"],
-                    candidates=[Candidate(rcid="rcid", text="", text_delta="true}")],
+                    candidates=[Candidate(rcid="rcid", text="", text_delta="true}<END>hidden")],
                 )
 
             with (
@@ -583,6 +583,7 @@ class ServerEndpointTests(unittest.TestCase):
                     headers={"Authorization": "Bearer sk-external"},
                     json={
                         "model": "gemini",
+                        "stop": "<END>",
                         "response_format": {"type": "json_object"},
                         "messages": [
                             {
@@ -601,6 +602,7 @@ class ServerEndpointTests(unittest.TestCase):
                     json={
                         "model": "gemini",
                         "stream": True,
+                        "stop": "<END>",
                         "response_format": {
                             "type": "json_schema",
                             "json_schema": {
@@ -641,6 +643,7 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertTrue(Path(calls[0][1]["files"][0]).is_file())
             self.assertEqual(stream.status_code, 200)
             self.assertIn("data: [DONE]", stream.text)
+            self.assertNotIn("hidden", stream.text)
             self.assertIn("JSON response mode is enabled.", stream_calls[0][0])
             self.assertIn('"required":["ok"]', stream_calls[0][0])
             self.assertEqual(stream_calls[0][1]["files"], calls[0][1]["files"])

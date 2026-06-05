@@ -6,6 +6,7 @@ from gemini_webapi.server.app import (
     ResponsesRequest,
     _append_response_format_instructions,
     _append_tool_instructions,
+    _apply_stop_sequences,
     _messages_to_prompt,
     _messages_file_ids,
     _responses_input_to_messages,
@@ -184,6 +185,20 @@ class ServerToolCallTests(unittest.TestCase):
 
         self.assertIn("JSON response mode is enabled.", prompt)
         self.assertIn('"required":["ok"]', prompt)
+
+    def test_apply_stop_sequences_truncates_at_earliest_match(self):
+        self.assertEqual(
+            _apply_stop_sequences("hello<END>hidden", "<END>"),
+            ("hello", True),
+        )
+        self.assertEqual(
+            _apply_stop_sequences("a STOP b END c", ["END", "STOP"]),
+            ("a ", True),
+        )
+        self.assertEqual(
+            _apply_stop_sequences("hello", None),
+            ("hello", False),
+        )
 
     def test_messages_include_tool_history(self):
         prompt = _messages_to_prompt(
