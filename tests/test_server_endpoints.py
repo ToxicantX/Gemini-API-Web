@@ -393,6 +393,10 @@ class ServerEndpointTests(unittest.TestCase):
                 data["endpoints"]["chat_completions"],
                 "/v1/chat/completions",
             )
+            self.assertEqual(
+                data["endpoints"]["audio_translations"],
+                "/v1/audio/translations",
+            )
             self.assertEqual(authorized_slash.status_code, 200)
             self.assertEqual(unauthorized_head.status_code, 401)
             self.assertEqual(head_root.status_code, 200)
