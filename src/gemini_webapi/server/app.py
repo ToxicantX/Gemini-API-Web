@@ -1006,6 +1006,18 @@ def _external_api_path(path: str) -> bool:
     )
 
 
+def _api_key_from_request(request: Request) -> str:
+    """兼容常见外部客户端的鉴权头写法。"""
+    api_key = request.headers.get("x-api-key", "").strip()
+    if api_key:
+        return api_key
+    auth = request.headers.get("authorization", "").strip()
+    scheme, _, token = auth.partition(" ")
+    if scheme.lower() == "bearer" and token.strip():
+        return token.strip()
+    return auth
+
+
 def _mask_secret(value: str | None) -> str:
     if not value:
         return ""
@@ -1343,8 +1355,7 @@ def create_app(config: ServerConfig | None = None):
                 )
             )
         ):
-            auth = request.headers.get("authorization", "")
-            token = auth.removeprefix("Bearer ").strip()
+            token = _api_key_from_request(request)
             if token not in allowed_api_keys:
                 return JSONResponse(
                     status_code=401,

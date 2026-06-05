@@ -172,6 +172,7 @@ ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-se
 - 控制台和管理接口需要管理员 Cookie。
 - 网页授权使用的 noVNC 页面和 WebSocket 通道也需要管理员 Cookie，避免服务器部署时暴露授权浏览器。
 - `/v1/models`、`/v1/chat/completions`、`/v1/gemini/generate` 等外部接口不使用管理员登录鉴权，而是使用 `Authorization: Bearer <API_KEY>`。
+- 鉴权头兼容 `Authorization: Bearer <API_KEY>`、大小写不同的 `bearer`，以及 `X-API-Key: <API_KEY>`。
 - Gemini 原生的 Gems、Deep Research、文件、媒体和 Jobs 接口也属于外部 API Key 调用面；账户池、授权浏览器、系统设置和请求日志仍属于管理端。
 - 浏览器环境跨域调用会返回 CORS 头；服务器公网部署时建议把 `CORS_ALLOW_ORIGINS` 收紧为可信域名。
 - 未配置任何 `API_KEYS` 且管理端系统设置中没有 API Key 时，外部接口保持无密钥模式，便于本地调试；服务器部署建议生成或配置 API Key。

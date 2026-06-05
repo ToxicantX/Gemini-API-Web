@@ -410,6 +410,16 @@ class ServerEndpointTests(unittest.TestCase):
                     headers={"Authorization": "Bearer sk-local-secret"},
                 )
                 self.assertEqual(authorized.status_code, 200)
+                lowercase_bearer = client.get(
+                    "/v1/request-logs",
+                    headers={"Authorization": "bearer sk-local-secret"},
+                )
+                self.assertEqual(lowercase_bearer.status_code, 200)
+                x_api_key = client.get(
+                    "/v1/request-logs",
+                    headers={"X-API-Key": "sk-local-secret"},
+                )
+                self.assertEqual(x_api_key.status_code, 200)
 
                 generated = client.post(
                     "/v1/system-settings/api-keys",
