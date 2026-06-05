@@ -204,6 +204,8 @@ ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-se
 
 外部 OpenAI 兼容客户端的 `base_url` 推荐填写 `http://host:7860/v1`。如果客户端误填成根地址，本服务也提供只读兼容入口 `GET/HEAD /models` 和 `GET /models/{model_id}`，但聊天、图片、文件等业务接口仍使用 `/v1/...` 路径。
 
+所有外部接口都会返回 `X-Request-ID`。调用方可以主动传入同名请求头；服务端会把它写入响应头、请求日志和媒体结果索引，便于按同一个 id 排查聊天、图片、音频和原生 Gemini 调用。
+
 列出模型：
 
 ```sh

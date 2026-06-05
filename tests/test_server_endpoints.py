@@ -2066,7 +2066,10 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 response = client.post(
                     "/v1/images/generations",
-                    headers={"Authorization": "Bearer sk-external"},
+                    headers={
+                        "Authorization": "Bearer sk-external",
+                        "X-Request-ID": "client-image-1",
+                    },
                     json={
                         "model": "gemini-3.5-flash",
                         "prompt": "make image",
@@ -2098,9 +2101,11 @@ class ServerEndpointTests(unittest.TestCase):
                     },
                 )
                 logs = app.state.store.list_request_logs(limit=20)
+                media_records = app.state.store.list_media_outputs(limit=20, kind="image")
 
             self.assertEqual(unauthenticated.status_code, 401)
             self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.headers["x-request-id"], "client-image-1")
             data = response.json()
             self.assertTrue(data["data"][0]["url"].startswith("/v1/gemini/media/"))
             self.assertEqual(data["data"][0]["revised_prompt"], "make image")
@@ -2120,9 +2125,16 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertTrue(
                 any(
                     log.endpoint == "/v1/images/generations"
+                    and log.job_id == "client-image-1"
                     and log.output_type == "gemini_image"
                     and log.media_count == 1
                     for log in logs
+                )
+            )
+            self.assertTrue(
+                any(
+                    item.request_id == "client-image-1"
+                    for item in media_records
                 )
             )
 

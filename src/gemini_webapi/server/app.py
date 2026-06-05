@@ -3145,6 +3145,7 @@ def create_app(config: ServerConfig | None = None):
         response_format: str | None,
         store_media: bool,
         files: list[str] | None = None,
+        request_id: str | None = None,
     ) -> dict[str, Any]:
         response_format = response_format or "url"
         if response_format not in {"url", "b64_json"}:
@@ -3156,7 +3157,8 @@ def create_app(config: ServerConfig | None = None):
             raise HTTPException(status_code=400, detail="n must be at least 1.")
         if n is not None and n > 1:
             raise HTTPException(status_code=400, detail="n>1 is not supported for image endpoints.")
-        request_id = f"img-{uuid.uuid4().hex}"
+        # 图片接口也复用外部请求号，方便调用方用响应头里的 X-Request-ID 反查日志和媒体记录。
+        request_id = request_id or f"img-{uuid.uuid4().hex}"
         generation_mode = "image"
         try:
             resolved_model = _resolve_model_arg(model)
@@ -3206,7 +3208,10 @@ def create_app(config: ServerConfig | None = None):
         )
 
     @app.post("/v1/images/generations")
-    async def image_generations(request: ImageGenerationRequest) -> dict[str, Any]:
+    async def image_generations(
+        http_request: Request,
+        request: ImageGenerationRequest,
+    ) -> dict[str, Any]:
         return await _run_openai_image_request(
             endpoint="/v1/images/generations",
             prompt=request.prompt,
@@ -3214,6 +3219,7 @@ def create_app(config: ServerConfig | None = None):
             n=request.n,
             response_format=request.response_format,
             store_media=request.store_media,
+            request_id=_request_id_from_request(http_request),
         )
 
     async def _save_temporary_upload_inputs(
@@ -3376,6 +3382,7 @@ def create_app(config: ServerConfig | None = None):
 
     @app.post("/v1/images/edits")
     async def image_edits(
+        request: Request,
         prompt: str = Form(...),
         image: list[UploadFile] = File(...),
         mask: UploadFile | None = File(None),
@@ -3397,12 +3404,14 @@ def create_app(config: ServerConfig | None = None):
                 response_format=response_format,
                 store_media=False,
                 files=paths,
+                request_id=_request_id_from_request(request),
             )
         finally:
             await _cleanup_temporary_upload_inputs(edit_dir, paths)
 
     @app.post("/v1/images/variations")
     async def image_variations(
+        request: Request,
         image: UploadFile = File(...),
         model: str | None = Form(None),
         n: int | None = Form(None),
@@ -3422,6 +3431,7 @@ def create_app(config: ServerConfig | None = None):
                 response_format=response_format,
                 store_media=False,
                 files=paths,
+                request_id=_request_id_from_request(request),
             )
         finally:
             await _cleanup_temporary_upload_inputs(variation_dir, paths)
