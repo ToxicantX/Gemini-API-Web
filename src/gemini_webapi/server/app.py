@@ -17,6 +17,7 @@ import orjson as json
 import websockets
 import httpx
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -1405,6 +1406,25 @@ def create_app(config: ServerConfig | None = None):
         return JSONResponse(
             status_code=exc.status_code,
             content=_openai_error(detail, exc.status_code, error_type),
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_exception_handler(
+        request: Request,
+        exc: RequestValidationError,
+    ):
+        # FastAPI 默认返回 422 结构；外部 OpenAI 兼容客户端更容易处理 400 + OpenAI error。
+        errors = exc.errors()
+        if errors:
+            first = errors[0]
+            location = ".".join(str(item) for item in first.get("loc", []) if item != "body")
+            message = str(first.get("msg", "Invalid request."))
+            detail = f"{location}: {message}" if location else message
+        else:
+            detail = "Invalid request body."
+        return JSONResponse(
+            status_code=400,
+            content=_openai_error(detail, 400, "invalid_request_error"),
         )
 
     @app.middleware("http")

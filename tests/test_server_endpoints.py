@@ -147,6 +147,40 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 self.assertEqual(client.get("/v1/models").status_code, 401)
 
+    def test_body_validation_errors_are_openai_compatible(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                response = client.post(
+                    "/v1/chat/completions",
+                    headers={"Authorization": "Bearer sk-external"},
+                    json={"model": "gemini"},
+                )
+
+            self.assertEqual(response.status_code, 400)
+            data = response.json()
+            self.assertEqual(data["error"]["type"], "invalid_request_error")
+            self.assertEqual(data["error"]["code"], 400)
+            self.assertIn("messages", data["error"]["message"])
+
     def test_parse_candidate_falls_back_to_nested_video_urls(self):
         client = GeminiClient()
         candidate_data = [
