@@ -298,6 +298,42 @@ class ServerToolCallTests(unittest.TestCase):
         self.assertIn("temperature=0", responses_prompt)
         self.assertIn("seed=456", responses_prompt)
 
+    def test_common_openai_tracking_fields_are_accepted(self):
+        chat = ChatCompletionRequest.model_validate(
+            {
+                "messages": [{"role": "user", "content": "hello"}],
+                "user": "external-user-1",
+                "metadata": {"trace_id": "trace-chat"},
+                "store": False,
+            }
+        )
+        completion = CompletionRequest.model_validate(
+            {
+                "prompt": "hello",
+                "user": "external-user-2",
+                "metadata": {"trace_id": "trace-completion"},
+                "store": False,
+            }
+        )
+        responses = ResponsesRequest.model_validate(
+            {
+                "input": "hello",
+                "user": "external-user-3",
+                "metadata": {"trace_id": "trace-response"},
+                "store": True,
+            }
+        )
+
+        self.assertEqual(chat.user, "external-user-1")
+        self.assertEqual(chat.metadata["trace_id"], "trace-chat")
+        self.assertFalse(chat.store)
+        self.assertEqual(completion.user, "external-user-2")
+        self.assertEqual(completion.metadata["trace_id"], "trace-completion")
+        self.assertFalse(completion.store)
+        self.assertEqual(responses.user, "external-user-3")
+        self.assertEqual(responses.metadata["trace_id"], "trace-response")
+        self.assertTrue(responses.store)
+
     def test_apply_stop_sequences_truncates_at_earliest_match(self):
         self.assertEqual(
             _apply_stop_sequences("hello<END>hidden", "<END>"),

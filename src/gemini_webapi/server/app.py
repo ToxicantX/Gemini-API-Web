@@ -228,6 +228,9 @@ class ChatCompletionRequest(BaseModel):
     function_call: str | dict[str, Any] | None = None
     parallel_tool_calls: bool | None = None
     response_format: ResponseFormatSpec | None = None
+    user: str | None = None
+    metadata: dict[str, Any] | None = None
+    store: bool | None = None
 
 
 class CompletionRequest(BaseModel):
@@ -244,6 +247,9 @@ class CompletionRequest(BaseModel):
     n: int | None = None
     stop: str | list[str] | None = None
     suffix: str | None = None
+    user: str | None = None
+    metadata: dict[str, Any] | None = None
+    store: bool | None = None
 
 
 class ResponsesRequest(BaseModel):
@@ -260,6 +266,9 @@ class ResponsesRequest(BaseModel):
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
     seed: int | None = None
+    user: str | None = None
+    metadata: dict[str, Any] | None = None
+    store: bool | None = None
 
 
 class ImageGenerationRequest(BaseModel):

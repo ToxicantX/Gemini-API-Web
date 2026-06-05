@@ -285,6 +285,8 @@ curl http://localhost:7860/v1/chat/completions \
 
 Chat Completions 中的 `system` 和新式 `developer` 角色都会作为 Gemini 的系统指令写入提示词；`tool` 角色会作为工具结果写入上下文。`stop` 支持字符串或字符串数组，服务端会在返回给客户端前按最早匹配位置截断文本。`max_tokens` 和 `max_completion_tokens` 会作为长度约束提示传给 Gemini。`temperature`、`top_p`、`presence_penalty`、`frequency_penalty` 和 `seed` 会被显式接收，并作为调用方生成偏好追加到提示词中；Gemini Web 没有稳定公开的原生采样参数入口，因此这些参数不是底层强制采样配置。流式调用支持 `stream_options.include_usage=true`，结束前会额外返回一个 OpenAI 风格的 usage chunk；由于 Gemini Web 无稳定 token 计数，当前 usage 字段为 0 占位。
 
+为兼容常见 OpenAI SDK 的追踪字段，`/v1/chat/completions`、`/v1/completions` 和 `/v1/responses` 会显式接收 `user`、`metadata` 和 `store`。这些字段仅作为请求兼容字段保留，不会触发 OpenAI 平台式训练、存储或审计语义；排障建议仍优先使用响应头 `X-Request-ID`。
+
 工具调用支持新版 `tools` / `tool_choice`，也兼容旧版 `functions` / `function_call` 入参；模型需要调用工具时会返回 OpenAI Chat Completions 格式的 `tool_calls`。当请求使用旧版 `functions` 时，非流式响应会额外带上旧版 `message.function_call` 字段，方便旧客户端读取。
 
 多模态消息中的 `image_url` 会被保留为图片链接提示，适合外部 OpenAI 兼容客户端传入图片 URL：
