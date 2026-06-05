@@ -2606,6 +2606,67 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 self.assertEqual(response.status_code, 400)
 
+    def test_media_cooldowns_are_available_to_external_api_keys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                account = app.state.store.upsert_account(
+                    secure_1psid="psid-active",
+                    cookies={"__Secure-1PSID": "psid-active"},
+                    name="active",
+                )
+                app.state.store.set_media_cooldown(
+                    account_id=account.id,
+                    kind="image",
+                    blocked_until=(
+                        datetime.now(timezone.utc) + timedelta(hours=5)
+                    ).isoformat().replace("+00:00", "Z"),
+                    reason="limit",
+                )
+
+                unauthenticated = client.get("/v1/media-cooldowns")
+                authorized = client.get(
+                    "/v1/media-cooldowns",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                cleared = client.post(
+                    "/v1/media-cooldowns/clear",
+                    headers={"Authorization": "Bearer sk-external"},
+                    json={"kind": "image"},
+                )
+                account_scoped = client.post(
+                    f"/v1/accounts/{account.id}/media-cooldowns/clear",
+                    headers={"Authorization": "Bearer sk-external"},
+                    json={"kind": "image"},
+                )
+
+            self.assertEqual(unauthenticated.status_code, 401)
+            self.assertEqual(authorized.status_code, 200)
+            by_kind = {item["kind"]: item for item in authorized.json()["summary"]}
+            self.assertEqual(by_kind["image"]["blocked"], 1)
+            self.assertEqual(cleared.status_code, 200)
+            self.assertEqual(cleared.json()["cleared"], 1)
+            # 单账号冷却清理属于管理操作，不能仅凭外部 API Key 操作具体账号。
+            self.assertEqual(account_scoped.status_code, 401)
+
     def test_request_validation_runs_before_account_selection(self):
         with tempfile.TemporaryDirectory() as tmp:
             app = create_app(

@@ -1106,6 +1106,8 @@ def _external_api_path(path: str) -> bool:
         "/v1/images/edits",
         "/v1/images/variations",
         "/v1/generate",
+        "/v1/media-cooldowns",
+        "/v1/media-cooldowns/clear",
         "/v1/gemini/generate",
         "/v1/gemini/stream",
         "/v1/gemini/media",
@@ -1128,7 +1130,6 @@ def _external_api_path(path: str) -> bool:
     management_prefixes = (
         "/v1/admin",
         "/v1/status",
-        "/v1/media-cooldowns",
         "/v1/settings",
         "/v1/system-settings",
         "/v1/request-logs",
