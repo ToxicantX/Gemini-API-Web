@@ -66,6 +66,10 @@ data/*
 !data/
 !data/accounts.example.json
 
+# Local UI/debug artifacts
+.playwright-mcp/
+gemini-*-desktop.png
+
 # Flask stuff:
 instance/
 .webassets-cache
