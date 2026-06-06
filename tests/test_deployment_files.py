@@ -1,3 +1,4 @@
+import re
 import subprocess
 import unittest
 from pathlib import Path
@@ -176,6 +177,21 @@ class DeploymentFileTests(unittest.TestCase):
         self.assertTrue(script.is_file())
         self.assertIn("python scripts/smoke_deploy.py", readme)
         self.assertIn("--api-key", readme)
+
+    def test_readme_smoke_flags_exist_in_cli(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        script = (ROOT / "scripts" / "smoke_deploy.py").read_text(encoding="utf-8")
+        documented_flags = {
+            flag
+            for line in readme.splitlines()
+            if "python scripts/smoke_deploy.py" in line
+            for flag in re.findall(r"--[a-z0-9-]+", line)
+        }
+        cli_flags = set(re.findall(r'add_argument\(\s*"(--[a-z0-9-]+)"', script))
+
+        # README 的部署 smoke 示例必须能直接照抄执行，避免文档参数和 CLI 参数分叉。
+        self.assertTrue(documented_flags)
+        self.assertEqual(set(), documented_flags - cli_flags)
 
 
 if __name__ == "__main__":
