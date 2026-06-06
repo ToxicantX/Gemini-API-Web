@@ -420,6 +420,21 @@ def _responses_input_to_messages(input_value: str | list[Any]) -> list[ChatMessa
             continue
         if not isinstance(item, dict):
             continue
+        if item.get("type") == "function_call_output":
+            output = item.get("output")
+            if isinstance(output, str):
+                content = output
+            else:
+                content = json.dumps(output).decode()
+            messages.append(
+                ChatMessage(
+                    role="tool",
+                    content=content,
+                    tool_call_id=item.get("call_id") or item.get("id"),
+                    name=item.get("name"),
+                )
+            )
+            continue
         role = str(item.get("role") or "user")
         content = item.get("content")
         if isinstance(content, str) or content is None:

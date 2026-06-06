@@ -296,6 +296,8 @@ Chat Completions 中的 `system` 和新式 `developer` 角色都会作为 Gemini
 
 `/v1/responses` 也支持新版 `tools` / `tool_choice` / `parallel_tool_calls` 入参；如果触发工具，会在 `output` 中返回 `function_call` 项，包含 `call_id`、`name` 和 JSON 字符串形式的 `arguments`，方便外部 Responses API 客户端继续执行工具。流式模式下，工具 JSON 会先在服务端缓冲解析，结束时以 `response.output_item.added` / `response.output_item.done` 的 `function_call` 事件输出，避免客户端把工具调用误展示成普通文本。
 
+外部客户端执行工具后，可以把 Responses API 的 `function_call_output` 放回 `input` 数组；服务端会把它转换为 Gemini 可见的工具结果上下文，继续完成后续回答。
+
 多模态消息中的 `image_url` 会被保留为图片链接提示，适合外部 OpenAI 兼容客户端传入图片 URL：
 
 ```sh

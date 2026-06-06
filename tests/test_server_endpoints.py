@@ -2258,6 +2258,79 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertNotIn("event: response.output_text.delta", response.text)
             self.assertIn("Tool calling is available.", stream_calls[0][0])
 
+    def test_responses_accepts_function_call_output_input(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            calls = []
+
+            async def fake_init(self, *args, **kwargs):
+                self.client = FakeSession()
+                self.account_status = AccountStatus.AVAILABLE
+
+            async def fake_close(self):
+                self.client = None
+
+            async def fake_generate_content(self, prompt, **kwargs):
+                calls.append((prompt, kwargs))
+                return ModelOutput(
+                    metadata=["cid", "rid"],
+                    candidates=[Candidate(rcid="rcid", text="工具结果已处理。")],
+                )
+
+            with (
+                patch.object(GeminiClient, "init", fake_init),
+                patch.object(GeminiClient, "close", fake_close),
+                patch.object(GeminiClient, "generate_content", fake_generate_content),
+                TestClient(app) as client,
+            ):
+                app.state.store.upsert_account(
+                    secure_1psid="psid-one",
+                    cookies={"__Secure-1PSID": "psid-one"},
+                    name="one",
+                )
+                response = client.post(
+                    "/v1/responses",
+                    headers={"Authorization": "Bearer sk-external"},
+                    json={
+                        "model": "gemini",
+                        "input": [
+                            {
+                                "role": "user",
+                                "content": "根据工具结果总结部署状态",
+                            },
+                            {
+                                "type": "function_call_output",
+                                "call_id": "call_123",
+                                "output": {"status": "ok", "port": 7860},
+                            },
+                        ],
+                    },
+                )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["output_text"], "工具结果已处理。")
+            self.assertIn("User: 根据工具结果总结部署状态", calls[0][0])
+            # Responses 工具执行后的 function_call_output 要进入上下文，否则第二轮无法继续。
+            self.assertIn('Tool result (call_123): {"status":"ok","port":7860}', calls[0][0])
+
     def test_openai_files_endpoint_reuses_gemini_file_storage(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)
