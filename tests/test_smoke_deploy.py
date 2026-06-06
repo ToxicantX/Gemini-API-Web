@@ -195,6 +195,91 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertIn("authorized models ok", results)
         self.assertIn("media cooldown summary ok", results)
 
+    def test_smoke_validates_media_cooldown_summary_shape(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "active_account_count": 2,
+                        "summary": [
+                            {
+                                "kind": "image",
+                                "label": "图片",
+                                "total": 2,
+                                "blocked": 1,
+                                "available": 1,
+                                "next": {
+                                    "account_id": 1,
+                                    "remaining_seconds": 300,
+                                },
+                            }
+                        ],
+                    },
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke("http://service", None)
+
+        self.assertIn("media cooldown summary ok", results)
+
+    def test_smoke_rejects_invalid_media_cooldown_summary_shape(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "summary": [
+                            {
+                                "kind": "video",
+                                "total": 1,
+                                "blocked": 0,
+                                "available": 2,
+                            }
+                        ],
+                    },
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(AssertionError) as raised:
+                smoke_deploy.run_smoke("http://service", None)
+
+        self.assertIn("available count exceeds total", str(raised.exception))
+
     def test_smoke_can_use_x_api_key_header(self):
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")

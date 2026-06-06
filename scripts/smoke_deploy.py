@@ -313,6 +313,37 @@ def _require_audio_response(body_text: str, response_format: str, label: str) ->
     _require(bool(body_text.strip()), f"{label} text response is empty")
 
 
+def _require_media_cooldown_summary(data: dict) -> None:
+    """校验媒体冷却摘要结构，避免外部调用方无法判断图片/视频/音频是否可用。"""
+    _require(data.get("ok") is True, "/v1/media-cooldowns missing ok=true")
+    summary = data.get("summary")
+    _require(isinstance(summary, list), "/v1/media-cooldowns missing summary list")
+    active_count = data.get("active_account_count")
+    if active_count is not None:
+        _require(
+            isinstance(active_count, int) and active_count >= 0,
+            "/v1/media-cooldowns returned invalid active_account_count",
+        )
+    for item in summary:
+        _require(isinstance(item, dict), "/v1/media-cooldowns summary item is not an object")
+        kind = item.get("kind")
+        _require(kind in {"image", "video", "audio"}, "/v1/media-cooldowns summary item has invalid kind")
+        for field in ("total", "blocked", "available"):
+            value = item.get(field)
+            _require(
+                isinstance(value, int) and value >= 0,
+                f"/v1/media-cooldowns summary item has invalid {field}",
+            )
+        _require(
+            item["available"] <= item["total"],
+            "/v1/media-cooldowns available count exceeds total",
+        )
+        _require(
+            item["blocked"] <= item["total"],
+            "/v1/media-cooldowns blocked count exceeds total",
+        )
+
+
 def _run_smoke_impl(
     base_url: str,
     api_key: str | None,
@@ -716,7 +747,7 @@ def _run_smoke_impl(
         results.append("media cooldown protection ok")
     else:
         _require(media_status == 200, f"/v1/media-cooldowns returned {media_status}")
-        _require(media.get("ok") is True, "/v1/media-cooldowns missing ok=true")
+        _require_media_cooldown_summary(media)
         results.append("media cooldown summary ok")
 
     if media_history:
