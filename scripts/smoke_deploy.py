@@ -226,20 +226,18 @@ def _raw_multipart_request(
     return status, response_body.decode("utf-8", errors="replace"), response_headers
 
 
-def _media_content_path(base_url: str, content_url: str) -> str:
-    """把媒体 content_url 归一成当前服务内的路径，避免误探测外部域名。"""
+def _media_content_target(base_url: str, content_url: str) -> tuple[str, str]:
+    """把媒体 content_url 归一成可 HEAD 探测的 base/path，兼容本服务代理和对象存储公网链接。"""
     value = str(content_url or "").strip()
     _require(bool(value), "media content_url is empty")
     if value.startswith("/"):
-        return value
+        return base_url, value
     parsed = urlparse(value)
     _require(bool(parsed.scheme and parsed.netloc), f"media content_url is not a URL: {content_url}")
-    base = urlparse(base_url.rstrip("/"))
-    _require(
-        parsed.netloc == base.netloc,
-        f"media content_url points to another host: {content_url}",
-    )
-    return parsed.path + (f"?{parsed.query}" if parsed.query else "")
+    _require(parsed.scheme in {"http", "https"}, f"media content_url must be http(s): {content_url}")
+    target_base = f"{parsed.scheme}://{parsed.netloc}"
+    target_path = parsed.path + (f"?{parsed.query}" if parsed.query else "")
+    return target_base, target_path
 
 
 def _require(condition: bool, message: str) -> None:
@@ -334,15 +332,17 @@ def _require_head_response(
     *,
     expected_status: int = 200,
     label: str,
+    require_request_id: bool = True,
 ) -> None:
     """统一校验 HEAD 探测响应，避免网关返回正文或丢失请求号。"""
     _require(status == expected_status, f"{label} returned {status}")
     if expected_status < 400:
         _require(body_text == "", f"{label} should not return a body")
-    _require(
-        "x-request-id" in {key.lower(): value for key, value in headers.items()},
-        f"{label} missing X-Request-ID",
-    )
+    if require_request_id:
+        _require(
+            "x-request-id" in {key.lower(): value for key, value in headers.items()},
+            f"{label} missing X-Request-ID",
+        )
 
 
 def _cookie_header(headers: dict[str, str]) -> str:
@@ -1489,14 +1489,25 @@ def _run_smoke_impl(
                 else:
                     checked = 0
                     for item in records[: max(1, int(media_content_probe_limit))]:
-                        content_path = _media_content_path(base_url, str(item.get("content_url") or ""))
-                        status, body_text, headers = _raw_request(
+                        content_base, content_path = _media_content_target(
                             base_url,
+                            str(item.get("content_url") or ""),
+                        )
+                        status, body_text, headers = _raw_request(
+                            content_base,
                             content_path,
                             timeout=timeout,
                             method="HEAD",
                         )
-                        _require_head_response(status, body_text, headers, label=f"HEAD {content_path}")
+                        base_host = urlparse(base_url.rstrip("/")).netloc
+                        content_host = urlparse(content_base.rstrip("/")).netloc
+                        _require_head_response(
+                            status,
+                            body_text,
+                            headers,
+                            label=f"HEAD {content_path}",
+                            require_request_id=content_host == base_host,
+                        )
                         _require_media_content_headers(
                             headers,
                             kind=str(item.get("kind") or ""),

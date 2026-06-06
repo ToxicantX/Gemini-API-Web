@@ -1935,7 +1935,15 @@ class SmokeDeployTests(unittest.TestCase):
                         "auth": {"api_key_required": True},
                     },
                 )
-            if not auth and path not in {"/v1/gemini/media/token/content", "/v1/gemini/media/absolute/content"}:
+            if (
+                not auth
+                and path
+                not in {
+                    "/v1/gemini/media/token/content",
+                    "/v1/gemini/media/absolute/content",
+                }
+                and request.full_url != "https://cdn.example.test/stored.png"
+            ):
                 raise urllib.error.HTTPError(
                     request.full_url,
                     401,
@@ -1970,6 +1978,11 @@ class SmokeDeployTests(unittest.TestCase):
                                 "url": "https://googlevideo.com/demo.mp4",
                                 "content_url": "http://service/v1/gemini/media/absolute/content",
                             },
+                            {
+                                "kind": "image",
+                                "url": "https://cdn.example.test/stored.png",
+                                "content_url": "https://cdn.example.test/stored.png",
+                            },
                         ],
                     },
                     {"X-Request-ID": "req-media-history"},
@@ -1986,6 +1999,17 @@ class SmokeDeployTests(unittest.TestCase):
                     },
                     body="",
                 )
+            if request.full_url == "https://cdn.example.test/stored.png":
+                self.assertEqual(request.get_method(), "HEAD")
+                seen_head.append(request.full_url)
+                return FakeHTTPResponse(
+                    200,
+                    headers={
+                        "Content-Type": "image/png",
+                        "Content-Length": "2048",
+                    },
+                    body="",
+                )
             raise AssertionError(path)
 
         with patch("urllib.request.urlopen", fake_urlopen):
@@ -1994,14 +2018,18 @@ class SmokeDeployTests(unittest.TestCase):
                 "sk-test",
                 media_history=True,
                 media_content_probes=True,
-                media_content_probe_limit=2,
+                media_content_probe_limit=3,
             )
 
         self.assertEqual(
             seen_head,
-            ["/v1/gemini/media/token/content", "/v1/gemini/media/absolute/content"],
+            [
+                "/v1/gemini/media/token/content",
+                "/v1/gemini/media/absolute/content",
+                "https://cdn.example.test/stored.png",
+            ],
         )
-        self.assertIn("media content probes ok (2)", results)
+        self.assertIn("media content probes ok (3)", results)
 
     def test_smoke_rejects_media_content_type_mismatch(self):
         def fake_urlopen(request, timeout):
