@@ -134,6 +134,109 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertIn("authorized models ok", results)
         self.assertIn("media cooldown summary ok", results)
 
+    def test_smoke_can_check_endpoint_probes(self):
+        seen_head = False
+
+        def fake_urlopen(request, timeout):
+            nonlocal seen_head
+            path = request.full_url.replace("http://service", "")
+            auth = request.headers.get("Authorization")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if not auth:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-401"},
+                    BytesIO(
+                        json.dumps(
+                            {"error": {"message": "Invalid or missing API key."}}
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/models":
+                if request.get_method() == "HEAD":
+                    seen_head = True
+                    return FakeHTTPResponse(
+                        200,
+                        headers={"X-Request-ID": "req-models-head"},
+                        body="",
+                    )
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "object": "api.root",
+                        "endpoints": {"models": "/v1/models"},
+                    },
+                    {"X-Request-ID": "req-v1-root"},
+                )
+            if path == "/v1/models/gemini":
+                return FakeHTTPResponse(
+                    200,
+                    {"id": "gemini", "object": "model"},
+                    {"X-Request-ID": "req-model-detail"},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                "sk-test",
+                probe_endpoints=True,
+            )
+
+        self.assertTrue(seen_head)
+        self.assertIn("endpoint probes ok", results)
+
+    def test_smoke_checks_endpoint_probe_api_key_protection(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            raise urllib.error.HTTPError(
+                request.full_url,
+                401,
+                "Unauthorized",
+                {"X-Request-ID": "req-401"},
+                BytesIO(
+                    json.dumps(
+                        {"error": {"message": "Invalid or missing API key."}}
+                    ).encode("utf-8")
+                ),
+            )
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                None,
+                probe_endpoints=True,
+            )
+
+        self.assertIn("endpoint probe protection ok", results)
+
     def test_smoke_can_check_media_history_shape(self):
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")

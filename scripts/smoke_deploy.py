@@ -125,6 +125,8 @@ def run_smoke(
     image_model: str = "gemini",
     image_response_format: str = "url",
     media_history: bool = False,
+    probe_endpoints: bool = False,
+    probe_model: str = "gemini",
     responses_prompt: str | None = None,
     responses_model: str = "gemini",
     responses_stream: bool = False,
@@ -181,6 +183,43 @@ def run_smoke(
         _require(any(item.get("id") == "gemini" for item in models.get("data", [])), "/v1/models missing gemini")
         _require("x-request-id" in {key.lower(): value for key, value in headers.items()}, "authorized response missing X-Request-ID")
         results.append("authorized models ok")
+
+    if probe_endpoints:
+        # 外部 SDK、API 网关和反向代理经常先探测根路径、模型列表 HEAD 和模型详情。
+        root_status, root, root_headers = _request(
+            base_url,
+            "/v1",
+            timeout=timeout,
+            api_key=api_key,
+        )
+        if health.get("auth", {}).get("api_key_required") and not api_key:
+            _require(root_status == 401, "/v1 should require an API key")
+            results.append("endpoint probe protection ok")
+        else:
+            _require(root_status == 200, f"/v1 returned {root_status}")
+            _require(root.get("object") == "api.root", "/v1 did not return api.root")
+            _require(isinstance(root.get("endpoints"), dict), "/v1 missing endpoints")
+            _require("x-request-id" in {key.lower(): value for key, value in root_headers.items()}, "/v1 response missing X-Request-ID")
+            head_status, _, head_headers = _raw_request(
+                base_url,
+                "/v1/models",
+                timeout=timeout,
+                api_key=api_key,
+                method="HEAD",
+            )
+            _require(head_status == 200, f"HEAD /v1/models returned {head_status}")
+            _require("x-request-id" in {key.lower(): value for key, value in head_headers.items()}, "HEAD /v1/models missing X-Request-ID")
+            detail_status, detail, detail_headers = _request(
+                base_url,
+                f"/v1/models/{probe_model}",
+                timeout=timeout,
+                api_key=api_key,
+            )
+            _require(detail_status == 200, f"/v1/models/{probe_model} returned {detail_status}")
+            _require(detail.get("object") == "model", "model detail is not an OpenAI model object")
+            _require(detail.get("id") == probe_model, "model detail returned unexpected id")
+            _require("x-request-id" in {key.lower(): value for key, value in detail_headers.items()}, "model detail response missing X-Request-ID")
+            results.append("endpoint probes ok")
 
     media_status, media, _ = _request(
         base_url,
@@ -536,6 +575,12 @@ def main() -> int:
         help="Verify /v1/gemini/media history shape without consuming model calls.",
     )
     parser.add_argument(
+        "--probe-endpoints",
+        action="store_true",
+        help="Verify /v1 root, HEAD /v1/models, and /v1/models/{model} probes.",
+    )
+    parser.add_argument("--probe-model", default="gemini")
+    parser.add_argument(
         "--responses-prompt",
         default="",
         help="Optional prompt for a real /v1/responses smoke request.",
@@ -587,6 +632,8 @@ def main() -> int:
             image_model=args.image_model,
             image_response_format=args.image_response_format,
             media_history=args.media_history,
+            probe_endpoints=args.probe_endpoints,
+            probe_model=args.probe_model,
             responses_prompt=args.responses_prompt or None,
             responses_model=args.responses_model,
             responses_stream=args.responses_stream,

@@ -123,6 +123,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 
 如果还没有生成 API Key，可以先不传 `--api-key`；脚本会确认外部 `/v1/*` 已被 401 正确保护。
 
+需要验证外部 SDK 或 API 网关常用的非消耗型探测端点时，可以加 `--probe-endpoints`。脚本会检查 `/v1`、`HEAD /v1/models` 和 `/v1/models/{model}`：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --probe-endpoints
+```
+
 需要验证媒体历史和代理链接结构时，可以加 `--media-history`。这不会触发模型调用，只会检查 `/v1/gemini/media` 是否能返回媒体索引、原始 URL 和 `content_url`：
 
 ```sh
