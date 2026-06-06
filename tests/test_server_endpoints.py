@@ -2155,6 +2155,109 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertIn("You must call one of the available tools.", calls[0][0])
             self.assertIn("Return at most one tool call.", calls[0][0])
 
+    def test_responses_stream_supports_function_tools(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            stream_calls = []
+
+            async def fake_init(self, *args, **kwargs):
+                self.client = FakeSession()
+                self.account_status = AccountStatus.AVAILABLE
+
+            async def fake_close(self):
+                self.client = None
+
+            async def fake_generate_content_stream(self, prompt, **kwargs):
+                stream_calls.append((prompt, kwargs))
+                yield ModelOutput(
+                    metadata=["cid", "rid"],
+                    candidates=[
+                        Candidate(
+                            rcid="rcid",
+                            text="",
+                            text_delta='{"tool_calls":[{"name":"search_docs",',
+                        )
+                    ],
+                )
+                yield ModelOutput(
+                    metadata=["cid", "rid"],
+                    candidates=[
+                        Candidate(
+                            rcid="rcid",
+                            text="",
+                            text_delta='"arguments":{"query":"部署"}}]}',
+                        )
+                    ],
+                )
+
+            with (
+                patch.object(GeminiClient, "init", fake_init),
+                patch.object(GeminiClient, "close", fake_close),
+                patch.object(GeminiClient, "generate_content_stream", fake_generate_content_stream),
+                TestClient(app) as client,
+            ):
+                app.state.store.upsert_account(
+                    secure_1psid="psid-one",
+                    cookies={"__Secure-1PSID": "psid-one"},
+                    name="one",
+                )
+                response = client.post(
+                    "/v1/responses",
+                    headers={"Authorization": "Bearer sk-external"},
+                    json={
+                        "model": "gemini",
+                        "input": "查一下部署说明",
+                        "stream": True,
+                        "tools": [
+                            {
+                                "type": "function",
+                                "function": {
+                                    "name": "search_docs",
+                                    "description": "Search local deployment docs.",
+                                    "parameters": {
+                                        "type": "object",
+                                        "properties": {"query": {"type": "string"}},
+                                        "required": ["query"],
+                                    },
+                                },
+                            }
+                        ],
+                        "tool_choice": "required",
+                    },
+                )
+
+            self.assertEqual(response.status_code, 200)
+            self._assert_sse_headers(response)
+            self.assertIn("event: response.created", response.text)
+            self.assertIn("event: response.output_item.added", response.text)
+            self.assertIn('"type":"function_call"', response.text)
+            self.assertIn('"name":"search_docs"', response.text)
+            self.assertIn('"arguments":"{\\"query\\":\\"部署\\"}"', response.text)
+            self.assertIn("event: response.completed", response.text)
+            self.assertIn('"output_text":""', response.text)
+            self.assertIn("data: [DONE]", response.text)
+            # 工具流式结果应在结束时作为 function_call 输出，避免外部客户端把工具 JSON 当普通文本展示。
+            self.assertNotIn("event: response.output_text.delta", response.text)
+            self.assertIn("Tool calling is available.", stream_calls[0][0])
+
     def test_openai_files_endpoint_reuses_gemini_file_storage(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)

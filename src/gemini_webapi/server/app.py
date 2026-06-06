@@ -3131,6 +3131,7 @@ def create_app(config: ServerConfig | None = None):
             output_id = f"msg_{uuid.uuid4().hex}"
             content_id = f"out_{uuid.uuid4().hex}"
             created = int(time.time())
+            tools_enabled = bool(payload.tools)
 
             async def event_stream():
                 yield _responses_stream_event(
@@ -3146,35 +3147,36 @@ def create_app(config: ServerConfig | None = None):
                         },
                     },
                 )
-                yield _responses_stream_event(
-                    "response.output_item.added",
-                    {
-                        "type": "response.output_item.added",
-                        "output_index": 0,
-                        "item": {
-                            "id": output_id,
-                            "type": "message",
-                            "status": "in_progress",
-                            "role": "assistant",
-                            "content": [],
+                if not tools_enabled:
+                    yield _responses_stream_event(
+                        "response.output_item.added",
+                        {
+                            "type": "response.output_item.added",
+                            "output_index": 0,
+                            "item": {
+                                "id": output_id,
+                                "type": "message",
+                                "status": "in_progress",
+                                "role": "assistant",
+                                "content": [],
+                            },
                         },
-                    },
-                )
-                yield _responses_stream_event(
-                    "response.content_part.added",
-                    {
-                        "type": "response.content_part.added",
-                        "item_id": output_id,
-                        "output_index": 0,
-                        "content_index": 0,
-                        "part": {
-                            "id": content_id,
-                            "type": "output_text",
-                            "text": "",
-                            "annotations": [],
+                    )
+                    yield _responses_stream_event(
+                        "response.content_part.added",
+                        {
+                            "type": "response.content_part.added",
+                            "item_id": output_id,
+                            "output_index": 0,
+                            "content_index": 0,
+                            "part": {
+                                "id": content_id,
+                                "type": "output_text",
+                                "text": "",
+                                "annotations": [],
+                            },
                         },
-                    },
-                )
+                    )
                 text_parts: list[str] = []
 
                 async def operation(client):
@@ -3197,16 +3199,17 @@ def create_app(config: ServerConfig | None = None):
                         if not delta:
                             continue
                         text_parts.append(delta)
-                        yield _responses_stream_event(
-                            "response.output_text.delta",
-                            {
-                                "type": "response.output_text.delta",
-                                "item_id": output_id,
-                                "output_index": 0,
-                                "content_index": 0,
-                                "delta": delta,
-                            },
-                        )
+                        if not tools_enabled:
+                            yield _responses_stream_event(
+                                "response.output_text.delta",
+                                {
+                                    "type": "response.output_text.delta",
+                                    "item_id": output_id,
+                                    "output_index": 0,
+                                    "content_index": 0,
+                                    "delta": delta,
+                                },
+                            )
                 except Exception as exc:
                     yield _responses_stream_event(
                         "response.failed",
@@ -3229,6 +3232,91 @@ def create_app(config: ServerConfig | None = None):
                     return
 
                 text = "".join(text_parts)
+                tool_calls = _tool_calls_from_output_text(text, payload.tools)
+                if tool_calls:
+                    for index, call in enumerate(tool_calls):
+                        function = call.get("function") or {}
+                        item = {
+                            "id": call["id"],
+                            "type": "function_call",
+                            "status": "completed",
+                            "call_id": call["id"],
+                            "name": function.get("name", ""),
+                            "arguments": function.get("arguments", "{}"),
+                        }
+                        yield _responses_stream_event(
+                            "response.output_item.added",
+                            {
+                                "type": "response.output_item.added",
+                                "output_index": index,
+                                "item": item,
+                            },
+                        )
+                        yield _responses_stream_event(
+                            "response.output_item.done",
+                            {
+                                "type": "response.output_item.done",
+                                "output_index": index,
+                                "item": item,
+                            },
+                        )
+                    yield _responses_stream_event(
+                        "response.completed",
+                        {
+                            "type": "response.completed",
+                            "response": _responses_output(
+                                response_id=response_id,
+                                model=model,
+                                text=text,
+                                tool_calls=tool_calls,
+                                created=created,
+                            ),
+                        },
+                    )
+                    yield "data: [DONE]\n\n"
+                    return
+
+                if tools_enabled:
+                    yield _responses_stream_event(
+                        "response.output_item.added",
+                        {
+                            "type": "response.output_item.added",
+                            "output_index": 0,
+                            "item": {
+                                "id": output_id,
+                                "type": "message",
+                                "status": "in_progress",
+                                "role": "assistant",
+                                "content": [],
+                            },
+                        },
+                    )
+                    yield _responses_stream_event(
+                        "response.content_part.added",
+                        {
+                            "type": "response.content_part.added",
+                            "item_id": output_id,
+                            "output_index": 0,
+                            "content_index": 0,
+                            "part": {
+                                "id": content_id,
+                                "type": "output_text",
+                                "text": "",
+                                "annotations": [],
+                            },
+                        },
+                    )
+                    if text:
+                        yield _responses_stream_event(
+                            "response.output_text.delta",
+                            {
+                                "type": "response.output_text.delta",
+                                "item_id": output_id,
+                                "output_index": 0,
+                                "content_index": 0,
+                                "delta": text,
+                            },
+                        )
                 yield _responses_stream_event(
                     "response.content_part.done",
                     {
