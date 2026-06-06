@@ -138,7 +138,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --probe-endpoints --probe-model gemini
 ```
 
-需要验证外部客户端常见错误路径时，可以加 `--error-probes`。脚本会检查未授权的 `401`、不存在接口的 `404` 和错误方法的 `405` 是否都返回 OpenAI 兼容错误体，并带有 `X-Request-ID`，不会触发模型调用：
+需要验证外部客户端常见错误路径时，可以加 `--error-probes`。脚本会检查 `/v1/models`、`/models`、`/engines` 未授权 `401`，不存在接口和 rootless 模型/engine 详情的 `404`，以及错误方法的 `405` 是否都返回 OpenAI 兼容错误体，并带有 `X-Request-ID`，不会触发模型调用：
 
 ```sh
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --error-probes
