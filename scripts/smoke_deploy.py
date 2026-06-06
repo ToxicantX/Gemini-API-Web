@@ -124,6 +124,7 @@ def run_smoke(
     image_prompt: str | None = None,
     image_model: str = "gemini",
     image_response_format: str = "url",
+    media_history: bool = False,
     responses_prompt: str | None = None,
     responses_model: str = "gemini",
     responses_stream: bool = False,
@@ -194,6 +195,29 @@ def run_smoke(
         _require(media_status == 200, f"/v1/media-cooldowns returned {media_status}")
         _require(media.get("ok") is True, "/v1/media-cooldowns missing ok=true")
         results.append("media cooldown summary ok")
+
+    if media_history:
+        # 媒体历史不消耗模型次数，用来验证外部客户端能读取图片/视频/音频索引和代理链接。
+        history_status, history, history_headers = _request(
+            base_url,
+            "/v1/gemini/media?limit=5",
+            timeout=timeout,
+            api_key=api_key,
+        )
+        if health.get("auth", {}).get("api_key_required") and not api_key:
+            _require(history_status == 401, "/v1/gemini/media should require an API key")
+            results.append("media history protection ok")
+        else:
+            _require(history_status == 200, f"/v1/gemini/media returned {history_status}")
+            _require("x-request-id" in {key.lower(): value for key, value in history_headers.items()}, "media history response missing X-Request-ID")
+            records = history.get("media")
+            _require(isinstance(records, list), "/v1/gemini/media missing media list")
+            for item in records:
+                _require(isinstance(item, dict), "media history item is not an object")
+                _require(bool(item.get("kind")), "media history item missing kind")
+                _require(bool(item.get("url")), "media history item missing url")
+                _require(bool(item.get("content_url")), "media history item missing content_url")
+            results.append("media history ok")
 
     if admin_password:
         admin_status, admin, _ = _request(
@@ -507,6 +531,11 @@ def main() -> int:
         choices=("url", "b64_json"),
     )
     parser.add_argument(
+        "--media-history",
+        action="store_true",
+        help="Verify /v1/gemini/media history shape without consuming model calls.",
+    )
+    parser.add_argument(
         "--responses-prompt",
         default="",
         help="Optional prompt for a real /v1/responses smoke request.",
@@ -557,6 +586,7 @@ def main() -> int:
             image_prompt=args.image_prompt or None,
             image_model=args.image_model,
             image_response_format=args.image_response_format,
+            media_history=args.media_history,
             responses_prompt=args.responses_prompt or None,
             responses_model=args.responses_model,
             responses_stream=args.responses_stream,

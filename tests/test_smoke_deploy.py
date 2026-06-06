@@ -134,6 +134,96 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertIn("authorized models ok", results)
         self.assertIn("media cooldown summary ok", results)
 
+    def test_smoke_can_check_media_history_shape(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            auth = request.headers.get("Authorization")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if not auth:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-401"},
+                    BytesIO(
+                        json.dumps(
+                            {"error": {"message": "Invalid or missing API key."}}
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/gemini/media?limit=5":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "media": [
+                            {
+                                "kind": "image",
+                                "url": "https://cdn.example.test/image.png",
+                                "content_url": "/v1/gemini/media/token/content",
+                            }
+                        ]
+                    },
+                    {"X-Request-ID": "req-media-history"},
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                "sk-test",
+                media_history=True,
+            )
+
+        self.assertIn("media history ok", results)
+
+    def test_smoke_checks_media_history_api_key_protection(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            raise urllib.error.HTTPError(
+                request.full_url,
+                401,
+                "Unauthorized",
+                {"X-Request-ID": "req-401"},
+                BytesIO(
+                    json.dumps(
+                        {"error": {"message": "Invalid or missing API key."}}
+                    ).encode("utf-8")
+                ),
+            )
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                None,
+                media_history=True,
+            )
+
+        self.assertIn("media history protection ok", results)
+
     def test_smoke_reports_health_warnings(self):
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")
