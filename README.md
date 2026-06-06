@@ -11,7 +11,7 @@
 - 支持按调用次数轮换、按错误次数轮换、手动切换账号。
 - OpenAI 兼容接口：`/v1/chat/completions`、`/v1/completions`、`/v1/responses`、`/v1/models`。
 - Gemini 原生接口：生成、流式生成、Gems、Deep Research、文件上传、媒体结果索引。
-- 管理端控制台：请求看板、账户设置、授权登录、Gems、Deep Research、媒体生成和媒体结果。
+- 管理端控制台：请求看板、账户设置、授权登录、授权 Cookie 诊断、Gems、Deep Research、媒体生成和媒体结果。
 - 服务器部署可开启管理员登录，保护网页控制台和管理接口；外部调用继续使用 API Key。
 - 媒体生成支持 `image`、`video`、`audio` 模式；生成结果会保存索引，并尽量缓存到本地，避免 Gemini 原始链接过期后无法查看。
 - 自用保护：图片/视频/音频生成会记录尝试和冷却状态，媒体额度错误或上游 2xx 但没有产出媒体时默认冷却 5 小时，避免额度异常时反复请求。
@@ -150,7 +150,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --health-probes
 ```
 
-需要验证管理端首页是否已经更新到当前版本时，可以加 `--ui-probes`。脚本只读取 `/` 的 HTML，不触发模型调用；会检查看板里的“调用就绪”诊断、网页授权入口、当前真实模型名，并确认旧的 `gemini / 3.1 Pro` 别名文案没有回流：
+需要验证管理端首页是否已经更新到当前版本时，可以加 `--ui-probes`。脚本只读取 `/` 的 HTML，不触发模型调用；会检查看板里的“调用就绪”诊断、网页授权入口、授权 Cookie 诊断入口、当前真实模型名，并确认旧的 `gemini / 3.1 Pro` 别名文案没有回流：
 
 ```sh
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --ui-probes
@@ -322,7 +322,10 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 2. 进入“账户设置”
 3. 点击“网页授权”
 4. 在弹出的 noVNC 浏览器中登录 Google/Gemini
-5. 回到管理端点击“保存授权 Cookie”
+5. 回到管理端点击“检查授权状态”
+6. 看到“已发现 Gemini 登录 Cookie”后，再点击“保存授权 Cookie”
+
+如果“检查授权状态”提示还没有发现 `__Secure-1PSID`，说明容器内授权浏览器还没有完成 Google/Gemini 登录，或当前页面不在有效登录态。此时不要反复保存，先回到 noVNC 授权浏览器完成登录，再重新检查。诊断接口只返回是否发现 Cookie、Cookie 数量、当前页面 URL 等摘要，不会返回 Cookie 明文。
 
 也可以复制示例文件后导入：
 
@@ -859,7 +862,7 @@ curl http://localhost:7860/v1/gemini/stream \
 - `Gems`：查看、创建、更新、删除自定义 system prompt。
 - `Deep Research`：创建研究计划、启动、轮询状态和查看结果。
 - `媒体结果`：上方生成图片/视频/音频，下方查看媒体历史和缓存/代理链接。
-- `账户设置`：调整轮换策略、授权操作、导入/导出/验证/切换账号，并可手动解除账号媒体冷却。
+- `账户设置`：调整轮换策略、授权操作、检查授权 Cookie 状态、导入/导出/验证/切换账号，并可手动解除账号媒体冷却。
 
 请求日志会记录输出类型、任务/请求 id、媒体数量和错误信息；媒体生成完成后会回填实际 `media_count`，方便在看板里判断图片、视频或音频是否真正产出。早期没有 `job_id/request_id` 的历史日志无法可靠关联媒体结果，会保留原始计数。
 
