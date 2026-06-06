@@ -892,6 +892,71 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertEqual(seen_heads, ["/v1", "/v1/models"])
         self.assertIn("endpoint probes ok", results)
 
+    def test_smoke_rejects_head_probe_body(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            auth = request.headers.get("Authorization")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if not auth:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-401"},
+                    BytesIO(
+                        json.dumps(
+                            {"error": {"message": "Invalid or missing API key."}}
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1":
+                if request.get_method() == "HEAD":
+                    return FakeHTTPResponse(
+                        200,
+                        headers={"X-Request-ID": "req-v1-root-head"},
+                        body="",
+                    )
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "object": "api.root",
+                        "endpoints": {"models": "/v1/models"},
+                    },
+                    {"X-Request-ID": "req-v1-root"},
+                )
+            if path == "/v1/models":
+                if request.get_method() == "HEAD":
+                    return FakeHTTPResponse(
+                        200,
+                        headers={"X-Request-ID": "req-models-head"},
+                        body="unexpected body",
+                    )
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaisesRegex(
+                AssertionError,
+                "HEAD /v1/models should not return a body",
+            ):
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    "sk-test",
+                    probe_endpoints=True,
+                )
+
     def test_smoke_checks_endpoint_probe_api_key_protection(self):
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")

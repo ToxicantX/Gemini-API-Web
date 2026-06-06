@@ -255,6 +255,24 @@ def _require_openai_error(
     _require(error.get("request_id") == request_id, f"{label} error request_id mismatch")
 
 
+def _require_head_response(
+    status: int,
+    body_text: str,
+    headers: dict[str, str],
+    *,
+    expected_status: int = 200,
+    label: str,
+) -> None:
+    """统一校验 HEAD 探测响应，避免网关返回正文或丢失请求号。"""
+    _require(status == expected_status, f"{label} returned {status}")
+    if expected_status < 400:
+        _require(body_text == "", f"{label} should not return a body")
+    _require(
+        "x-request-id" in {key.lower(): value for key, value in headers.items()},
+        f"{label} missing X-Request-ID",
+    )
+
+
 def _cookie_header(headers: dict[str, str]) -> str:
     raw_cookie = ""
     for key, value in headers.items():
@@ -589,9 +607,7 @@ def _run_smoke_impl(
                 timeout=timeout,
                 method="HEAD",
             )
-            _require(head_status == 200, f"HEAD {path} returned {head_status}")
-            _require(head_body == "", f"HEAD {path} should not return a body")
-            _require("x-request-id" in {key.lower(): value for key, value in head_headers.items()}, f"HEAD {path} missing X-Request-ID")
+            _require_head_response(head_status, head_body, head_headers, label=f"HEAD {path}")
         results.append("health probes ok")
 
     if cors_probes:
@@ -745,18 +761,15 @@ def _run_smoke_impl(
                 api_key=api_key,
                 method="HEAD",
             )
-            _require(root_head_status == 200, f"HEAD /v1 returned {root_head_status}")
-            _require(root_head_body == "", "HEAD /v1 should not return a body")
-            _require("x-request-id" in {key.lower(): value for key, value in root_head_headers.items()}, "HEAD /v1 missing X-Request-ID")
-            head_status, _, head_headers = _raw_request(
+            _require_head_response(root_head_status, root_head_body, root_head_headers, label="HEAD /v1")
+            head_status, head_body, head_headers = _raw_request(
                 base_url,
                 "/v1/models",
                 timeout=timeout,
                 api_key=api_key,
                 method="HEAD",
             )
-            _require(head_status == 200, f"HEAD /v1/models returned {head_status}")
-            _require("x-request-id" in {key.lower(): value for key, value in head_headers.items()}, "HEAD /v1/models missing X-Request-ID")
+            _require_head_response(head_status, head_body, head_headers, label="HEAD /v1/models")
             detail_status, detail, detail_headers = _request(
                 base_url,
                 f"/v1/models/{probe_model}",
@@ -776,15 +789,19 @@ def _run_smoke_impl(
             _require(alias_status == 200, f"/models returned {alias_status}")
             _require(alias_models.get("object") == "list", "/models did not return an OpenAI list")
             _require("x-request-id" in {key.lower(): value for key, value in alias_headers.items()}, "/models response missing X-Request-ID")
-            alias_head_status, _, alias_head_headers = _raw_request(
+            alias_head_status, alias_head_body, alias_head_headers = _raw_request(
                 base_url,
                 f"/models/{probe_model}",
                 timeout=timeout,
                 api_key=api_key,
                 method="HEAD",
             )
-            _require(alias_head_status == 200, f"HEAD /models/{probe_model} returned {alias_head_status}")
-            _require("x-request-id" in {key.lower(): value for key, value in alias_head_headers.items()}, "HEAD /models/{model} missing X-Request-ID")
+            _require_head_response(
+                alias_head_status,
+                alias_head_body,
+                alias_head_headers,
+                label=f"HEAD /models/{probe_model}",
+            )
             engines_status, engines, engines_headers = _request(
                 base_url,
                 "/v1/engines",
@@ -794,15 +811,19 @@ def _run_smoke_impl(
             _require(engines_status == 200, f"/v1/engines returned {engines_status}")
             _require(engines.get("object") == "list", "/v1/engines did not return an OpenAI list")
             _require("x-request-id" in {key.lower(): value for key, value in engines_headers.items()}, "/v1/engines response missing X-Request-ID")
-            engine_head_status, _, engine_head_headers = _raw_request(
+            engine_head_status, engine_head_body, engine_head_headers = _raw_request(
                 base_url,
                 f"/v1/engines/{probe_model}",
                 timeout=timeout,
                 api_key=api_key,
                 method="HEAD",
             )
-            _require(engine_head_status == 200, f"HEAD /v1/engines/{probe_model} returned {engine_head_status}")
-            _require("x-request-id" in {key.lower(): value for key, value in engine_head_headers.items()}, "HEAD /v1/engines/{model} missing X-Request-ID")
+            _require_head_response(
+                engine_head_status,
+                engine_head_body,
+                engine_head_headers,
+                label=f"HEAD /v1/engines/{probe_model}",
+            )
             rootless_engines_status, rootless_engines, rootless_engines_headers = _request(
                 base_url,
                 "/engines",
@@ -812,28 +833,38 @@ def _run_smoke_impl(
             _require(rootless_engines_status == 200, f"/engines returned {rootless_engines_status}")
             _require(rootless_engines.get("object") == "list", "/engines did not return an OpenAI list")
             _require("x-request-id" in {key.lower(): value for key, value in rootless_engines_headers.items()}, "/engines response missing X-Request-ID")
-            rootless_engine_head_status, _, rootless_engine_head_headers = _raw_request(
+            rootless_engine_head_status, rootless_engine_head_body, rootless_engine_head_headers = _raw_request(
                 base_url,
                 f"/engines/{probe_model}",
                 timeout=timeout,
                 api_key=api_key,
                 method="HEAD",
             )
-            _require(rootless_engine_head_status == 200, f"HEAD /engines/{probe_model} returned {rootless_engine_head_status}")
-            _require("x-request-id" in {key.lower(): value for key, value in rootless_engine_head_headers.items()}, "HEAD /engines/{model} missing X-Request-ID")
+            _require_head_response(
+                rootless_engine_head_status,
+                rootless_engine_head_body,
+                rootless_engine_head_headers,
+                label=f"HEAD /engines/{probe_model}",
+            )
             results.append("endpoint probes ok")
 
     if file_probes:
         # 文件接口的 HEAD 探测不读取正文，适合验证外部 SDK 和网关的连通性检查。
         head_paths = ("/v1/files", "/v1/gemini/files")
         if health.get("auth", {}).get("api_key_required") and not api_key:
-            status, _, _ = _raw_request(
+            status, body_text, headers = _raw_request(
                 base_url,
                 head_paths[0],
                 timeout=timeout,
                 method="HEAD",
             )
-            _require(status == 401, "HEAD /v1/files should require an API key")
+            _require_head_response(
+                status,
+                body_text,
+                headers,
+                expected_status=401,
+                label="HEAD /v1/files",
+            )
             results.append("file probe protection ok")
         else:
             for path in head_paths:
@@ -844,9 +875,7 @@ def _run_smoke_impl(
                     api_key=api_key,
                     method="HEAD",
                 )
-                _require(status == 200, f"HEAD {path} returned {status}")
-                _require(body_text == "", f"HEAD {path} should not return a body")
-                _require("x-request-id" in {key.lower(): value for key, value in headers.items()}, f"HEAD {path} missing X-Request-ID")
+                _require_head_response(status, body_text, headers, label=f"HEAD {path}")
             results.append("file probes ok")
 
     if file_smoke_path:
@@ -909,9 +938,12 @@ def _run_smoke_impl(
                 api_key=api_key,
                 method="HEAD",
             )
-            _require(detail_head_status == 200, f"HEAD /v1/files/{file_id} returned {detail_head_status}")
-            _require(detail_head_body == "", f"HEAD /v1/files/{file_id} should not return a body")
-            _require("x-request-id" in {key.lower(): value for key, value in detail_head_headers.items()}, "file detail HEAD missing X-Request-ID")
+            _require_head_response(
+                detail_head_status,
+                detail_head_body,
+                detail_head_headers,
+                label=f"HEAD /v1/files/{file_id}",
+            )
 
             content_status, content_body, content_headers = _raw_request(
                 base_url,
@@ -931,9 +963,12 @@ def _run_smoke_impl(
                 api_key=api_key,
                 method="HEAD",
             )
-            _require(content_head_status == 200, f"HEAD /v1/files/{file_id}/content returned {content_head_status}")
-            _require(content_head_body == "", f"HEAD /v1/files/{file_id}/content should not return a body")
-            _require("x-request-id" in {key.lower(): value for key, value in content_head_headers.items()}, "file content HEAD missing X-Request-ID")
+            _require_head_response(
+                content_head_status,
+                content_head_body,
+                content_head_headers,
+                label=f"HEAD /v1/files/{file_id}/content",
+            )
 
             native_status, native, native_headers = _request(
                 base_url,
@@ -1013,8 +1048,7 @@ def _run_smoke_impl(
                             timeout=timeout,
                             method="HEAD",
                         )
-                        _require(status == 200, f"HEAD {content_path} returned {status}")
-                        _require(body_text == "", f"HEAD {content_path} should not return a body")
+                        _require_head_response(status, body_text, headers, label=f"HEAD {content_path}")
                         _require_media_content_headers(
                             headers,
                             kind=str(item.get("kind") or ""),
