@@ -367,6 +367,28 @@ def _require_chat_completion_response(data: dict) -> None:
     )
 
 
+def _require_chat_completion_stream_chunk(data: dict, *, final: bool = False) -> None:
+    """校验 Chat Completions 流式 chunk，避免外部 SDK 解析 SSE 时缺关键字段。"""
+    _require(data.get("object") == "chat.completion.chunk", "stream chunk is not an OpenAI chat completion chunk")
+    _require(str(data.get("id") or "").startswith("chatcmpl-"), "stream chunk missing chatcmpl id")
+    _require(isinstance(data.get("created"), int), "stream chunk missing integer created")
+    _require(bool(data.get("model")), "stream chunk missing model")
+    choices = data.get("choices")
+    _require(isinstance(choices, list), "stream chunk missing choices")
+    if final and choices == []:
+        # include_usage=true 的用量 chunk 会用空 choices；普通 smoke 不强制要求，但保持兼容。
+        return
+    _require(bool(choices), "stream chunk missing choices")
+    choice = choices[0]
+    _require(choice.get("index") == 0, "stream chunk first choice index is not 0")
+    _require(isinstance(choice.get("delta"), dict), "stream chunk missing delta")
+    finish_reason = choice.get("finish_reason")
+    if final:
+        _require(finish_reason in {"stop", "length", "tool_calls"}, "stream final chunk has invalid finish_reason")
+    else:
+        _require(finish_reason is None, "stream delta chunk finish_reason must be null")
+
+
 def _require_chat_tool_call_response(data: dict) -> None:
     """校验 Chat Completions 工具调用返回 OpenAI 客户端可执行的结构。"""
     _require_chat_completion_response(data)
@@ -1013,9 +1035,15 @@ def _run_smoke_impl(
             _require("[DONE]" in data_items, "stream response missing [DONE]")
             chunks = [item for item in data_items if item != "[DONE]"]
             _require(bool(chunks), "stream response missing data chunks")
-            first_chunk = json.loads(chunks[0])
-            _require(first_chunk.get("object") == "chat.completion.chunk", "stream chunk is not an OpenAI chat completion chunk")
-            _require("choices" in first_chunk, "stream chunk missing choices")
+            parsed_chunks = [json.loads(item) for item in chunks]
+            _require_chat_completion_stream_chunk(parsed_chunks[0])
+            final_chunks = [
+                item
+                for item in parsed_chunks
+                if (item.get("choices") or [{}])[0].get("finish_reason") is not None
+            ]
+            _require(bool(final_chunks), "stream response missing final finish_reason chunk")
+            _require_chat_completion_stream_chunk(final_chunks[-1], final=True)
             results.append("chat stream ok")
 
     if chat_tool_probe:
