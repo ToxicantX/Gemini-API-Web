@@ -2976,7 +2976,7 @@ class ServerEndpointTests(unittest.TestCase):
                     headers={"Authorization": "Bearer sk-external"},
                     data={
                         "prompt": "edit image",
-                        "model": "gemini-3.5-flash",
+                        "model": "gpt-image-2",
                     },
                     files={"image": ("source.png", b"png-bytes", "image/png")},
                 )
@@ -2999,7 +2999,8 @@ class ServerEndpointTests(unittest.TestCase):
                 )
             )
             self.assertEqual(calls[0][0], "edit image")
-            self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
+            # 图片编辑端点同样接受 OpenAI 图片模型名，但实际仍使用当前真实 Gemini 模型。
+            self.assertEqual(calls[0][1]["model"], "gemini-3.1-pro")
             self.assertEqual(calls[0][1]["generation_mode"], "image")
             self.assertEqual(len(calls[0][1]["files"]), 1)
             self.assertFalse(Path(calls[0][1]["files"][0]).exists())
@@ -3085,7 +3086,7 @@ class ServerEndpointTests(unittest.TestCase):
                 response = client.post(
                     "/v1/images/variations",
                     headers={"Authorization": "Bearer sk-external"},
-                    data={"model": "gemini-3.1-pro"},
+                    data={"model": "dall-e-3"},
                     files={"image": ("source.png", b"png-bytes", "image/png")},
                 )
                 base64_response = client.post(
@@ -3104,6 +3105,7 @@ class ServerEndpointTests(unittest.TestCase):
                 )
             )
             self.assertEqual(calls[0][0], "基于上传图片生成新的图片变体。")
+            # 图片变体端点只把 OpenAI 图片模型名作为端点级别兼容别名。
             self.assertEqual(calls[0][1]["model"], "gemini-3.1-pro")
             self.assertEqual(calls[0][1]["generation_mode"], "image")
             self.assertEqual(len(calls[0][1]["files"]), 1)
