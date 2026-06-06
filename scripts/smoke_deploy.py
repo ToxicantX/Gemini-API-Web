@@ -75,6 +75,8 @@ def run_smoke(
     *,
     admin_username: str | None = None,
     admin_password: str | None = None,
+    chat_prompt: str | None = None,
+    chat_model: str = "gemini",
     fail_on_warnings: bool = False,
 ) -> list[str]:
     results: list[str] = []
@@ -152,6 +154,30 @@ def run_smoke(
         _require("logs" in logs, "/v1/request-logs missing logs")
         results.append("admin login ok")
 
+    if chat_prompt:
+        # 真实模型调用会消耗账号请求次数，因此只在显式传入 --chat-prompt 时执行。
+        chat_status, chat, chat_headers = _request(
+            base_url,
+            "/v1/chat/completions",
+            api_key=api_key,
+            method="POST",
+            body={
+                "model": chat_model,
+                "messages": [{"role": "user", "content": chat_prompt}],
+            },
+        )
+        _require(chat_status == 200, f"/v1/chat/completions returned {chat_status}")
+        _require(chat.get("object") == "chat.completion", "chat response is not an OpenAI chat completion")
+        _require("x-request-id" in {key.lower(): value for key, value in chat_headers.items()}, "chat response missing X-Request-ID")
+        choices = chat.get("choices") or []
+        _require(bool(choices), "chat response missing choices")
+        message = choices[0].get("message") or {}
+        _require(
+            bool(message.get("content") or message.get("tool_calls")),
+            "chat response missing message content or tool_calls",
+        )
+        results.append("chat completions ok")
+
     return results
 
 
@@ -161,6 +187,12 @@ def main() -> int:
     parser.add_argument("--api-key", default="")
     parser.add_argument("--admin-username", default="")
     parser.add_argument("--admin-password", default="")
+    parser.add_argument(
+        "--chat-prompt",
+        default="",
+        help="Optional prompt for a real /v1/chat/completions smoke request.",
+    )
+    parser.add_argument("--chat-model", default="gemini")
     parser.add_argument(
         "--fail-on-warnings",
         action="store_true",
@@ -173,6 +205,8 @@ def main() -> int:
             args.api_key or None,
             admin_username=args.admin_username or None,
             admin_password=args.admin_password or None,
+            chat_prompt=args.chat_prompt or None,
+            chat_model=args.chat_model,
             fail_on_warnings=args.fail_on_warnings,
         )
     except Exception as exc:
