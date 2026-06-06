@@ -945,6 +945,49 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertTrue(api_key.startswith("sk-gemini-"))
             self.assertEqual(authorized.status_code, 200)
 
+    def test_health_warns_when_compose_placeholder_secrets_are_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=(),
+                host=config.host,
+                port=config.port,
+                admin_username="admin",
+                admin_password="change-this-admin-password",
+                admin_session_secret="change-this-to-a-long-random-string",
+                require_api_key=True,
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                health = client.get("/health")
+
+            self.assertEqual(health.status_code, 200)
+            warnings = health.json()["warnings"]
+            self.assertTrue(
+                any(
+                    "ADMIN_PASSWORD is still using the Docker Compose placeholder"
+                    in warning
+                    for warning in warnings
+                )
+            )
+            self.assertTrue(
+                any(
+                    "ADMIN_SESSION_SECRET is still using the Docker Compose placeholder"
+                    in warning
+                    for warning in warnings
+                )
+            )
+
     def test_health_warns_when_api_key_requirement_cannot_be_bootstrapped(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)

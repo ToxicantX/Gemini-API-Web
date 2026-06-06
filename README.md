@@ -175,6 +175,8 @@ environment:
 
 开启 `REQUIRE_API_KEY=true` 时，至少需要同时配置 `API_KEYS` 或 `ADMIN_PASSWORD` 之一：前者可直接给外部客户端调用，后者可先登录管理端再到“系统设置”生成第一个 API Key。若两者都为空，外部接口会被拒绝，`/health` 会返回配置告警。
 
+如果仍使用 Docker Compose 默认的占位管理员密码或会话密钥，服务可以启动并完成首次引导，但 `/health` 会返回安全告警；服务器上线前必须改成自己的强密码和随机密钥。
+
 ## 管理员登录与外部鉴权
 
 如果要部署到服务器，必须修改默认管理员密码和会话密钥，建议至少配置 `ADMIN_USERNAME`、`ADMIN_PASSWORD` 和 `ADMIN_SESSION_SECRET`：

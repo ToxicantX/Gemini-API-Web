@@ -57,6 +57,8 @@ MEDIA_CONTENT_ALLOWED_HOST_SUFFIXES = (
 )
 SYSTEM_SETTINGS_KEY = "system_settings"
 MASKED_SECRET = "********"
+DEFAULT_ADMIN_PASSWORD_PLACEHOLDER = "change-this-admin-password"
+DEFAULT_ADMIN_SESSION_SECRET_PLACEHOLDER = "change-this-to-a-long-random-string"
 DEFAULT_SYSTEM_SETTINGS = {
     "api_keys": [],
     "object_storage": {
@@ -1922,9 +1924,20 @@ def create_app(config: ServerConfig | None = None):
             warnings.append(
                 "ADMIN_PASSWORD is not configured. The admin console and management APIs are open; set ADMIN_PASSWORD for server deployments."
             )
-        elif not config.admin_username:
+        elif config.admin_password == DEFAULT_ADMIN_PASSWORD_PLACEHOLDER:
+            warnings.append(
+                "ADMIN_PASSWORD is still using the Docker Compose placeholder value. Change ADMIN_PASSWORD before exposing this service."
+            )
+        if config.admin_password and not config.admin_username:
             warnings.append(
                 "ADMIN_USERNAME is not configured. The admin console uses password-only login; set ADMIN_USERNAME for server deployments."
+            )
+        if (
+            config.admin_session_secret
+            == DEFAULT_ADMIN_SESSION_SECRET_PLACEHOLDER
+        ):
+            warnings.append(
+                "ADMIN_SESSION_SECRET is still using the Docker Compose placeholder value. Set a random ADMIN_SESSION_SECRET before exposing this service."
             )
         if (
             config.require_api_key
