@@ -740,11 +740,23 @@ class SmokeDeployTests(unittest.TestCase):
                     {"id": uploaded_file_id, "object": "file", "purpose": "assistants"},
                     {"X-Request-ID": "req-file-detail"},
                 )
-            if path == f"/v1/files/{uploaded_file_id}/content":
+            if path == f"/v1/files/{uploaded_file_id}" and request.get_method() == "HEAD":
+                return FakeHTTPResponse(
+                    200,
+                    headers={"X-Request-ID": "req-file-detail-head"},
+                    body="",
+                )
+            if path == f"/v1/files/{uploaded_file_id}/content" and request.get_method() == "GET":
                 return FakeHTTPResponse(
                     200,
                     headers={"X-Request-ID": "req-file-content"},
                     body="hello smoke",
+                )
+            if path == f"/v1/files/{uploaded_file_id}/content" and request.get_method() == "HEAD":
+                return FakeHTTPResponse(
+                    200,
+                    headers={"X-Request-ID": "req-file-content-head"},
+                    body="",
                 )
             if path == "/v1/gemini/files":
                 return FakeHTTPResponse(

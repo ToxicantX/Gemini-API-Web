@@ -519,6 +519,17 @@ def _run_smoke_impl(
             _require("x-request-id" in {key.lower(): value for key, value in detail_headers.items()}, "file detail response missing X-Request-ID")
             _require(detail.get("id") == file_id, "file detail returned unexpected id")
 
+            detail_head_status, detail_head_body, detail_head_headers = _raw_request(
+                base_url,
+                f"/v1/files/{file_id}",
+                timeout=timeout,
+                api_key=api_key,
+                method="HEAD",
+            )
+            _require(detail_head_status == 200, f"HEAD /v1/files/{file_id} returned {detail_head_status}")
+            _require(detail_head_body == "", f"HEAD /v1/files/{file_id} should not return a body")
+            _require("x-request-id" in {key.lower(): value for key, value in detail_head_headers.items()}, "file detail HEAD missing X-Request-ID")
+
             content_status, content_body, content_headers = _raw_request(
                 base_url,
                 f"/v1/files/{file_id}/content",
@@ -529,6 +540,17 @@ def _run_smoke_impl(
             _require("x-request-id" in {key.lower(): value for key, value in content_headers.items()}, "file content response missing X-Request-ID")
             expected_body = source.read_bytes().decode("utf-8", errors="replace")
             _require(content_body == expected_body, "file content response did not match uploaded file")
+
+            content_head_status, content_head_body, content_head_headers = _raw_request(
+                base_url,
+                f"/v1/files/{file_id}/content",
+                timeout=timeout,
+                api_key=api_key,
+                method="HEAD",
+            )
+            _require(content_head_status == 200, f"HEAD /v1/files/{file_id}/content returned {content_head_status}")
+            _require(content_head_body == "", f"HEAD /v1/files/{file_id}/content should not return a body")
+            _require("x-request-id" in {key.lower(): value for key, value in content_head_headers.items()}, "file content HEAD missing X-Request-ID")
 
             native_status, native, native_headers = _request(
                 base_url,
