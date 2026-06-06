@@ -1475,11 +1475,16 @@ def _resolve_masked_api_keys(
 def _merge_system_settings(
     current: dict[str, Any],
     request: SystemSettingsRequest | None = None,
+    defaults: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    default_object_storage = {
+        **DEFAULT_SYSTEM_SETTINGS["object_storage"],
+        **((defaults or {}).get("object_storage") or {}),
+    }
     merged = {
         "api_keys": _normalize_api_keys(current.get("api_keys")),
         "object_storage": {
-            **DEFAULT_SYSTEM_SETTINGS["object_storage"],
+            **default_object_storage,
             **(current.get("object_storage") or {}),
         },
     }
@@ -1508,8 +1513,11 @@ def _merge_system_settings(
     return merged
 
 
-def _public_system_settings(settings: dict[str, Any]) -> dict[str, Any]:
-    public = _merge_system_settings(settings)
+def _public_system_settings(
+    settings: dict[str, Any],
+    defaults: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    public = _merge_system_settings(settings, defaults=defaults)
     public["api_keys"] = [
         {
             "fingerprint": _key_fingerprint(key),
@@ -1628,7 +1636,14 @@ def create_app(config: ServerConfig | None = None):
     from pathlib import Path
 
     config = config or ServerConfig.from_env()
+    system_settings_defaults = {
+        "object_storage": config.object_storage_defaults,
+    }
     store = AccountStore(config.database_path)
+    def _stored_system_settings() -> dict[str, Any]:
+        # 未保存系统设置时返回空对象，让全局默认和环境变量默认值参与合并。
+        return store.get_json_state(SYSTEM_SETTINGS_KEY, {})
+
     store.import_accounts_file(config.accounts_file)
     switch_on_uses = int(store.get_state("switch_on_uses", str(config.switch_on_uses)))
     failure_threshold = int(
@@ -1760,7 +1775,8 @@ def create_app(config: ServerConfig | None = None):
                 )
 
         system_settings = _merge_system_settings(
-            store.get_json_state(SYSTEM_SETTINGS_KEY, DEFAULT_SYSTEM_SETTINGS)
+            _stored_system_settings(),
+            defaults=system_settings_defaults,
         )
         allowed_api_keys = set(config.api_keys) | set(system_settings["api_keys"])
         if (
@@ -1915,7 +1931,8 @@ def create_app(config: ServerConfig | None = None):
     def _health_payload() -> dict[str, Any]:
         # 探活接口只返回部署排障需要的非敏感摘要，不暴露 Cookie、API Key 或账号明文。
         system_settings = _merge_system_settings(
-            store.get_json_state(SYSTEM_SETTINGS_KEY, DEFAULT_SYSTEM_SETTINGS)
+            _stored_system_settings(),
+            defaults=system_settings_defaults,
         )
         status_data = rotator.status()
         accounts = status_data.get("accounts") or []
@@ -2116,11 +2133,15 @@ def create_app(config: ServerConfig | None = None):
     @app.get("/v1/system-settings")
     async def get_system_settings() -> dict[str, Any]:
         settings = _merge_system_settings(
-            store.get_json_state(SYSTEM_SETTINGS_KEY, DEFAULT_SYSTEM_SETTINGS)
+            _stored_system_settings(),
+            defaults=system_settings_defaults,
         )
         return {
             "ok": True,
-            "settings": _public_system_settings(settings),
+            "settings": _public_system_settings(
+                settings,
+                defaults=system_settings_defaults,
+            ),
             "object_storage_ready": ObjectStorageConfig.from_dict(
                 settings["object_storage"]
             ).usable(),
@@ -2128,12 +2149,19 @@ def create_app(config: ServerConfig | None = None):
 
     @app.patch("/v1/system-settings")
     async def update_system_settings(request: SystemSettingsRequest) -> dict[str, Any]:
-        current = store.get_json_state(SYSTEM_SETTINGS_KEY, DEFAULT_SYSTEM_SETTINGS)
-        settings = _merge_system_settings(current, request)
+        current = _stored_system_settings()
+        settings = _merge_system_settings(
+            current,
+            request,
+            defaults=system_settings_defaults,
+        )
         store.set_json_state(SYSTEM_SETTINGS_KEY, settings)
         return {
             "ok": True,
-            "settings": _public_system_settings(settings),
+            "settings": _public_system_settings(
+                settings,
+                defaults=system_settings_defaults,
+            ),
             "object_storage_ready": ObjectStorageConfig.from_dict(
                 settings["object_storage"]
             ).usable(),
@@ -2141,8 +2169,11 @@ def create_app(config: ServerConfig | None = None):
 
     @app.post("/v1/system-settings/api-keys")
     async def create_system_api_key() -> dict[str, Any]:
-        current = store.get_json_state(SYSTEM_SETTINGS_KEY, DEFAULT_SYSTEM_SETTINGS)
-        settings = _merge_system_settings(current)
+        current = _stored_system_settings()
+        settings = _merge_system_settings(
+            current,
+            defaults=system_settings_defaults,
+        )
         api_key = f"sk-gemini-{secrets.token_urlsafe(32)}"
         settings["api_keys"] = _normalize_api_keys([*settings["api_keys"], api_key])
         store.set_json_state(SYSTEM_SETTINGS_KEY, settings)
@@ -2150,13 +2181,19 @@ def create_app(config: ServerConfig | None = None):
             "ok": True,
             "api_key": api_key,
             "fingerprint": _key_fingerprint(api_key),
-            "settings": _public_system_settings(settings),
+            "settings": _public_system_settings(
+                settings,
+                defaults=system_settings_defaults,
+            ),
         }
 
     @app.delete("/v1/system-settings/api-keys/{fingerprint}")
     async def delete_system_api_key(fingerprint: str) -> dict[str, Any]:
-        current = store.get_json_state(SYSTEM_SETTINGS_KEY, DEFAULT_SYSTEM_SETTINGS)
-        settings = _merge_system_settings(current)
+        current = _stored_system_settings()
+        settings = _merge_system_settings(
+            current,
+            defaults=system_settings_defaults,
+        )
         before = len(settings["api_keys"])
         settings["api_keys"] = [
             key for key in settings["api_keys"] if _key_fingerprint(key) != fingerprint
@@ -2165,7 +2202,10 @@ def create_app(config: ServerConfig | None = None):
         return {
             "ok": True,
             "deleted": before - len(settings["api_keys"]),
-            "settings": _public_system_settings(settings),
+            "settings": _public_system_settings(
+                settings,
+                defaults=system_settings_defaults,
+            ),
         }
 
     @app.get("/v1/request-logs")
@@ -2435,7 +2475,8 @@ def create_app(config: ServerConfig | None = None):
         downloaded: dict[str, Any],
     ) -> dict[str, Any]:
         settings = _merge_system_settings(
-            store.get_json_state(SYSTEM_SETTINGS_KEY, DEFAULT_SYSTEM_SETTINGS)
+            _stored_system_settings(),
+            defaults=system_settings_defaults,
         )
         storage_config = ObjectStorageConfig.from_dict(settings["object_storage"])
         content = downloaded.get("content")

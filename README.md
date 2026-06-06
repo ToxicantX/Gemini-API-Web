@@ -66,6 +66,24 @@ data/media-cache/
 
 真实数据库、Cookie 文件和本地状态不会提交到 Git。
 
+### 媒体对象存储
+
+默认情况下，图片、视频、音频结果会缓存到本地 `data/media-cache/`，媒体历史返回同服务的代理链接。服务器部署后如果希望外部客户端拿到长期可访问的公开媒体地址，可以在 `.env` 中开启 S3 兼容对象存储：
+
+```env
+OBJECT_STORAGE_ENABLED=true
+OBJECT_STORAGE_ENDPOINT=https://s3.example.com
+OBJECT_STORAGE_REGION=auto
+OBJECT_STORAGE_BUCKET=gemini-media
+OBJECT_STORAGE_ACCESS_KEY_ID=your-access-key
+OBJECT_STORAGE_SECRET_ACCESS_KEY=your-secret-key
+OBJECT_STORAGE_PREFIX=gemini-web
+OBJECT_STORAGE_PUBLIC_URL=https://cdn.example.com/gemini-media
+OBJECT_STORAGE_FORCE_PATH_STYLE=true
+```
+
+这些环境变量会作为容器首次启动的系统设置默认值，也可以在管理端“系统设置”里修改；管理端保存后的 SQLite 设置优先于环境变量。只有请求显式启用媒体保存时才会上传对象存储，未配置或上传失败时仍会保留本地缓存/代理链接。
+
 ## 更新 Docker 镜像
 
 本项目默认使用本地源码构建镜像。更新代码后重新构建并替换容器：

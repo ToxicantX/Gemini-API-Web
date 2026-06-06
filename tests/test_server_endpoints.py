@@ -893,6 +893,49 @@ class ServerEndpointTests(unittest.TestCase):
                 self.assertEqual(deleted.status_code, 200)
                 self.assertEqual(deleted.json()["deleted"], 1)
 
+    def test_system_settings_use_object_storage_env_defaults(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=config.api_keys,
+                host=config.host,
+                port=config.port,
+                object_storage_defaults={
+                    "enabled": True,
+                    "endpoint": "https://s3.example.test",
+                    "region": "auto",
+                    "bucket": "media",
+                    "access_key_id": "access",
+                    "secret_access_key": "secret-value",
+                    "prefix": "gemini-web",
+                    "public_url": "https://cdn.example.test/media",
+                    "force_path_style": True,
+                },
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                response = client.get("/v1/system-settings")
+
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            storage = data["settings"]["object_storage"]
+            self.assertTrue(storage["enabled"])
+            self.assertEqual(storage["endpoint"], "https://s3.example.test")
+            self.assertEqual(storage["bucket"], "media")
+            self.assertEqual(storage["public_url"], "https://cdn.example.test/media")
+            self.assertEqual(storage["secret_access_key"], "secr...alue")
+            self.assertTrue(data["object_storage_ready"])
+
     def test_require_api_key_blocks_external_calls_until_key_exists(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)

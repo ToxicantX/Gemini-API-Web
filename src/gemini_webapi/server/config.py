@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -74,6 +74,7 @@ class ServerConfig:
     cors_allow_origins: tuple[str, ...] = ("*",)
     require_api_key: bool = False
     git_commit: str = ""
+    object_storage_defaults: dict[str, object] = field(default_factory=dict)
 
     @classmethod
     def from_env(cls) -> "ServerConfig":
@@ -122,4 +123,16 @@ class ServerConfig:
             in {"1", "true", "yes"},
             cors_allow_origins=_env_list("CORS_ALLOW_ORIGINS", ("*",)),
             git_commit=os.getenv("GIT_COMMIT", "").strip(),
+            # 对象存储既可以在管理端保存，也可以通过环境变量作为容器首次启动默认值注入。
+            object_storage_defaults={
+                "enabled": _env_bool("OBJECT_STORAGE_ENABLED", False),
+                "endpoint": os.getenv("OBJECT_STORAGE_ENDPOINT", "").strip(),
+                "region": os.getenv("OBJECT_STORAGE_REGION", "auto").strip() or "auto",
+                "bucket": os.getenv("OBJECT_STORAGE_BUCKET", "").strip(),
+                "access_key_id": os.getenv("OBJECT_STORAGE_ACCESS_KEY_ID", "").strip(),
+                "secret_access_key": os.getenv("OBJECT_STORAGE_SECRET_ACCESS_KEY", "").strip(),
+                "prefix": os.getenv("OBJECT_STORAGE_PREFIX", "gemini-web").strip() or "gemini-web",
+                "public_url": os.getenv("OBJECT_STORAGE_PUBLIC_URL", "").strip(),
+                "force_path_style": _env_bool("OBJECT_STORAGE_FORCE_PATH_STYLE", True),
+            },
         )

@@ -46,6 +46,13 @@ class DeploymentFileTests(unittest.TestCase):
             compose,
         )
         self.assertIn("GIT_COMMIT: ${GIT_COMMIT:-}", compose)
+        self.assertIn("OBJECT_STORAGE_ENABLED: ${OBJECT_STORAGE_ENABLED:-false}", compose)
+        self.assertIn("OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-}", compose)
+        self.assertIn("OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-}", compose)
+        self.assertIn(
+            "OBJECT_STORAGE_PUBLIC_URL: ${OBJECT_STORAGE_PUBLIC_URL:-}",
+            compose,
+        )
 
     def test_env_example_defaults_are_server_safe(self):
         env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
@@ -56,6 +63,9 @@ class DeploymentFileTests(unittest.TestCase):
         self.assertIn("API_KEYS=sk-change-this-external-key", env_example)
         self.assertIn("CORS_ALLOW_ORIGINS=https://your-panel.example.com", env_example)
         self.assertIn("GIT_COMMIT=", env_example)
+        self.assertIn("OBJECT_STORAGE_ENABLED=false", env_example)
+        self.assertIn("OBJECT_STORAGE_PREFIX=gemini-web", env_example)
+        self.assertIn("OBJECT_STORAGE_FORCE_PATH_STYLE=true", env_example)
 
     def test_readme_documents_file_head_probes(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -73,6 +83,7 @@ class DeploymentFileTests(unittest.TestCase):
         self.assertIn("仍使用占位值", readme)
         self.assertIn("REQUIRE_API_KEY=true", readme)
         self.assertIn("CORS_ALLOW_ORIGINS", readme)
+        self.assertIn("OBJECT_STORAGE_ENABLED", readme)
 
     def test_readme_documents_deployment_smoke_test(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
