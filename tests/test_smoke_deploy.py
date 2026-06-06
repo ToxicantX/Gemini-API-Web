@@ -2114,6 +2114,7 @@ class SmokeDeployTests(unittest.TestCase):
                 body = json.loads(request.data.decode("utf-8"))
                 if body.get("stream"):
                     seen_stream = True
+                    self.assertEqual(body["stream_options"], {"include_usage": True})
                     return FakeHTTPResponse(
                         200,
                         headers={
@@ -2124,6 +2125,7 @@ class SmokeDeployTests(unittest.TestCase):
                             'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n'
                             'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini","choices":[{"index":0,"delta":{"content":"p"},"finish_reason":null}]}\n\n'
                             'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n'
+                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini","choices":[],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}\n\n'
                             "data: [DONE]\n\n"
                         ),
                     )
@@ -2918,6 +2920,7 @@ class SmokeDeployTests(unittest.TestCase):
                 body = json.loads(request.data.decode("utf-8"))
                 if body.get("stream"):
                     seen_stream = True
+                    self.assertEqual(body["stream_options"], {"include_usage": True})
                     return FakeHTTPResponse(
                         200,
                         headers={
@@ -2926,7 +2929,7 @@ class SmokeDeployTests(unittest.TestCase):
                         },
                         body=(
                             'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"p"}\n\n'
-                            'event: response.completed\ndata: {"type":"response.completed","response":{"object":"response"}}\n\n'
+                            'event: response.completed\ndata: {"type":"response.completed","response":{"object":"response","usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}}\n\n'
                             "data: [DONE]\n\n"
                         ),
                     )
@@ -3161,6 +3164,7 @@ class SmokeDeployTests(unittest.TestCase):
                 body = json.loads(request.data.decode("utf-8"))
                 if body.get("stream"):
                     seen_stream = True
+                    self.assertEqual(body["stream_options"], {"include_usage": True})
                     return FakeHTTPResponse(
                         200,
                         headers={
@@ -3169,6 +3173,7 @@ class SmokeDeployTests(unittest.TestCase):
                         },
                         body=(
                             'data: {"object":"text_completion.chunk","choices":[{"text":" done"}]}\n\n'
+                            'data: {"object":"text_completion.chunk","choices":[],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}\n\n'
                             "data: [DONE]\n\n"
                         ),
                     )

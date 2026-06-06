@@ -432,6 +432,25 @@ def _require_chat_completion_stream_chunk(data: dict, *, final: bool = False) ->
         _require(finish_reason is None, "stream delta chunk finish_reason must be null")
 
 
+def _require_openai_stream_usage_chunk(data: dict, *, label: str) -> None:
+    """校验 include_usage=true 时 OpenAI 兼容流式接口返回的用量 chunk。"""
+    _require(data.get("choices") == [], f"{label} usage chunk choices must be empty")
+    usage = data.get("usage")
+    _require(isinstance(usage, dict), f"{label} stream missing usage object")
+    for field in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        _require(isinstance(usage.get(field), int), f"{label} stream usage missing {field}")
+
+
+def _require_responses_stream_usage_event(data: dict) -> None:
+    """校验 Responses 流式完成事件里包含兼容 SDK 可读取的 usage 字段。"""
+    response = data.get("response") if isinstance(data, dict) else None
+    _require(isinstance(response, dict), "responses stream completed event missing response object")
+    usage = response.get("usage")
+    _require(isinstance(usage, dict), "responses stream completed event missing usage")
+    for field in ("input_tokens", "output_tokens", "total_tokens"):
+        _require(isinstance(usage.get(field), int), f"responses stream usage missing {field}")
+
+
 def _require_chat_tool_call_response(data: dict) -> None:
     """校验 Chat Completions 工具调用返回 OpenAI 客户端可执行的结构。"""
     _require_chat_completion_response(data)
@@ -1102,6 +1121,7 @@ def _run_smoke_impl(
                 body={
                     "model": chat_model,
                     "stream": True,
+                    "stream_options": {"include_usage": True},
                     "messages": [{"role": "user", "content": chat_prompt}],
                 },
             )
@@ -1125,6 +1145,9 @@ def _run_smoke_impl(
             ]
             _require(bool(final_chunks), "stream response missing final finish_reason chunk")
             _require_chat_completion_stream_chunk(final_chunks[-1], final=True)
+            usage_chunks = [item for item in parsed_chunks if item.get("choices") == []]
+            _require(bool(usage_chunks), "stream response missing include_usage chunk")
+            _require_openai_stream_usage_chunk(usage_chunks[-1], label="chat")
             results.append("chat stream ok")
 
     if chat_tool_probe:
@@ -1327,6 +1350,7 @@ def _run_smoke_impl(
                     "model": responses_model,
                     "input": responses_prompt,
                     "stream": True,
+                    "stream_options": {"include_usage": True},
                 },
             )
             _require(stream_status == 200, f"stream /v1/responses returned {stream_status}")
@@ -1340,6 +1364,13 @@ def _run_smoke_impl(
             data_items = _sse_data_items(stream_body)
             _require("response.completed" in events, "responses stream missing response.completed event")
             _require("[DONE]" in data_items, "responses stream missing [DONE]")
+            completed_items = [
+                json.loads(item)
+                for item in data_items
+                if item != "[DONE]" and json.loads(item).get("type") == "response.completed"
+            ]
+            _require(bool(completed_items), "responses stream missing completed data")
+            _require_responses_stream_usage_event(completed_items[-1])
             results.append("responses stream ok")
 
     if completion_prompt:
@@ -1374,6 +1405,7 @@ def _run_smoke_impl(
                     "model": completion_model,
                     "prompt": completion_prompt,
                     "stream": True,
+                    "stream_options": {"include_usage": True},
                 },
             )
             _require(stream_status == 200, f"stream /v1/completions returned {stream_status}")
@@ -1390,6 +1422,10 @@ def _run_smoke_impl(
             first_chunk = json.loads(chunks[0])
             _require(first_chunk.get("object") == "text_completion.chunk", "completion stream chunk is not a text completion chunk")
             _require("choices" in first_chunk, "completion stream chunk missing choices")
+            parsed_chunks = [json.loads(item) for item in chunks]
+            usage_chunks = [item for item in parsed_chunks if item.get("choices") == []]
+            _require(bool(usage_chunks), "completion stream missing include_usage chunk")
+            _require_openai_stream_usage_chunk(usage_chunks[-1], label="completion")
             results.append("completions stream ok")
 
     if gemini_prompt:
