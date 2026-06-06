@@ -700,8 +700,10 @@
               <div class="row button-row">
                 <button id="reopenAuthBtn">打开授权界面</button>
                 <button id="reloadAuthBtn">刷新授权浏览器</button>
+                <button id="diagnoseAuthBtn">检查授权状态</button>
                 <button id="closeAuthBtn">关闭授权会话</button>
               </div>
+              <div id="authDiagnoseBox" class="hint">授权浏览器启动后，可先检查是否已经拿到 Gemini Cookie，再保存到账户池。</div>
             </div>
           </section>
         </div>
@@ -785,6 +787,7 @@
       <div class="modal-head"><h2>保存授权 Cookie</h2><button data-close-modal="authSaveModal">关闭</button></div>
       <div class="modal-body">
         <label>账户名<input id="authSaveName" placeholder="可选"></label>
+        <div id="authSaveDiagnose" class="notice">保存前请确认授权浏览器内已经完成 Google/Gemini 登录，并且检查状态显示已发现 __Secure-1PSID。</div>
         <div class="row button-row"><button id="authSaveConfirmBtn" class="primary">保存</button><button data-close-modal="authSaveModal">取消</button></div>
       </div>
     </div>
@@ -1649,17 +1652,38 @@
       // 后端会根据当前部署地址返回 noVNC 代理链接；缺省时再使用同源兜底地址。
       state.authWindow = window.open(data.vnc_url || data.novnc_url || noVncUrl(), "gemini-auth-browser");
       if (!state.authWindow) throw new Error("浏览器阻止了弹窗，请允许此站点打开新窗口。");
+      $("authDiagnoseBox").textContent = "授权浏览器已打开。登录完成后点击“检查授权状态”，确认 Cookie 可用后再保存。";
+    }
+    async function diagnoseAuth() {
+      const data = await api("/v1/auth/diagnose");
+      const ok = Boolean(data.has_secure_1psid);
+      const message = ok
+        ? `已发现 Gemini 登录 Cookie，可保存到账户池。Cookie 数：${data.cookie_count || 0}${data.detected_account_name ? `，账户：${data.detected_account_name}` : ""}`
+        : `还没有发现 __Secure-1PSID。当前页面：${data.url || "-"}。请在授权浏览器里完成 Google/Gemini 登录后再试。`;
+      $("authDiagnoseBox").textContent = message;
+      $("authSaveDiagnose").textContent = message;
+      setMsg(ok ? "授权状态正常，可以保存 Cookie" : "授权状态未完成");
+      return data;
     }
     $("authOpenBtn").onclick = () => startAuth().catch(e => setMsg(e.message));
     $("reopenAuthBtn").onclick = () => startAuth().catch(e => setMsg(e.message));
     $("reloadAuthBtn").onclick = () => api("/v1/auth/press", { method: "POST", body: JSON.stringify({ key: "F5" }) }).catch(e => setMsg(e.message));
+    $("diagnoseAuthBtn").onclick = () => diagnoseAuth().catch(e => {
+      $("authDiagnoseBox").textContent = `无法检查授权状态：${e.message}`;
+      setMsg(e.message);
+    });
     $("closeAuthBtn").onclick = async () => { await api("/v1/auth/session", { method: "DELETE" }); if (state.authWindow && !state.authWindow.closed) state.authWindow.close(); };
     $("authSaveConfirmBtn").onclick = async () => {
-      const data = await api("/v1/auth/save", { method: "POST", body: JSON.stringify({ name: $("authSaveName").value || null }) });
-      closeModal("authSaveModal");
-      await refreshAll();
-      const savedText = data.saved ? `授权 Cookie 已保存到账户池 #${data.account_id}，当前共 ${data.account_count ?? (data.accounts || []).length} 个账户。` : "授权 Cookie 未确认保存。";
-      setMsg(data.validation?.valid ? `${savedText} 验证通过。` : `${savedText} 但验证失败：${data.validation?.message || "请稍后重新验证。"}`);
+      try {
+        const data = await api("/v1/auth/save", { method: "POST", body: JSON.stringify({ name: $("authSaveName").value || null }) });
+        closeModal("authSaveModal");
+        await refreshAll();
+        const savedText = data.saved ? `授权 Cookie 已保存到账户池 #${data.account_id}，当前共 ${data.account_count ?? (data.accounts || []).length} 个账户。` : "授权 Cookie 未确认保存。";
+        setMsg(data.validation?.valid ? `${savedText} 验证通过。` : `${savedText} 但验证失败：${data.validation?.message || "请稍后重新验证。"}`);
+      } catch (error) {
+        $("authSaveDiagnose").textContent = `保存失败：${error.message}。请先点击“检查授权状态”，确认已发现 __Secure-1PSID。`;
+        setMsg(error.message);
+      }
     };
 
     boot().catch(e => setMsg(e.message));

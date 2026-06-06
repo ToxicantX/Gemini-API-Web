@@ -3209,6 +3209,13 @@ def create_app(config: ServerConfig | None = None):
         await auth_browser.close_session()
         return {"ok": True}
 
+    @app.get("/v1/auth/diagnose")
+    async def auth_diagnose() -> dict[str, Any]:
+        try:
+            return await auth_browser.diagnose_session()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.get("/v1/auth/screenshot")
     async def auth_screenshot() -> Response:
         try:

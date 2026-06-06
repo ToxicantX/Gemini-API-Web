@@ -739,6 +739,48 @@ class ServerEndpointTests(unittest.TestCase):
                 "/novnc/vnc.html?autoconnect=true&resize=scale&path=websockify",
             )
 
+    def test_auth_diagnose_reports_cookie_presence_without_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = create_app(self._config(tmp))
+
+            async def fake_diagnose_session(self):
+                return {
+                    "id": "auth-1",
+                    "url": "https://gemini.google.com/app",
+                    "cookie_count": 3,
+                    "has_secure_1psid": True,
+                    "has_secure_1psidts": False,
+                    "detected_account_name": "user@example.com",
+                }
+
+            with (
+                patch(
+                    "gemini_webapi.server.auth_browser.AuthBrowserManager.diagnose_session",
+                    fake_diagnose_session,
+                ),
+                TestClient(app) as client,
+            ):
+                response = client.get("/v1/auth/diagnose")
+
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertTrue(data["has_secure_1psid"])
+            self.assertEqual(data["cookie_count"], 3)
+            self.assertEqual(data["detected_account_name"], "user@example.com")
+            # 诊断接口只能返回状态摘要，不能把敏感 Cookie 明文带回管理端。
+            self.assertNotIn("__Secure-1PSID", response.text)
+            self.assertNotIn("secret-cookie-value", response.text)
+
+    def test_auth_diagnose_requires_running_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = create_app(self._config(tmp))
+
+            with TestClient(app) as client:
+                response = client.get("/v1/auth/diagnose")
+
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("No auth browser session", response.text)
+
     def test_auth_save_reports_saved_account_even_when_validation_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             app = create_app(self._config(tmp))

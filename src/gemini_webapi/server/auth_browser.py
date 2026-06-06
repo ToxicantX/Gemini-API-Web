@@ -139,17 +139,7 @@ class AuthBrowserManager:
 
     async def save_account(self, name: str | None = None) -> dict[str, Any]:
         session = self._require_session()
-        cookies_list = await session.context.cookies()
-        cookies = {
-            cookie["name"]: cookie["value"]
-            for cookie in cookies_list
-            if isinstance(cookie.get("name"), str)
-            and isinstance(cookie.get("value"), str)
-            and (
-                "google.com" in str(cookie.get("domain", ""))
-                or "gemini.google.com" in str(cookie.get("domain", ""))
-            )
-        }
+        cookies = await self._google_cookies(session)
         psid = cookies.get("__Secure-1PSID")
         psidts = cookies.get("__Secure-1PSIDTS")
         if not psid:
@@ -172,10 +162,36 @@ class AuthBrowserManager:
             "cookie_count": len(cookies),
         }
 
+    async def diagnose_session(self) -> dict[str, Any]:
+        session = self._require_session()
+        session.last_used_at = time.time()
+        cookies = await self._google_cookies(session)
+        # 只返回授权状态摘要，不返回 Cookie 明文，避免诊断接口泄露敏感信息。
+        return {
+            **self._session_info(session),
+            "cookie_count": len(cookies),
+            "has_secure_1psid": "__Secure-1PSID" in cookies,
+            "has_secure_1psidts": "__Secure-1PSIDTS" in cookies,
+            "detected_account_name": await self._detect_account_name(session),
+        }
+
     def _require_session(self) -> BrowserSession:
         if self._session is None:
             raise ValueError("No auth browser session is running.")
         return self._session
+
+    async def _google_cookies(self, session: BrowserSession) -> dict[str, str]:
+        cookies_list = await session.context.cookies()
+        return {
+            cookie["name"]: cookie["value"]
+            for cookie in cookies_list
+            if isinstance(cookie.get("name"), str)
+            and isinstance(cookie.get("value"), str)
+            and (
+                "google.com" in str(cookie.get("domain", ""))
+                or "gemini.google.com" in str(cookie.get("domain", ""))
+            )
+        }
 
     async def _detect_account_name(self, session: BrowserSession) -> str | None:
         try:
