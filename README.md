@@ -123,6 +123,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --chat-prompt "用一句话回复 ok" --chat-stream
 ```
 
+需要验证新版 OpenAI Responses API 时，可以显式传入 `--responses-prompt`，脚本会实际调用 `/v1/responses` 并校验 `output_text` 和 `output` 结构：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --responses-prompt "用一句话回复 ok" --responses-model gemini
+```
+
 需要验证 OpenAI 图片端点时，可以显式传入 `--image-prompt`。这会实际调用 `/v1/images/generations` 并消耗一次图片生成次数：
 
 ```sh

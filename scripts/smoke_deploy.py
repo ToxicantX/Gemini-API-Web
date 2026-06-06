@@ -111,6 +111,8 @@ def run_smoke(
     image_prompt: str | None = None,
     image_model: str = "gemini",
     image_response_format: str = "url",
+    responses_prompt: str | None = None,
+    responses_model: str = "gemini",
     fail_on_warnings: bool = False,
 ) -> list[str]:
     results: list[str] = []
@@ -266,6 +268,29 @@ def run_smoke(
             _require(url.startswith(("http://", "https://")), "image response missing absolute url")
         results.append("image generation ok")
 
+    if responses_prompt:
+        # Responses API 是新版 OpenAI SDK 的常用入口；显式传参时验证它的基础返回结构。
+        responses_status, responses, responses_headers = _request(
+            base_url,
+            "/v1/responses",
+            api_key=api_key,
+            method="POST",
+            body={
+                "model": responses_model,
+                "input": responses_prompt,
+            },
+        )
+        _require(responses_status == 200, f"/v1/responses returned {responses_status}")
+        _require("x-request-id" in {key.lower(): value for key, value in responses_headers.items()}, "responses response missing X-Request-ID")
+        _require(responses.get("object") == "response", "responses body is not an OpenAI response object")
+        output = responses.get("output") or []
+        _require(bool(output), "responses body missing output")
+        _require(
+            bool(responses.get("output_text") or any(item.get("type") == "function_call" for item in output if isinstance(item, dict))),
+            "responses body missing output_text or function_call",
+        )
+        results.append("responses api ok")
+
     return results
 
 
@@ -298,6 +323,12 @@ def main() -> int:
         choices=("url", "b64_json"),
     )
     parser.add_argument(
+        "--responses-prompt",
+        default="",
+        help="Optional prompt for a real /v1/responses smoke request.",
+    )
+    parser.add_argument("--responses-model", default="gemini")
+    parser.add_argument(
         "--fail-on-warnings",
         action="store_true",
         help="Fail when /health reports deployment warnings.",
@@ -315,6 +346,8 @@ def main() -> int:
             image_prompt=args.image_prompt or None,
             image_model=args.image_model,
             image_response_format=args.image_response_format,
+            responses_prompt=args.responses_prompt or None,
+            responses_model=args.responses_model,
             fail_on_warnings=args.fail_on_warnings,
         )
     except Exception as exc:
