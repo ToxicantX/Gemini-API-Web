@@ -60,14 +60,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -88,7 +88,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
@@ -104,7 +104,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                     {"X-Request-ID": f"req-get-{path[1:]}"},
@@ -112,7 +112,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -148,7 +148,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -191,7 +191,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -210,7 +210,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -230,14 +230,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(
@@ -275,14 +275,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(
@@ -316,7 +316,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -336,7 +336,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -364,7 +364,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
@@ -398,7 +398,7 @@ class SmokeDeployTests(unittest.TestCase):
                     seen_actual = True
                     return FakeHTTPResponse(
                         200,
-                        {"object": "list", "data": [{"id": "gemini"}]},
+                        {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                         {
                             "Access-Control-Allow-Origin": "https://panel.example.com",
                             "Access-Control-Expose-Headers": "X-Request-ID",
@@ -407,7 +407,7 @@ class SmokeDeployTests(unittest.TestCase):
                     )
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -434,7 +434,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
@@ -452,7 +452,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -477,7 +477,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
@@ -495,7 +495,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -520,7 +520,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
@@ -540,7 +540,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -565,7 +565,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
@@ -587,7 +587,7 @@ class SmokeDeployTests(unittest.TestCase):
                 if request.headers.get("Origin") == "https://panel.example.com":
                     return FakeHTTPResponse(
                         200,
-                        {"object": "list", "data": [{"id": "gemini"}]},
+                        {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                         {
                             "Access-Control-Allow-Origin": "https://panel.example.com",
                             "X-Request-ID": "req-cors-models",
@@ -595,7 +595,7 @@ class SmokeDeployTests(unittest.TestCase):
                     )
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -622,7 +622,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -647,7 +647,7 @@ class SmokeDeployTests(unittest.TestCase):
                 seen_headers.append(auth_headers)
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                     {"X-Request-ID": "req-models"},
                 )
             if path == "/v1/media-cooldowns":
@@ -684,7 +684,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -703,7 +703,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -735,7 +735,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -781,7 +781,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -812,7 +812,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -833,7 +833,7 @@ class SmokeDeployTests(unittest.TestCase):
                 self.assertIsNone(request.headers.get("X-api-key"))
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 self.assertEqual(request.headers.get("Authorization"), "Bearer sk-test")
@@ -857,7 +857,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -883,15 +883,15 @@ class SmokeDeployTests(unittest.TestCase):
                     )
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                     {"X-Request-ID": "req-models-alias"},
                 )
-            if path == "/models/gemini":
+            if path == "/models/gemini-3.1-pro":
                 self.assertEqual(request.get_method(), "HEAD")
                 return FakeHTTPResponse(
                     200,
@@ -901,10 +901,10 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/engines":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                     {"X-Request-ID": "req-engines"},
                 )
-            if path == "/v1/engines/gemini":
+            if path == "/v1/engines/gemini-3.1-pro":
                 self.assertEqual(request.get_method(), "HEAD")
                 return FakeHTTPResponse(
                     200,
@@ -914,10 +914,10 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/engines":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                     {"X-Request-ID": "req-rootless-engines"},
                 )
-            if path == "/engines/gemini":
+            if path == "/engines/gemini-3.1-pro":
                 self.assertEqual(request.get_method(), "HEAD")
                 return FakeHTTPResponse(
                     200,
@@ -941,10 +941,10 @@ class SmokeDeployTests(unittest.TestCase):
                     },
                     {"X-Request-ID": "req-v1-root"},
                 )
-            if path == "/v1/models/gemini":
+            if path == "/v1/models/gemini-3.1-pro":
                 return FakeHTTPResponse(
                     200,
-                    {"id": "gemini", "object": "model"},
+                    {"id": "gemini-3.1-pro", "object": "model"},
                     {"X-Request-ID": "req-model-detail"},
                 )
             if path == "/v1/media-cooldowns":
@@ -970,7 +970,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -1011,7 +1011,7 @@ class SmokeDeployTests(unittest.TestCase):
                     )
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             raise AssertionError(path)
 
@@ -1034,7 +1034,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -1082,7 +1082,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -1111,7 +1111,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                     {"X-Request-ID": "req-models"},
                 )
             if path == "/v1/not-a-real-smoke-endpoint":
@@ -1203,7 +1203,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -1222,7 +1222,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path in {"/v1/files", "/v1/gemini/files"}:
                 self.assertEqual(request.get_method(), "HEAD")
@@ -1259,7 +1259,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -1278,7 +1278,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -1393,7 +1393,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -1430,7 +1430,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -1464,7 +1464,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -1483,7 +1483,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -1523,7 +1523,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -1542,7 +1542,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -1604,7 +1604,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -1623,7 +1623,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -1675,14 +1675,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -1713,7 +1713,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -1746,7 +1746,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                         "warnings": [
                             "ADMIN_PASSWORD is still using the Docker Compose placeholder value.",
@@ -1756,7 +1756,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -1779,7 +1779,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                         "warnings": ["ADMIN_SESSION_SECRET is still using a placeholder."],
                     },
@@ -1804,14 +1804,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -1883,7 +1883,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -1902,7 +1902,7 @@ class SmokeDeployTests(unittest.TestCase):
                     )
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -1971,14 +1971,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2012,7 +2012,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -2031,7 +2031,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2081,14 +2081,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2099,7 +2099,7 @@ class SmokeDeployTests(unittest.TestCase):
                         "id": "chatcmpl-test",
                         "object": "chat.completion",
                         "created": 1,
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "choices": [
                             {
                                 "index": 0,
@@ -2135,14 +2135,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2153,7 +2153,7 @@ class SmokeDeployTests(unittest.TestCase):
                         "id": "chatcmpl-test",
                         "object": "chat.completion",
                         "created": 1,
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "choices": [
                             {
                                 "index": 0,
@@ -2185,7 +2185,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -2204,13 +2204,13 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
             if path == "/v1/chat/completions":
                 body = json.loads(request.data.decode("utf-8"))
-                self.assertEqual(body["model"], "gemini")
+                self.assertEqual(body["model"], "gemini-3.1-pro")
                 self.assertEqual(body["tools"][0]["function"]["name"], "echo_tool")
                 self.assertEqual(
                     body["tool_choice"]["function"]["name"],
@@ -2222,7 +2222,7 @@ class SmokeDeployTests(unittest.TestCase):
                         "id": "chatcmpl-tool-test",
                         "object": "chat.completion",
                         "created": 1,
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "choices": [
                             {
                                 "index": 0,
@@ -2270,14 +2270,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2288,7 +2288,7 @@ class SmokeDeployTests(unittest.TestCase):
                         "id": "chatcmpl-tool-test",
                         "object": "chat.completion",
                         "created": 1,
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "choices": [
                             {
                                 "index": 0,
@@ -2341,7 +2341,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -2360,7 +2360,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2376,10 +2376,10 @@ class SmokeDeployTests(unittest.TestCase):
                             "X-Request-ID": "req-stream",
                         },
                         body=(
-                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n'
-                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini","choices":[{"index":0,"delta":{"content":"p"},"finish_reason":null}]}\n\n'
-                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n'
-                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini","choices":[],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}\n\n'
+                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini-3.1-pro","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n'
+                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini-3.1-pro","choices":[{"index":0,"delta":{"content":"p"},"finish_reason":null}]}\n\n'
+                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini-3.1-pro","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n'
+                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini-3.1-pro","choices":[],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}\n\n'
                             "data: [DONE]\n\n"
                         ),
                     )
@@ -2389,7 +2389,7 @@ class SmokeDeployTests(unittest.TestCase):
                         "id": "chatcmpl-test",
                         "object": "chat.completion",
                         "created": 1,
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "choices": [
                             {
                                 "index": 0,
@@ -2427,14 +2427,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2447,7 +2447,7 @@ class SmokeDeployTests(unittest.TestCase):
                             "Content-Type": "text/event-stream",
                             "X-Request-ID": "req-stream",
                         },
-                        body='data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini","choices":[{"index":0,"delta":{"content":"p"},"finish_reason":null}]}\n\n',
+                        body='data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini-3.1-pro","choices":[{"index":0,"delta":{"content":"p"},"finish_reason":null}]}\n\n',
                     )
                 return FakeHTTPResponse(
                     200,
@@ -2455,7 +2455,7 @@ class SmokeDeployTests(unittest.TestCase):
                         "id": "chatcmpl-test",
                         "object": "chat.completion",
                         "created": 1,
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "choices": [
                             {
                                 "index": 0,
@@ -2492,14 +2492,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2513,7 +2513,7 @@ class SmokeDeployTests(unittest.TestCase):
                             "X-Request-ID": "req-stream",
                         },
                         body=(
-                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini","choices":[{"index":0,"delta":{"content":"p"},"finish_reason":null}]}\n\n'
+                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini-3.1-pro","choices":[{"index":0,"delta":{"content":"p"},"finish_reason":null}]}\n\n'
                             "data: [DONE]\n\n"
                         ),
                     )
@@ -2523,7 +2523,7 @@ class SmokeDeployTests(unittest.TestCase):
                         "id": "chatcmpl-test",
                         "object": "chat.completion",
                         "created": 1,
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "choices": [
                             {
                                 "index": 0,
@@ -2561,7 +2561,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -2580,7 +2580,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2626,7 +2626,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -2645,7 +2645,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2704,14 +2704,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2758,14 +2758,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2797,7 +2797,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -2816,7 +2816,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2859,14 +2859,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2909,14 +2909,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2954,14 +2954,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -2995,14 +2995,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -3033,7 +3033,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -3052,7 +3052,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -3101,14 +3101,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -3147,7 +3147,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -3166,7 +3166,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -3225,14 +3225,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -3284,7 +3284,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -3303,7 +3303,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -3346,14 +3346,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -3391,7 +3391,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -3410,7 +3410,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -3462,14 +3462,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -3515,7 +3515,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -3534,7 +3534,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -3579,14 +3579,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -3596,7 +3596,7 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "ok": True,
                         "account": 1,
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "metadata": {},
                         "output": {
                             "text": "",
@@ -3631,7 +3631,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": True},
                     },
                 )
@@ -3650,7 +3650,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -3660,7 +3660,7 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "ok": True,
                         "account": 1,
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "metadata": {"request_id": "req-gemini"},
                         "output": {
                             "text": "native pong",
@@ -3674,7 +3674,7 @@ class SmokeDeployTests(unittest.TestCase):
             if path == "/v1/gemini/stream":
                 body = json.loads(request.data.decode("utf-8"))
                 seen_stream = True
-                self.assertEqual(body["model"], "gemini")
+                self.assertEqual(body["model"], "gemini-3.1-pro")
                 self.assertEqual(body["prompt"], "native ping")
                 return FakeHTTPResponse(
                     200,
@@ -3684,7 +3684,7 @@ class SmokeDeployTests(unittest.TestCase):
                     },
                     body=(
                         'data: {"type":"delta","text_delta":"na","thoughts_delta":""}\n\n'
-                        'data: {"type":"final","ok":true,"account":1,"model":"gemini","metadata":{"request_id":"req-gemini-stream"},"output":{"text":"native pong","images":[],"videos":[],"media":[]}}\n\n'
+                        'data: {"type":"final","ok":true,"account":1,"model":"gemini-3.1-pro","metadata":{"request_id":"req-gemini-stream"},"output":{"text":"native pong","images":[],"videos":[],"media":[]}}\n\n'
                         "data: [DONE]\n\n"
                     ),
                 )
@@ -3710,14 +3710,14 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {
                         "ok": True,
-                        "models": ["gemini"],
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
                         "auth": {"api_key_required": False},
                     },
                 )
             if path == "/v1/models":
                 return FakeHTTPResponse(
                     200,
-                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
             if path == "/v1/media-cooldowns":
                 return FakeHTTPResponse(200, {"ok": True, "summary": []})
@@ -3727,7 +3727,7 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "ok": True,
                         "account": 1,
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "metadata": {},
                         "output": {
                             "text": "native pong",

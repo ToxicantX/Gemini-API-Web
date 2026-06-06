@@ -238,7 +238,7 @@ class ServerEndpointTests(unittest.TestCase):
                 response = client.post(
                     "/v1/chat/completions",
                     headers={"Authorization": "Bearer sk-external"},
-                    json={"model": "gemini"},
+                    json={"model": "gemini-3.1-pro"},
                 )
 
             self.assertEqual(response.status_code, 400)
@@ -340,8 +340,12 @@ class ServerEndpointTests(unittest.TestCase):
                     "/models",
                     headers={"Authorization": "Bearer sk-external"},
                 )
+                missing_rootless_alias = client.get(
+                    "/models/gemini",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
                 rootless_detail = client.get(
-                    "/models/GEMINI",
+                    "/models/gemini-3.1-pro",
                     headers={"Authorization": "Bearer sk-external"},
                 )
                 rootless_engines = client.get(
@@ -374,6 +378,7 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(generated.status_code, 200)
             self.assertEqual(rootless.status_code, 200)
             self.assertEqual(rootless.json()["data"], generated.json()["data"])
+            self.assertEqual(missing_rootless_alias.status_code, 404)
             self.assertEqual(rootless_detail.status_code, 200)
             self.assertEqual(rootless_detail.json()["id"], "gemini-3.1-pro")
             self.assertEqual(rootless_engines.status_code, 200)
@@ -524,14 +529,14 @@ class ServerEndpointTests(unittest.TestCase):
                         "X-Request-ID": "client-chat-1",
                     },
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "messages": [{"role": "user", "content": "hello"}],
                     },
                 )
                 generated = client.post(
                     "/v1/responses",
                     headers={"Authorization": "Bearer sk-external"},
-                    json={"model": "gemini", "input": "hello"},
+                    json={"model": "gemini-3.1-pro", "input": "hello"},
                 )
                 stream = client.post(
                     "/v1/chat/completions",
@@ -540,7 +545,7 @@ class ServerEndpointTests(unittest.TestCase):
                         "X-Request-ID": "client-chat-stream-1",
                     },
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "stream": True,
                         "messages": [{"role": "user", "content": "hello"}],
                     },
@@ -1567,12 +1572,10 @@ class ServerEndpointTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.json()["id"], "gemini-3.1-pro")
                 self.assertEqual(response.json()["object"], "model")
-                alias = client.get(
-                    "/v1/models/GEMINI",
+                missing_alias = client.get(
+                    "/v1/models/gemini",
                     headers={"Authorization": "Bearer sk-external"},
                 )
-                self.assertEqual(alias.status_code, 200)
-                self.assertEqual(alias.json()["id"], "gemini-3.1-pro")
                 missing = client.get(
                     "/v1/models/gemini-3-pro",
                     headers={"Authorization": "Bearer sk-external"},
@@ -1590,6 +1593,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/models/gemini-3-pro",
                     headers={"Authorization": "Bearer sk-external"},
                 )
+                self.assertEqual(missing_alias.status_code, 404)
                 self.assertEqual(missing.status_code, 404)
                 self.assertEqual(unauthenticated_head.status_code, 401)
                 self.assertEqual(head_detail.status_code, 200)
@@ -1629,16 +1633,24 @@ class ServerEndpointTests(unittest.TestCase):
                     "/engines",
                     headers={"Authorization": "Bearer sk-external"},
                 )
-                detail = client.get(
+                missing_alias = client.get(
                     "/v1/engines/gemini",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                detail = client.get(
+                    "/v1/engines/gemini-3.1-pro",
                     headers={"Authorization": "Bearer sk-external"},
                 )
                 rootless_detail = client.get(
                     "/engines/gemini-3.5-flash",
                     headers={"Authorization": "Bearer sk-external"},
                 )
-                head = client.head(
+                missing_alias_head = client.head(
                     "/v1/engines/gemini",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                head = client.head(
+                    "/v1/engines/gemini-3.1-pro",
                     headers={"Authorization": "Bearer sk-external"},
                 )
                 missing = client.get(
@@ -1652,9 +1664,11 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(engines.json()["data"][0]["object"], "engine")
             self.assertTrue(engines.json()["data"][0]["ready"])
             self.assertEqual(rootless.json()["data"], engines.json()["data"])
+            self.assertEqual(missing_alias.status_code, 404)
             self.assertEqual(detail.status_code, 200)
             self.assertEqual(detail.json()["id"], "gemini-3.1-pro")
             self.assertEqual(rootless_detail.json()["id"], "gemini-3.5-flash")
+            self.assertEqual(missing_alias_head.status_code, 404)
             self.assertEqual(head.status_code, 200)
             self.assertFalse(head.text)
             self.assertEqual(missing.status_code, 404)
@@ -1722,7 +1736,7 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 unauthenticated = client.post(
                     "/v1/completions",
-                    json={"model": "gemini", "prompt": "hello"},
+                    json={"model": "gemini-3.1-pro", "prompt": "hello"},
                 )
                 response = client.post(
                     "/v1/completions",
@@ -1739,7 +1753,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/completions",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "prompt": ["stream me"],
                         "stream": True,
                         "stream_options": {"include_usage": True},
@@ -1824,7 +1838,7 @@ class ServerEndpointTests(unittest.TestCase):
                         "X-Request-ID": "client-completion-stream-error-1",
                     },
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "prompt": "hello",
                         "stream": True,
                     },
@@ -1912,7 +1926,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/chat/completions",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "stop": "<END>",
                         "max_completion_tokens": 32,
                         "response_format": {"type": "json_object"},
@@ -1931,7 +1945,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/chat/completions",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "stream": True,
                         "stream_options": {"include_usage": True},
                         "stop": "<END>",
@@ -1961,7 +1975,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/chat/completions",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "response_format": {"type": "xml"},
                         "messages": [{"role": "user", "content": "test"}],
                     },
@@ -2042,7 +2056,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/chat/completions",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "messages": [{"role": "user", "content": "北京天气怎么样？"}],
                         "functions": [
                             {
@@ -2125,7 +2139,7 @@ class ServerEndpointTests(unittest.TestCase):
                         "X-Request-ID": "client-chat-stream-error-1",
                     },
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "stream": True,
                         "messages": [{"role": "user", "content": "hello"}],
                     },
@@ -2209,7 +2223,7 @@ class ServerEndpointTests(unittest.TestCase):
                 file_id = upload.json()["id"]
                 unauthenticated = client.post(
                     "/v1/responses",
-                    json={"model": "gemini", "input": "hello"},
+                    json={"model": "gemini-3.1-pro", "input": "hello"},
                 )
                 response = client.post(
                     "/v1/responses",
@@ -2237,7 +2251,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/responses",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "input": [
                             {
                                 "role": "user",
@@ -2269,7 +2283,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/responses",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "input": "hello",
                         "text": {"format": {"type": "xml"}},
                     },
@@ -2360,7 +2374,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/responses",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "input": "查一下部署说明",
                         "tools": [
                             {
@@ -2461,7 +2475,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/responses",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "input": "查一下部署说明",
                         "stream": True,
                         "tools": [
@@ -2547,7 +2561,7 @@ class ServerEndpointTests(unittest.TestCase):
                         "X-Request-ID": "client-responses-stream-error-1",
                     },
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "input": "hello",
                         "stream": True,
                     },
@@ -2615,7 +2629,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/responses",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "input": [
                             {
                                 "role": "user",
@@ -2688,7 +2702,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/responses",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "input": [
                             {
                                 "role": "assistant",
@@ -2874,7 +2888,7 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 unauthenticated = client.post(
                     "/v1/audio/transcriptions",
-                    data={"model": "gemini"},
+                    data={"model": "gemini-3.1-pro"},
                     files={"file": ("voice.mp3", b"mp3-bytes", "audio/mpeg")},
                 )
                 response = client.post(
@@ -2967,7 +2981,7 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 unauthenticated = client.post(
                     "/v1/audio/translations",
-                    data={"model": "gemini"},
+                    data={"model": "gemini-3.1-pro"},
                     files={"file": ("voice.mp3", b"mp3-bytes", "audio/mpeg")},
                 )
                 response = client.post(
@@ -3073,7 +3087,7 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 unauthenticated = client.post(
                     "/v1/images/generations",
-                    json={"model": "gemini", "prompt": "make image"},
+                    json={"model": "gemini-3.1-pro", "prompt": "make image"},
                 )
                 response = client.post(
                     "/v1/images/generations",
@@ -3098,7 +3112,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/images/generations",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "prompt": "make image",
                         "response_format": "b64_json",
                     },
@@ -3107,7 +3121,7 @@ class ServerEndpointTests(unittest.TestCase):
                     "/v1/images/generations",
                     headers={"Authorization": "Bearer sk-external"},
                     json={
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "prompt": "make image",
                         "n": 2,
                     },
@@ -3218,7 +3232,7 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 unauthenticated = client.post(
                     "/v1/images/edits",
-                    data={"prompt": "edit image", "model": "gemini"},
+                    data={"prompt": "edit image", "model": "gemini-3.1-pro"},
                     files={"image": ("source.png", b"png-bytes", "image/png")},
                 )
                 response = client.post(
@@ -3330,7 +3344,7 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 unauthenticated = client.post(
                     "/v1/images/variations",
-                    data={"model": "gemini"},
+                    data={"model": "gemini-3.1-pro"},
                     files={"image": ("source.png", b"png-bytes", "image/png")},
                 )
                 response = client.post(
@@ -3667,7 +3681,7 @@ class ServerEndpointTests(unittest.TestCase):
                     headers={"X-Request-ID": "client-legacy-video-1"},
                     json={
                         "prompt": "make video",
-                        "model": "gemini",
+                        "model": "gemini-3.1-pro",
                         "mode": "video",
                     },
                 )
@@ -3939,17 +3953,17 @@ class ServerEndpointTests(unittest.TestCase):
             cases = [
                 (
                     "/v1/gemini/generate",
-                    {"prompt": "test", "model": "gemini", "mode": "bad"},
+                    {"prompt": "test", "model": "gemini-3.1-pro", "mode": "bad"},
                     "mode must be one of",
                 ),
                 (
                     "/v1/gemini/stream",
-                    {"prompt": "test", "model": "gemini", "mode": "bad"},
+                    {"prompt": "test", "model": "gemini-3.1-pro", "mode": "bad"},
                     "mode must be one of",
                 ),
                 (
                     "/v1/generate",
-                    {"prompt": "test", "model": "gemini", "mode": "bad"},
+                    {"prompt": "test", "model": "gemini-3.1-pro", "mode": "bad"},
                     "mode must be one of",
                 ),
                 (
@@ -4029,7 +4043,7 @@ class ServerEndpointTests(unittest.TestCase):
                         "Authorization": "Bearer sk-external",
                         "X-Request-ID": "client-native-stream-1",
                     },
-                    json={"model": "gemini", "prompt": "stream"},
+                    json={"model": "gemini-3.1-pro", "prompt": "stream"},
                 )
                 logs = app.state.store.list_request_logs(limit=10)
 
@@ -4099,7 +4113,7 @@ class ServerEndpointTests(unittest.TestCase):
                         "Authorization": "Bearer sk-external",
                         "X-Request-ID": "client-native-stream-error-1",
                     },
-                    json={"model": "gemini", "prompt": "stream"},
+                    json={"model": "gemini-3.1-pro", "prompt": "stream"},
                 )
 
             self.assertEqual(response.status_code, 200)

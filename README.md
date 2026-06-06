@@ -135,7 +135,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 需要验证外部 SDK 或 API 网关常用的非消耗型探测端点时，可以加 `--probe-endpoints`。脚本会检查 `/v1`、`HEAD /v1/models`、`/v1/models/{model}`，以及根路径误填和旧版 SDK 常用的 `/models`、`/models/{model}`、`/v1/engines`、`/v1/engines/{model}`、`/engines`、`/engines/{model}` 只读别名：
 
 ```sh
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --probe-endpoints --probe-model gemini
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --probe-endpoints --probe-model gemini-3.1-pro
 ```
 
 需要验证外部客户端常见错误路径时，可以加 `--error-probes`。脚本会检查 `/v1/models`、`/models`、`/engines` 未授权 `401`，不存在接口和 rootless 模型/engine 详情的 `404`，以及错误方法的 `405` 是否都返回 OpenAI 兼容错误体，并带有 `X-Request-ID`，不会触发模型调用：
@@ -195,7 +195,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 需要确认外部客户端真实模型调用也可用时，可以显式传入 `--chat-prompt`。这会实际调用 `/v1/chat/completions` 并消耗一次账号请求：
 
 ```sh
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --chat-prompt "用一句话回复 ok" --chat-model gemini
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --chat-prompt "用一句话回复 ok" --chat-model gemini-3.1-pro
 ```
 
 如果外部客户端会使用流式响应，可以再加 `--chat-stream`，脚本会额外验证 `stream=true` 的 SSE chunk 和 `[DONE]` 结束标记：
@@ -213,7 +213,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 需要验证旧版 OpenAI Completions API 时，可以显式传入 `--completion-prompt`，脚本会实际调用 `/v1/completions` 并校验 `text_completion` 返回结构：
 
 ```sh
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --completion-prompt "补全这句话：Gemini API Web" --completion-model gemini
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --completion-prompt "补全这句话：Gemini API Web" --completion-model gemini-3.1-pro
 ```
 
 如果外部客户端会使用 Completions 流式响应，可以再加 `--completion-stream`，脚本会额外验证 `text_completion.chunk` 和 `[DONE]` 结束标记：
@@ -225,7 +225,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 需要验证 Gemini 原生生成接口时，可以显式传入 `--gemini-prompt`，脚本会实际调用 `/v1/gemini/generate` 并校验分类输出结构：
 
 ```sh
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --gemini-prompt "用一句话回复 ok" --gemini-model gemini
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --gemini-prompt "用一句话回复 ok" --gemini-model gemini-3.1-pro
 ```
 
 如果外部客户端会使用 Gemini 原生流式接口，可以再加 `--gemini-stream`，脚本会额外验证 `/v1/gemini/stream` 的 SSE final 包和 `[DONE]` 结束标记：
@@ -237,7 +237,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 需要验证新版 OpenAI Responses API 时，可以显式传入 `--responses-prompt`，脚本会实际调用 `/v1/responses` 并校验 `output_text` 和 `output` 结构：
 
 ```sh
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --responses-prompt "用一句话回复 ok" --responses-model gemini
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --responses-prompt "用一句话回复 ok" --responses-model gemini-3.1-pro
 ```
 
 如果外部客户端会使用 Responses 流式事件，可以再加 `--responses-stream`，脚本会额外验证 `response.completed` 事件和 `[DONE]` 结束标记：
@@ -262,8 +262,8 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 需要验证 OpenAI 音频转写或翻译端点时，可以传入本地音频文件。脚本会使用 multipart/form-data 实际调用 `/v1/audio/transcriptions` 或 `/v1/audio/translations`，并校验返回的 `text` 字段：
 
 ```sh
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --audio-transcription-file ./sample.wav --audio-model gemini
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --audio-translation-file ./sample.mp3 --audio-model gemini
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --audio-transcription-file ./sample.wav --audio-model gemini-3.1-pro
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --audio-translation-file ./sample.mp3 --audio-model gemini-3.1-pro
 ```
 
 如果外部客户端使用非 JSON 音频响应，可以加 `--audio-response-format text|verbose_json|srt|vtt` 验证对应格式：
@@ -431,7 +431,7 @@ curl http://localhost:7860/v1/completions \
   -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemini",
+    "model": "gemini-3.1-pro",
     "prompt": "只回复 OK",
     "max_tokens": 32
   }'
@@ -446,7 +446,7 @@ curl http://localhost:7860/v1/chat/completions \
   -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemini",
+    "model": "gemini-3.1-pro",
     "messages": [
       { "role": "user", "content": "只回复 OK" }
     ]
@@ -460,7 +460,7 @@ curl http://localhost:7860/v1/chat/completions \
   -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemini",
+    "model": "gemini-3.1-pro",
     "stream": true,
     "messages": [
       { "role": "user", "content": "按行输出 1 和 2" }
@@ -475,7 +475,7 @@ curl http://localhost:7860/v1/chat/completions \
   -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemini",
+    "model": "gemini-3.1-pro",
     "stop": "<END>",
     "max_completion_tokens": 256,
     "response_format": { "type": "json_object" },
@@ -506,7 +506,7 @@ curl http://localhost:7860/v1/chat/completions \
   -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemini",
+    "model": "gemini-3.1-pro",
     "messages": [
       {
         "role": "user",
@@ -573,7 +573,7 @@ curl http://localhost:7860/v1/responses \
   -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemini",
+    "model": "gemini-3.1-pro",
     "instructions": "保持简洁，只输出 JSON",
     "text": { "format": { "type": "json_object" } },
     "input": "只回复 OK"
@@ -587,7 +587,7 @@ curl http://localhost:7860/v1/responses \
   -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemini",
+    "model": "gemini-3.1-pro",
     "stream": true,
     "input": "按行输出 1 和 2"
   }'
@@ -621,7 +621,7 @@ curl http://localhost:7860/v1/images/generations \
   -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemini",
+    "model": "gemini-3.1-pro",
     "prompt": "生成一张赛博朋克风格的猫"
   }'
 ```
@@ -635,7 +635,7 @@ OpenAI 兼容图片编辑：
 ```sh
 curl http://localhost:7860/v1/images/edits \
   -H "Authorization: Bearer sk-your-external-key" \
-  -F "model=gemini" \
+  -F "model=gemini-3.1-pro" \
   -F "prompt=把图片调整成电影海报风格" \
   -F "image=@./source.png"
 ```
@@ -647,7 +647,7 @@ OpenAI 兼容图片变体：
 ```sh
 curl http://localhost:7860/v1/images/variations \
   -H "Authorization: Bearer sk-your-external-key" \
-  -F "model=gemini" \
+  -F "model=gemini-3.1-pro" \
   -F "image=@./source.png"
 ```
 
@@ -655,7 +655,6 @@ curl http://localhost:7860/v1/images/variations \
 
 常用模型：
 
-- `gemini`：默认映射到 Gemini 3.1 Pro。
 - `gemini-3.1-pro`：真实模型名，原样传给 Gemini。
 - `gemini-3.5-flash`：快速模型。
 - `gemini-3.1-flash-lite`：轻量快速模型。
@@ -671,7 +670,7 @@ curl http://localhost:7860/v1/gemini/generate \
   -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemini",
+    "model": "gemini-3.1-pro",
     "prompt": "生成一段简短介绍"
   }'
 ```
@@ -683,7 +682,7 @@ curl http://localhost:7860/v1/gemini/generate \
   -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemini",
+    "model": "gemini-3.1-pro",
     "mode": "image",
     "prompt": "生成一张赛博朋克风格的猫"
   }'
@@ -701,7 +700,7 @@ curl http://localhost:7860/v1/gemini/generate \
 {
   "ok": true,
   "account": 1,
-  "model": "gemini",
+  "model": "gemini-3.1-pro",
   "metadata": [],
   "output": {
     "text": "...",
@@ -800,7 +799,7 @@ curl http://localhost:7860/v1/gemini/stream \
   -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemini",
+    "model": "gemini-3.1-pro",
     "prompt": "按行输出 1 和 2"
   }'
 ```

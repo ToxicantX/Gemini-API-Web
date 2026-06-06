@@ -553,11 +553,11 @@ def _run_smoke_impl(
     admin_username: str | None = None,
     admin_password: str | None = None,
     chat_prompt: str | None = None,
-    chat_model: str = "gemini",
+    chat_model: str = "gemini-3.1-pro",
     chat_stream: bool = False,
     chat_tool_probe: bool = False,
     image_prompt: str | None = None,
-    image_model: str = "gemini",
+    image_model: str = "gemini-3.1-pro",
     image_response_format: str = "url",
     image_edit_file: str | None = None,
     image_edit_prompt: str | None = None,
@@ -574,17 +574,17 @@ def _run_smoke_impl(
     file_smoke_purpose: str = "assistants",
     native_probes: bool = False,
     responses_prompt: str | None = None,
-    responses_model: str = "gemini",
+    responses_model: str = "gemini-3.1-pro",
     responses_stream: bool = False,
     completion_prompt: str | None = None,
-    completion_model: str = "gemini",
+    completion_model: str = "gemini-3.1-pro",
     completion_stream: bool = False,
     gemini_prompt: str | None = None,
-    gemini_model: str = "gemini",
+    gemini_model: str = "gemini-3.1-pro",
     gemini_stream: bool = False,
     audio_transcription_file: str | None = None,
     audio_translation_file: str | None = None,
-    audio_model: str = "gemini",
+    audio_model: str = "gemini-3.1-pro",
     audio_response_format: str = "json",
     health_probes: bool = False,
     cors_probes: bool = False,
@@ -1619,11 +1619,11 @@ def run_smoke(
     admin_username: str | None = None,
     admin_password: str | None = None,
     chat_prompt: str | None = None,
-    chat_model: str = "gemini",
+    chat_model: str = "gemini-3.1-pro",
     chat_stream: bool = False,
     chat_tool_probe: bool = False,
     image_prompt: str | None = None,
-    image_model: str = "gemini",
+    image_model: str = "gemini-3.1-pro",
     image_response_format: str = "url",
     image_edit_file: str | None = None,
     image_edit_prompt: str | None = None,
@@ -1640,17 +1640,17 @@ def run_smoke(
     file_smoke_purpose: str = "assistants",
     native_probes: bool = False,
     responses_prompt: str | None = None,
-    responses_model: str = "gemini",
+    responses_model: str = "gemini-3.1-pro",
     responses_stream: bool = False,
     completion_prompt: str | None = None,
-    completion_model: str = "gemini",
+    completion_model: str = "gemini-3.1-pro",
     completion_stream: bool = False,
     gemini_prompt: str | None = None,
-    gemini_model: str = "gemini",
+    gemini_model: str = "gemini-3.1-pro",
     gemini_stream: bool = False,
     audio_transcription_file: str | None = None,
     audio_translation_file: str | None = None,
-    audio_model: str = "gemini",
+    audio_model: str = "gemini-3.1-pro",
     audio_response_format: str = "json",
     health_probes: bool = False,
     cors_probes: bool = False,
@@ -1741,7 +1741,7 @@ def main() -> int:
         default="",
         help="Optional prompt for a real /v1/chat/completions smoke request.",
     )
-    parser.add_argument("--chat-model", default="gemini")
+    parser.add_argument("--chat-model", default="gemini-3.1-pro")
     parser.add_argument(
         "--chat-stream",
         action="store_true",
@@ -1757,7 +1757,7 @@ def main() -> int:
         default="",
         help="Optional prompt for a real /v1/images/generations smoke request.",
     )
-    parser.add_argument("--image-model", default="gemini")
+    parser.add_argument("--image-model", default="gemini-3.1-pro")
     parser.add_argument(
         "--image-response-format",
         default="url",
@@ -1793,7 +1793,7 @@ def main() -> int:
         default="",
         help="Optional local audio file for a real /v1/audio/translations smoke request.",
     )
-    parser.add_argument("--audio-model", default="gemini")
+    parser.add_argument("--audio-model", default="gemini-3.1-pro")
     parser.add_argument(
         "--audio-response-format",
         default="json",
@@ -1848,7 +1848,7 @@ def main() -> int:
         default="",
         help="Optional prompt for a real /v1/responses smoke request.",
     )
-    parser.add_argument("--responses-model", default="gemini")
+    parser.add_argument("--responses-model", default="gemini-3.1-pro")
     parser.add_argument(
         "--responses-stream",
         action="store_true",
@@ -1859,7 +1859,7 @@ def main() -> int:
         default="",
         help="Optional prompt for a real /v1/completions smoke request.",
     )
-    parser.add_argument("--completion-model", default="gemini")
+    parser.add_argument("--completion-model", default="gemini-3.1-pro")
     parser.add_argument(
         "--completion-stream",
         action="store_true",
@@ -1870,7 +1870,7 @@ def main() -> int:
         default="",
         help="Optional prompt for a real /v1/gemini/generate smoke request.",
     )
-    parser.add_argument("--gemini-model", default="gemini")
+    parser.add_argument("--gemini-model", default="gemini-3.1-pro")
     parser.add_argument(
         "--gemini-stream",
         action="store_true",

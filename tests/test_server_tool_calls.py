@@ -99,7 +99,7 @@ class ServerToolCallTests(unittest.TestCase):
     def test_responses_output_shape(self):
         data = _responses_output(
             response_id="resp_1",
-            model="gemini",
+            model="gemini-3.1-pro",
             text="hello",
             created=123,
         )
@@ -191,7 +191,7 @@ class ServerToolCallTests(unittest.TestCase):
     def test_chat_request_accepts_openai_tools(self):
         request = ChatCompletionRequest.model_validate(
             {
-                "model": "gemini",
+                "model": "gemini-3.1-pro",
                 "messages": [{"role": "user", "content": "北京天气怎么样？"}],
                 "tools": [WEATHER_TOOL],
                 "tool_choice": {
@@ -207,7 +207,7 @@ class ServerToolCallTests(unittest.TestCase):
     def test_chat_request_accepts_legacy_functions(self):
         request = ChatCompletionRequest.model_validate(
             {
-                "model": "gemini",
+                "model": "gemini-3.1-pro",
                 "messages": [{"role": "user", "content": "北京天气怎么样？"}],
                 "functions": [WEATHER_TOOL["function"]],
                 "function_call": {"name": "get_weather"},

@@ -298,6 +298,7 @@ PUBLIC_MODEL_ORDER = [
     "gemini-3.5-flash",
     "gemini-3.1-pro",
 ]
+DEFAULT_MODEL_ID = "gemini-3.1-pro"
 
 OPENAI_IMAGE_MODEL_ALIASES = {
     "gpt-image-1",
@@ -998,7 +999,7 @@ def _resolve_openai_image_model_arg(model: str | None) -> str | None:
     model_key = (model or "").strip().lower()
     if model_key in OPENAI_IMAGE_MODEL_ALIASES:
         # 图片端点兼容 OpenAI 图片模型名，但内部仍落到当前真实 Gemini 模型。
-        return "gemini-3.1-pro"
+        return DEFAULT_MODEL_ID
     return _resolve_model_arg(model)
 
 
@@ -2569,7 +2570,7 @@ def create_app(config: ServerConfig | None = None):
             output = await rotator.run(
                 operation,
                 endpoint="/v1/gemini/generate",
-                model=request.model or "gemini",
+                model=resolved_model or DEFAULT_MODEL_ID,
                 output_type=f"gemini_{request.mode or 'native'}",
                 job_id=request_id,
                 require_video_generation=generation_mode == "video",
@@ -2595,7 +2596,7 @@ def create_app(config: ServerConfig | None = None):
                 job_type="deep_research",
                 state="planned",
                 account_id=account_id,
-                model=request.model or "gemini",
+                model=resolved_model or DEFAULT_MODEL_ID,
                 prompt=request.prompt,
                 plan=_dump_model(output.deep_research_plan),
             )
@@ -2604,7 +2605,7 @@ def create_app(config: ServerConfig | None = None):
         return {
             "ok": True,
             "account": account_id,
-            "model": request.model or "gemini",
+            "model": resolved_model or DEFAULT_MODEL_ID,
             "metadata": output.metadata,
             "output": _classified_output(output),
             "usage": {
@@ -2654,7 +2655,7 @@ def create_app(config: ServerConfig | None = None):
                 async for output in rotator.run_stream(
                     operation,
                     endpoint="/v1/gemini/stream",
-                    model=request.model or "gemini",
+                    model=resolved_model or DEFAULT_MODEL_ID,
                     output_type=f"gemini_{request.mode or 'native'}",
                     job_id=request_id,
                     require_video_generation=generation_mode == "video",
@@ -2705,7 +2706,7 @@ def create_app(config: ServerConfig | None = None):
                     "type": "final",
                     "ok": True,
                     "account": account_id,
-                    "model": request.model or "gemini",
+                    "model": resolved_model or DEFAULT_MODEL_ID,
                     "metadata": final_output.metadata,
                     "output": _classified_output(final_output),
                     "request_id": request_id,
@@ -2806,19 +2807,24 @@ def create_app(config: ServerConfig | None = None):
         request: DeepResearchCreateRequest,
     ) -> dict[str, Any]:
         job_id = f"dr-{uuid.uuid4().hex}"
+        try:
+            resolved_model = _resolve_model_arg(request.model)
+        except Exception as exc:
+            raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
+        model_for_call = resolved_model or Model.UNSPECIFIED
+        model_for_log = resolved_model or DEFAULT_MODEL_ID
 
         async def operation(client):
-            resolved_model = _resolve_model_arg(request.model) or Model.UNSPECIFIED
             return await client.create_deep_research_plan(
                 request.prompt,
-                model=resolved_model,
+                model=model_for_call,
             )
 
         try:
             plan = await rotator.run(
                 operation,
                 endpoint="/v1/gemini/deep-research/plan",
-                model=request.model or "gemini",
+                model=model_for_log,
                 output_type="deep_research",
                 job_id=job_id,
                 deep_research_state="planned",
@@ -2828,7 +2834,7 @@ def create_app(config: ServerConfig | None = None):
                 job_id=job_id,
                 job_type="deep_research",
                 state="failed",
-                model=request.model or "gemini",
+                model=model_for_log,
                 prompt=request.prompt,
                 error=str(exc),
             )
@@ -2841,7 +2847,7 @@ def create_app(config: ServerConfig | None = None):
             job_type="deep_research",
             state="planned",
             account_id=rotator.status()["current_account_id"],
-            model=request.model or "gemini",
+            model=model_for_log,
             prompt=request.prompt,
             plan=_dump_model(plan),
         )
@@ -2983,7 +2989,7 @@ def create_app(config: ServerConfig | None = None):
             resolved_model = _resolve_model_arg(model_id)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        return _openai_model_object(resolved_model or "gemini")
+        return _openai_model_object(resolved_model or DEFAULT_MODEL_ID)
 
     @app.api_route("/engines", methods=["GET", "HEAD"])
     @app.api_route("/v1/engines", methods=["GET", "HEAD"])
@@ -3001,7 +3007,7 @@ def create_app(config: ServerConfig | None = None):
             resolved_model = _resolve_model_arg(model_id)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        return _openai_engine_object(resolved_model or "gemini")
+        return _openai_engine_object(resolved_model or DEFAULT_MODEL_ID)
 
     @app.get("/v1/accounts")
     async def list_accounts() -> dict[str, Any]:
@@ -3196,7 +3202,7 @@ def create_app(config: ServerConfig | None = None):
             output = await rotator.run(
                 operation,
                 endpoint="/v1/generate",
-                model=payload.model or "gemini",
+                model=resolved_model or DEFAULT_MODEL_ID,
                 output_type=f"gemini_{payload.mode or 'native'}",
                 job_id=request_id,
                 require_video_generation=generation_mode == "video",
@@ -3233,11 +3239,11 @@ def create_app(config: ServerConfig | None = None):
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if not prompt:
             raise HTTPException(status_code=400, detail="input must contain text.")
-        model = payload.model or "gemini"
         try:
             resolved_model = _resolve_model_arg(payload.model)
         except Exception as exc:
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
+        model = resolved_model or DEFAULT_MODEL_ID
 
         if payload.stream:
             response_id = f"resp_{uuid.uuid4().hex}"
@@ -3549,7 +3555,7 @@ def create_app(config: ServerConfig | None = None):
             output = await rotator.run(
                 operation,
                 endpoint=endpoint,
-                model=model or "gemini",
+                model=model or DEFAULT_MODEL_ID,
                 output_type="gemini_image",
                 job_id=request_id,
                 media_generation_mode=generation_mode,
@@ -3676,7 +3682,7 @@ def create_app(config: ServerConfig | None = None):
                 output = await rotator.run(
                     operation,
                     endpoint=endpoint,
-                    model=model or "gemini",
+                    model=model or DEFAULT_MODEL_ID,
                     output_type=output_type,
                     job_id=request_id,
                 )
@@ -3829,11 +3835,11 @@ def create_app(config: ServerConfig | None = None):
             prompt = f"{prompt}\n{payload.suffix}"
         prompt = _append_completion_token_limit_instruction(prompt, payload)
         prompt = _append_sampling_parameter_instructions(prompt, payload)
-        model = payload.model or "gemini"
         try:
             resolved_model = _resolve_model_arg(payload.model)
         except Exception as exc:
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
+        model = resolved_model or DEFAULT_MODEL_ID
 
         if payload.stream:
             completion_id = f"cmpl-{uuid.uuid4().hex}"
@@ -3942,12 +3948,12 @@ def create_app(config: ServerConfig | None = None):
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         prompt = _append_chat_token_limit_instruction(prompt, payload)
         prompt = _append_sampling_parameter_instructions(prompt, payload)
-        model = payload.model or "gemini"
         normalized_tools, _ = _normalized_chat_request_tools(payload)
         try:
             resolved_model = _resolve_model_arg(payload.model)
         except Exception as exc:
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
+        model = resolved_model or DEFAULT_MODEL_ID
 
         if payload.stream:
             completion_id = f"chatcmpl-{uuid.uuid4().hex}"
