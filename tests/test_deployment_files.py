@@ -26,6 +26,17 @@ class DeploymentFileTests(unittest.TestCase):
         self.assertNotIn("6080:6080", compose)
         self.assertNotIn('"6080:6080"', compose)
 
+    def test_compose_passes_server_deployment_env(self):
+        compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+
+        # compose 必须把 .env.example 中的服务器部署关键项传入容器，避免文档配置后不生效。
+        self.assertIn("ADMIN_USERNAME: ${ADMIN_USERNAME:-}", compose)
+        self.assertIn("ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}", compose)
+        self.assertIn("REQUIRE_API_KEY: ${REQUIRE_API_KEY:-false}", compose)
+        self.assertIn("API_KEYS: ${API_KEYS:-}", compose)
+        self.assertIn("CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-*}", compose)
+        self.assertIn("GIT_COMMIT: ${GIT_COMMIT:-}", compose)
+
     def test_env_example_defaults_are_server_safe(self):
         env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
 
