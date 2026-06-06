@@ -344,11 +344,33 @@ def _require_media_cooldown_summary(data: dict) -> None:
         )
 
 
+def _require_chat_completion_response(data: dict) -> None:
+    """校验非流式 Chat Completions 基础结构，贴近 OpenAI SDK 的解析预期。"""
+    _require(data.get("object") == "chat.completion", "chat response is not an OpenAI chat completion")
+    _require(str(data.get("id") or "").startswith("chatcmpl-"), "chat response missing chatcmpl id")
+    _require(isinstance(data.get("created"), int), "chat response missing integer created")
+    _require(bool(data.get("model")), "chat response missing model")
+    usage = data.get("usage")
+    _require(isinstance(usage, dict), "chat response missing usage")
+    for field in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        _require(isinstance(usage.get(field), int), f"chat response usage missing {field}")
+    choices = data.get("choices") or []
+    _require(bool(choices), "chat response missing choices")
+    choice = choices[0]
+    _require(choice.get("index") == 0, "chat response first choice index is not 0")
+    _require(choice.get("finish_reason") in {"stop", "length", "tool_calls"}, "chat response has invalid finish_reason")
+    message = choice.get("message") or {}
+    _require(message.get("role") == "assistant", "chat response message role is not assistant")
+    _require(
+        bool(message.get("content") or message.get("tool_calls")),
+        "chat response missing message content or tool_calls",
+    )
+
+
 def _require_chat_tool_call_response(data: dict) -> None:
     """校验 Chat Completions 工具调用返回 OpenAI 客户端可执行的结构。"""
-    _require(data.get("object") == "chat.completion", "tool probe response is not a chat completion")
+    _require_chat_completion_response(data)
     choices = data.get("choices") or []
-    _require(bool(choices), "tool probe response missing choices")
     choice = choices[0]
     _require(choice.get("finish_reason") == "tool_calls", "tool probe finish_reason is not tool_calls")
     message = choice.get("message") or {}
@@ -962,15 +984,8 @@ def _run_smoke_impl(
             },
         )
         _require(chat_status == 200, f"/v1/chat/completions returned {chat_status}")
-        _require(chat.get("object") == "chat.completion", "chat response is not an OpenAI chat completion")
         _require("x-request-id" in {key.lower(): value for key, value in chat_headers.items()}, "chat response missing X-Request-ID")
-        choices = chat.get("choices") or []
-        _require(bool(choices), "chat response missing choices")
-        message = choices[0].get("message") or {}
-        _require(
-            bool(message.get("content") or message.get("tool_calls")),
-            "chat response missing message content or tool_calls",
-        )
+        _require_chat_completion_response(chat)
         results.append("chat completions ok")
 
         if chat_stream:

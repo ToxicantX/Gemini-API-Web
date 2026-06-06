@@ -1572,6 +1572,8 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "id": "chatcmpl-test",
                         "object": "chat.completion",
+                        "created": 1,
+                        "model": "gemini-3.5-flash",
                         "choices": [
                             {
                                 "index": 0,
@@ -1579,6 +1581,11 @@ class SmokeDeployTests(unittest.TestCase):
                                 "finish_reason": "stop",
                             }
                         ],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-chat"},
                 )
@@ -1617,8 +1624,22 @@ class SmokeDeployTests(unittest.TestCase):
                 return FakeHTTPResponse(
                     200,
                     {
+                        "id": "chatcmpl-test",
                         "object": "chat.completion",
-                        "choices": [{"message": {"role": "assistant"}}],
+                        "created": 1,
+                        "model": "gemini",
+                        "choices": [
+                            {
+                                "index": 0,
+                                "message": {"role": "assistant"},
+                                "finish_reason": "stop",
+                            }
+                        ],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-chat"},
                 )
@@ -1633,6 +1654,55 @@ class SmokeDeployTests(unittest.TestCase):
                 )
 
         self.assertIn("missing message content or tool_calls", str(raised.exception))
+
+    def test_smoke_rejects_chat_completion_without_usage(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/chat/completions":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "id": "chatcmpl-test",
+                        "object": "chat.completion",
+                        "created": 1,
+                        "model": "gemini",
+                        "choices": [
+                            {
+                                "index": 0,
+                                "message": {"role": "assistant", "content": "pong"},
+                                "finish_reason": "stop",
+                            }
+                        ],
+                    },
+                    {"X-Request-ID": "req-chat"},
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(AssertionError) as raised:
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    chat_prompt="ping",
+                )
+
+        self.assertIn("chat response missing usage", str(raised.exception))
 
     def test_smoke_can_check_chat_tool_calls_shape(self):
         def fake_urlopen(request, timeout):
@@ -1679,6 +1749,8 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "id": "chatcmpl-tool-test",
                         "object": "chat.completion",
+                        "created": 1,
+                        "model": "gemini",
                         "choices": [
                             {
                                 "index": 0,
@@ -1699,6 +1771,11 @@ class SmokeDeployTests(unittest.TestCase):
                                 "finish_reason": "tool_calls",
                             }
                         ],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-tool"},
                 )
@@ -1736,9 +1813,13 @@ class SmokeDeployTests(unittest.TestCase):
                 return FakeHTTPResponse(
                     200,
                     {
+                        "id": "chatcmpl-tool-test",
                         "object": "chat.completion",
+                        "created": 1,
+                        "model": "gemini",
                         "choices": [
                             {
+                                "index": 0,
                                 "message": {
                                     "role": "assistant",
                                     "content": None,
@@ -1756,6 +1837,11 @@ class SmokeDeployTests(unittest.TestCase):
                                 "finish_reason": "tool_calls",
                             }
                         ],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-tool"},
                 )
@@ -1826,11 +1912,20 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "id": "chatcmpl-test",
                         "object": "chat.completion",
+                        "created": 1,
+                        "model": "gemini",
                         "choices": [
                             {
+                                "index": 0,
                                 "message": {"role": "assistant", "content": "pong"},
+                                "finish_reason": "stop",
                             }
                         ],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-chat"},
                 )
@@ -1881,12 +1976,22 @@ class SmokeDeployTests(unittest.TestCase):
                 return FakeHTTPResponse(
                     200,
                     {
+                        "id": "chatcmpl-test",
                         "object": "chat.completion",
+                        "created": 1,
+                        "model": "gemini",
                         "choices": [
                             {
+                                "index": 0,
                                 "message": {"role": "assistant", "content": "pong"},
+                                "finish_reason": "stop",
                             }
                         ],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-chat"},
                 )
