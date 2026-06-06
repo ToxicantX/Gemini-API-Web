@@ -3918,6 +3918,55 @@ class SmokeDeployTests(unittest.TestCase):
 
         self.assertIn("gemini generate ok", results)
 
+    def test_smoke_rejects_gemini_native_old_model_alias_response(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/gemini/generate":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "account": 1,
+                        "model": "gemini",
+                        "metadata": {"request_id": "req-gemini"},
+                        "output": {
+                            "text": "native pong",
+                            "images": [],
+                            "videos": [],
+                            "media": [],
+                        },
+                    },
+                    {"X-Request-ID": "req-gemini"},
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(AssertionError) as raised:
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    gemini_prompt="native ping",
+                    gemini_model="gemini-3.1-pro",
+                )
+
+        self.assertIn("unexpected model", str(raised.exception))
+
     def test_smoke_rejects_empty_gemini_native_output(self):
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")

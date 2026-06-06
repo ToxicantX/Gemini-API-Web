@@ -1740,7 +1740,10 @@ def _run_smoke_impl(
         _require(gemini_status == 200, f"/v1/gemini/generate returned {gemini_status}")
         _require("x-request-id" in {key.lower(): value for key, value in gemini_headers.items()}, "gemini generate response missing X-Request-ID")
         _require(gemini.get("ok") is True, "gemini generate body missing ok=true")
-        _require(gemini.get("model") in {gemini_model, "gemini"}, "gemini generate body has unexpected model")
+        _require(
+            gemini.get("model") == gemini_model,
+            "gemini generate body has unexpected model",
+        )
         _require(isinstance(gemini.get("output"), dict), "gemini generate body missing output object")
         _require("metadata" in gemini, "gemini generate body missing metadata")
         output = gemini["output"]
