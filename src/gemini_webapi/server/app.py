@@ -3242,10 +3242,28 @@ def create_app(config: ServerConfig | None = None):
     async def auth_save(request: AuthSaveRequest) -> dict[str, Any]:
         try:
             result = await auth_browser.save_account(name=request.name)
-            validation = await rotator.validate_account(result["account_id"])
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return {**result, "validation": validation, "accounts": rotator.status()["accounts"]}
+        # 保存 Cookie 和验证账号是两个阶段：保存成功后即使验证失败，也要明确告诉管理端账号已经写入持久化账户池。
+        try:
+            validation = await rotator.validate_account(result["account_id"])
+        except Exception as exc:
+            validation = {
+                "account_id": result["account_id"],
+                "valid": False,
+                "expired": True,
+                "status": type(exc).__name__,
+                "status_code": None,
+                "message": str(exc),
+            }
+        status_data = rotator.status()
+        return {
+            **result,
+            "saved": True,
+            "account_count": len(status_data["accounts"]),
+            "validation": validation,
+            "accounts": status_data["accounts"],
+        }
 
     @app.post("/v1/generate")
     async def generate(request: Request, payload: GenerateRequest) -> dict[str, Any]:

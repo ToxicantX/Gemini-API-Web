@@ -739,6 +739,57 @@ class ServerEndpointTests(unittest.TestCase):
                 "/novnc/vnc.html?autoconnect=true&resize=scale&path=websockify",
             )
 
+    def test_auth_save_reports_saved_account_even_when_validation_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = create_app(self._config(tmp))
+
+            async def fake_save_account(self, name=None):
+                account = self.store.upsert_account(
+                    name=name,
+                    secure_1psid="psid-saved",
+                    secure_1psidts="ts-saved",
+                    cookies={
+                        "__Secure-1PSID": "psid-saved",
+                        "__Secure-1PSIDTS": "ts-saved",
+                    },
+                    enabled=True,
+                )
+                return {
+                    "ok": True,
+                    "account_id": account.id,
+                    "name": name,
+                    "cookie_count": 2,
+                }
+
+            async def fake_validate_account(self, account_id=None):
+                raise RuntimeError("validation backend unavailable")
+
+            with (
+                patch(
+                    "gemini_webapi.server.auth_browser.AuthBrowserManager.save_account",
+                    fake_save_account,
+                ),
+                patch(
+                    "gemini_webapi.server.rotator.AccountRotator.validate_account",
+                    fake_validate_account,
+                ),
+                TestClient(app) as client,
+            ):
+                response = client.post("/v1/auth/save", json={"name": "saved"})
+
+            data = response.json()
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(data["ok"])
+            self.assertTrue(data["saved"])
+            self.assertEqual(data["account_count"], 1)
+            self.assertEqual(len(data["accounts"]), 1)
+            self.assertEqual(data["accounts"][0]["name"], "saved")
+            self.assertFalse(data["validation"]["valid"])
+            self.assertEqual(
+                data["validation"]["message"],
+                "validation backend unavailable",
+            )
+
     def test_gemini_generate_passes_media_mode_to_client_and_rotator(self):
         with tempfile.TemporaryDirectory() as tmp:
             app = create_app(

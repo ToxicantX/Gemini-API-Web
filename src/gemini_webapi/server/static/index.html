@@ -1658,7 +1658,8 @@
       const data = await api("/v1/auth/save", { method: "POST", body: JSON.stringify({ name: $("authSaveName").value || null }) });
       closeModal("authSaveModal");
       await refreshAll();
-      setMsg(data.validation.valid ? "授权 Cookie 已保存并验证通过" : `授权 Cookie 已保存，但验证失败：${data.validation.message}`);
+      const savedText = data.saved ? `授权 Cookie 已保存到账户池 #${data.account_id}，当前共 ${data.account_count ?? (data.accounts || []).length} 个账户。` : "授权 Cookie 未确认保存。";
+      setMsg(data.validation?.valid ? `${savedText} 验证通过。` : `${savedText} 但验证失败：${data.validation?.message || "请稍后重新验证。"}`);
     };
 
     boot().catch(e => setMsg(e.message));
