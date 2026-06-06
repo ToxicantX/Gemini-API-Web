@@ -498,6 +498,7 @@ def _require_admin_ui(body: str) -> None:
     _require("readinessPanel" in body, "admin UI missing generation readiness panel")
     _require("外部调用未就绪" in body, "admin UI missing readiness diagnostic copy")
     _require("网页授权" in body, "admin UI missing web authorization action")
+    _require("检查授权状态" in body, "admin UI missing auth cookie diagnostics action")
     _require("gemini-3.1-pro" in body, "admin UI missing gemini-3.1-pro model option")
     _require("gemini-3.5-flash" in body, "admin UI missing gemini-3.5-flash model option")
     _require(
@@ -1578,6 +1579,20 @@ def _run_smoke_impl(
                 api_key_create.get("detail") == "Admin login required.",
                 "external API key unexpectedly generated a system API key",
             )
+            api_key_auth_diag_status, api_key_auth_diag, _ = _request(
+                base_url,
+                "/v1/auth/diagnose",
+                timeout=timeout,
+                api_key=api_key,
+            )
+            _require(
+                api_key_auth_diag_status == 401,
+                "/v1/auth/diagnose should reject external API key",
+            )
+            _require(
+                api_key_auth_diag.get("detail") == "Admin login required.",
+                "external API key unexpectedly accessed auth diagnostics",
+            )
         login_status, login, login_headers = _request(
             base_url,
             "/v1/admin/login",
@@ -1597,6 +1612,30 @@ def _run_smoke_impl(
         )
         _require(logs_status == 200, f"/v1/request-logs with admin cookie returned {logs_status}")
         _require("logs" in logs, "/v1/request-logs missing logs")
+        auth_diag_status, auth_diag, _ = _request(
+            base_url,
+            "/v1/auth/diagnose",
+            timeout=timeout,
+            headers={"Cookie": cookie},
+        )
+        _require(
+            auth_diag_status in {200, 400},
+            f"/v1/auth/diagnose with admin cookie returned {auth_diag_status}",
+        )
+        if auth_diag_status == 200:
+            _require(
+                "has_secure_1psid" in auth_diag,
+                "/v1/auth/diagnose missing cookie status summary",
+            )
+            _require(
+                "__Secure-1PSID" not in json.dumps(auth_diag),
+                "/v1/auth/diagnose leaked sensitive cookie names",
+            )
+        else:
+            _require(
+                "No auth browser session" in json.dumps(auth_diag),
+                "/v1/auth/diagnose did not explain missing auth browser session",
+            )
         generated_status, generated, _ = _request(
             base_url,
             "/v1/system-settings/api-keys",

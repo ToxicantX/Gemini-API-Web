@@ -1196,6 +1196,7 @@ class SmokeDeployTests(unittest.TestCase):
                     <div id="readinessPanel">外部调用未就绪</div>
                     <strong id="metricReadiness">未知</strong>
                     <button>网页授权</button>
+                    <button>检查授权状态</button>
                     <option value="gemini-3.1-pro">gemini-3.1-pro</option>
                     <option value="gemini-3.5-flash">gemini-3.5-flash</option>
                     <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
@@ -1237,6 +1238,7 @@ class SmokeDeployTests(unittest.TestCase):
                     <div id="readinessPanel">外部调用未就绪</div>
                     <strong id="metricReadiness">未知</strong>
                     <button>网页授权</button>
+                    <button>检查授权状态</button>
                     <option value="gemini-3.1-pro">gemini-3.1-pro</option>
                     <option value="gemini-3.5-flash">gemini-3.5-flash</option>
                     <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
@@ -2262,6 +2264,28 @@ class SmokeDeployTests(unittest.TestCase):
                         ),
                     )
                 return FakeHTTPResponse(200, {"logs": []})
+            if path == "/v1/auth/diagnose":
+                self.assertIn(
+                    "gemini_admin_session=abc.def",
+                    request.headers.get("Cookie", ""),
+                )
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    400,
+                    "Bad Request",
+                    {"X-Request-ID": "req-auth-diagnose"},
+                    BytesIO(
+                        json.dumps(
+                            {
+                                "error": {
+                                    "message": "No auth browser session is running.",
+                                    "type": "invalid_request_error",
+                                },
+                                "request_id": "req-auth-diagnose",
+                            }
+                        ).encode("utf-8")
+                    ),
+                )
             if path == "/v1/system-settings/api-keys":
                 self.assertIn(
                     "gemini_admin_session=abc.def",
@@ -2298,9 +2322,10 @@ class SmokeDeployTests(unittest.TestCase):
     def test_smoke_rejects_api_key_on_admin_management_endpoints(self):
         seen_admin_api_key = False
         seen_api_key_create = False
+        seen_auth_diag_api_key = False
 
         def fake_urlopen(request, timeout):
-            nonlocal seen_admin_api_key, seen_api_key_create
+            nonlocal seen_admin_api_key, seen_api_key_create, seen_auth_diag_api_key
             path = request.full_url.replace("http://service", "")
             if path == "/health":
                 return FakeHTTPResponse(
@@ -2399,6 +2424,30 @@ class SmokeDeployTests(unittest.TestCase):
                         ).encode("utf-8")
                     ),
                 )
+            if path == "/v1/auth/diagnose":
+                if "gemini_admin_session=abc.def" in request.headers.get("Cookie", ""):
+                    return FakeHTTPResponse(
+                        200,
+                        {
+                            "id": "auth-1",
+                            "cookie_count": 2,
+                            "has_secure_1psid": True,
+                            "has_secure_1psidts": False,
+                        },
+                    )
+                if request.headers.get("Authorization") == "Bearer sk-test":
+                    seen_auth_diag_api_key = True
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-admin-401"},
+                    BytesIO(
+                        json.dumps(
+                            {"ok": False, "detail": "Admin login required."}
+                        ).encode("utf-8")
+                    ),
+                )
             if path == "/v1/system-settings/api-keys/fp-generated":
                 self.assertEqual(request.get_method(), "DELETE")
                 self.assertIn(
@@ -2417,6 +2466,7 @@ class SmokeDeployTests(unittest.TestCase):
 
         self.assertTrue(seen_admin_api_key)
         self.assertTrue(seen_api_key_create)
+        self.assertTrue(seen_auth_diag_api_key)
         self.assertIn("admin login and boundary ok", results)
 
     def test_smoke_requires_admin_username_when_server_requires_it(self):
