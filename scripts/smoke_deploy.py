@@ -538,6 +538,16 @@ def _run_smoke_impl(
             _require(root.get("object") == "api.root", "/v1 did not return api.root")
             _require(isinstance(root.get("endpoints"), dict), "/v1 missing endpoints")
             _require("x-request-id" in {key.lower(): value for key, value in root_headers.items()}, "/v1 response missing X-Request-ID")
+            root_head_status, root_head_body, root_head_headers = _raw_request(
+                base_url,
+                "/v1",
+                timeout=timeout,
+                api_key=api_key,
+                method="HEAD",
+            )
+            _require(root_head_status == 200, f"HEAD /v1 returned {root_head_status}")
+            _require(root_head_body == "", "HEAD /v1 should not return a body")
+            _require("x-request-id" in {key.lower(): value for key, value in root_head_headers.items()}, "HEAD /v1 missing X-Request-ID")
             head_status, _, head_headers = _raw_request(
                 base_url,
                 "/v1/models",

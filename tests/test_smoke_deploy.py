@@ -560,10 +560,9 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertIn("authorized models ok", results)
 
     def test_smoke_can_check_endpoint_probes(self):
-        seen_head = False
+        seen_heads = []
 
         def fake_urlopen(request, timeout):
-            nonlocal seen_head
             path = request.full_url.replace("http://service", "")
             auth = request.headers.get("Authorization")
             if path == "/health":
@@ -589,7 +588,7 @@ class SmokeDeployTests(unittest.TestCase):
                 )
             if path == "/v1/models":
                 if request.get_method() == "HEAD":
-                    seen_head = True
+                    seen_heads.append(path)
                     return FakeHTTPResponse(
                         200,
                         headers={"X-Request-ID": "req-models-head"},
@@ -626,6 +625,13 @@ class SmokeDeployTests(unittest.TestCase):
                     body="",
                 )
             if path == "/v1":
+                if request.get_method() == "HEAD":
+                    seen_heads.append(path)
+                    return FakeHTTPResponse(
+                        200,
+                        headers={"X-Request-ID": "req-v1-root-head"},
+                        body="",
+                    )
                 return FakeHTTPResponse(
                     200,
                     {
@@ -652,7 +658,7 @@ class SmokeDeployTests(unittest.TestCase):
                 probe_endpoints=True,
             )
 
-        self.assertTrue(seen_head)
+        self.assertEqual(seen_heads, ["/v1", "/v1/models"])
         self.assertIn("endpoint probes ok", results)
 
     def test_smoke_checks_endpoint_probe_api_key_protection(self):
