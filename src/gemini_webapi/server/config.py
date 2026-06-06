@@ -67,11 +67,13 @@ class ServerConfig:
     api_keys: tuple[str, ...]
     host: str
     port: int
+    admin_username: str | None = None
     admin_password: str | None = None
     admin_session_secret: str = ""
     admin_cookie_secure: bool = False
     cors_allow_origins: tuple[str, ...] = ("*",)
     require_api_key: bool = False
+    git_commit: str = ""
 
     @classmethod
     def from_env(cls) -> "ServerConfig":
@@ -112,10 +114,12 @@ class ServerConfig:
             require_api_key=_env_bool("REQUIRE_API_KEY", False),
             host=os.getenv("HOST", "0.0.0.0"),
             port=_env_int("PORT", 7860, minimum=1),
+            admin_username=os.getenv("ADMIN_USERNAME") or None,
             admin_password=os.getenv("ADMIN_PASSWORD") or None,
             admin_session_secret=os.getenv("ADMIN_SESSION_SECRET", ""),
             # HTTPS 反向代理部署时建议开启，浏览器会只在安全连接中发送管理员会话 Cookie。
             admin_cookie_secure=os.getenv("ADMIN_COOKIE_SECURE", "false").lower()
             in {"1", "true", "yes"},
             cors_allow_origins=_env_list("CORS_ALLOW_ORIGINS", ("*",)),
+            git_commit=os.getenv("GIT_COMMIT", "").strip(),
         )

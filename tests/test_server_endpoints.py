@@ -180,6 +180,7 @@ class ServerEndpointTests(unittest.TestCase):
                 port=config.port,
                 admin_password="admin-pass",
                 admin_session_secret="session-secret",
+                git_commit="abc1234",
             )
             app = create_app(config)
             with TestClient(app) as client:
@@ -200,6 +201,7 @@ class ServerEndpointTests(unittest.TestCase):
             data = response.json()
             self.assertTrue(data["ok"])
             self.assertEqual(data["version"], "0.1.0")
+            self.assertEqual(data["build"]["commit"], "abc1234")
             self.assertIn("gemini-3.1-pro", data["models"])
             self.assertEqual(data["accounts"]["total"], 1)
             self.assertEqual(data["accounts"]["available"], 1)
@@ -1027,6 +1029,53 @@ class ServerEndpointTests(unittest.TestCase):
                 self.assertTrue(login.cookies.get("gemini_admin_session"))
                 self.assertEqual(client.get("/v1/request-logs").status_code, 200)
                 self.assertEqual(client.post("/v1/admin/logout", json={}).status_code, 200)
+
+    def test_admin_login_can_require_username_for_server_deployments(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_username="admin",
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                status = client.get("/v1/admin/status")
+                missing_username = client.post(
+                    "/v1/admin/login",
+                    json={"password": "admin-pass"},
+                )
+                bad_username = client.post(
+                    "/v1/admin/login",
+                    headers={"X-Forwarded-For": "203.0.113.20"},
+                    json={"username": "root", "password": "admin-pass"},
+                )
+                login = client.post(
+                    "/v1/admin/login",
+                    headers={"X-Forwarded-For": "203.0.113.21"},
+                    json={"username": "admin", "password": "admin-pass"},
+                )
+
+            self.assertEqual(status.status_code, 200)
+            self.assertTrue(status.json()["username_required"])
+            # 服务器模式可以额外要求管理员账号，避免只有密码字段时被简单猜测。
+            self.assertEqual(missing_username.status_code, 401)
+            self.assertEqual(bad_username.status_code, 401)
+            self.assertEqual(login.status_code, 200)
+            self.assertTrue(login.cookies.get("gemini_admin_session"))
 
     def test_admin_login_rate_limits_repeated_failures(self):
         with tempfile.TemporaryDirectory() as tmp:

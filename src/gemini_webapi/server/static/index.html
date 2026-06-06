@@ -444,6 +444,7 @@
     <form id="loginForm" class="login-panel">
       <h2>管理员登录</h2>
       <div class="notice">服务器部署模式下需要管理员密码才能进入控制台。外部 API 调用请使用系统自动生成的 API Key。</div>
+      <label id="adminUsernameLabel" style="display:none">管理员账号<input id="adminUsername" type="text" autocomplete="username"></label>
       <label>管理员密码<input id="adminPassword" type="password" autocomplete="current-password"></label>
       <button class="primary" type="submit">登录</button>
       <div id="loginMessage" class="hint"></div>
@@ -805,7 +806,8 @@
       $("logoutBtn").style.display = "none";
       $("loginBackdrop").classList.add("open");
       $("loginMessage").textContent = message;
-      $("adminPassword").focus();
+      const usernameVisible = $("adminUsernameLabel").style.display !== "none";
+      (usernameVisible ? $("adminUsername") : $("adminPassword")).focus();
     }
     async function api(path, options = {}) {
       const headers = authHeaders({ "Content-Type": "application/json", ...(options.headers || {}) });
@@ -886,10 +888,11 @@
         const response = await fetch("/v1/admin/status");
         const data = await response.json();
         state.adminReady = !data.enabled || data.authenticated;
+        $("adminUsernameLabel").style.display = data.username_required ? "" : "none";
         $("logoutBtn").style.display = data.enabled && data.authenticated ? "" : "none";
         $("loginBackdrop").classList.toggle("open", data.enabled && !data.authenticated);
         if (data.enabled && !data.authenticated) {
-          $("loginMessage").textContent = "请输入管理员密码。";
+          $("loginMessage").textContent = data.username_required ? "请输入管理员账号和密码。" : "请输入管理员密码。";
         }
         return data;
       } catch (error) {
@@ -1317,8 +1320,13 @@
       event.preventDefault();
       $("loginMessage").textContent = "正在登录...";
       try {
-        const data = await api("/v1/admin/login", { method: "POST", body: JSON.stringify({ password: $("adminPassword").value }) });
+        const payload = {
+          username: $("adminUsername").value,
+          password: $("adminPassword").value,
+        };
+        const data = await api("/v1/admin/login", { method: "POST", body: JSON.stringify(payload) });
         if (data.authenticated) {
+          $("adminUsername").value = "";
           $("adminPassword").value = "";
           $("loginBackdrop").classList.remove("open");
           $("logoutBtn").style.display = "";

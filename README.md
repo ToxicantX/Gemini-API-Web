@@ -95,6 +95,8 @@ curl http://localhost:7860/health
 
 `/health` 不需要管理员登录或 API Key，只返回非敏感摘要，适合反向代理和监控系统探活。为兼容常见部署平台，也支持 `GET/HEAD /healthz`、`GET/HEAD /readyz` 和 `GET/HEAD /livez`。
 
+如果部署时设置 `GIT_COMMIT`，`/health` 会在 `build.commit` 中返回该值，方便确认服务器当前运行的镜像或源码版本；未设置时返回空字符串。
+
 ## 添加账号
 
 推荐使用管理端的“网页授权”：
@@ -146,6 +148,7 @@ environment:
   REQUEST_TIMEOUT: "300"
   GEMINI_AUTO_REFRESH: "true"
   GEMINI_AUTH_HEADLESS: "false"
+  ADMIN_USERNAME: "admin"
   ADMIN_PASSWORD: ""
   ADMIN_SESSION_SECRET: ""
   ADMIN_COOKIE_SECURE: "false"
@@ -162,6 +165,7 @@ environment:
 - `REQUEST_TIMEOUT`：请求超时时间，单位秒。
 - `GEMINI_AUTO_REFRESH`：是否启用 Cookie 自动刷新。
 - `GEMINI_AUTH_HEADLESS`：授权浏览器是否无头运行。需要 noVNC 登录时保持 `false`。
+- `ADMIN_USERNAME`：管理员账号。为空时管理端保持旧版“只输密码”模式；服务器部署建议设置。
 - `ADMIN_PASSWORD`：管理员密码。为空时不启用管理端登录，适合本地自用；服务器部署建议设置。
 - `ADMIN_SESSION_SECRET`：管理员会话签名密钥。服务器部署建议设置为一段随机长字符串。
 - `ADMIN_COOKIE_SECURE`：管理员会话 Cookie 是否只允许 HTTPS 发送。直连本地 HTTP 保持 `false`；通过 HTTPS 域名反向代理部署时建议设为 `true`。
@@ -173,21 +177,22 @@ environment:
 
 ## 管理员登录与外部鉴权
 
-如果要部署到服务器，建议至少配置 `ADMIN_PASSWORD`：
+如果要部署到服务器，建议至少配置 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`：
 
 ```sh
-ADMIN_PASSWORD=your-admin-password docker compose up -d --build
+ADMIN_USERNAME=admin ADMIN_PASSWORD=your-admin-password docker compose up -d --build
 ```
 
 也可以同时配置固定会话密钥、HTTPS 安全 Cookie 和外部 API Key：
 
 ```sh
-ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-secret ADMIN_COOKIE_SECURE=true REQUIRE_API_KEY=true API_KEYS=sk-your-external-key CORS_ALLOW_ORIGINS=https://your-panel.example.com docker compose up -d --build
+ADMIN_USERNAME=admin ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-secret ADMIN_COOKIE_SECURE=true REQUIRE_API_KEY=true API_KEYS=sk-your-external-key CORS_ALLOW_ORIGINS=https://your-panel.example.com docker compose up -d --build
 ```
 
 启用后：
 
 - `http://localhost:7860` 会显示管理员登录页。
+- 如果配置了 `ADMIN_USERNAME`，登录页会要求同时输入管理员账号和密码；未配置时只要求密码，兼容旧部署。
 - 控制台和管理接口需要管理员 Cookie。
 - 管理员登录连续输错会按客户端来源短时间限速，响应 `429` 和 `Retry-After`，避免公网部署时被简单爆破。
 - 网页授权使用的 noVNC 页面和 WebSocket 通道也需要管理员 Cookie，避免服务器部署时暴露授权浏览器。
@@ -696,7 +701,7 @@ gemini-webapi-server
 - 不要提交 `data/app.db`、`data/accounts.json`、`cookies.json` 或任何真实 Cookie。
 - 本项目通过 Gemini Web 的 Cookie 工作，不是 Google 官方 API Key 接口。
 - Google 可能调整 Gemini Web 页面结构，某些原生能力可能会受账号权限、地区、订阅状态或上游 SDK 适配影响。
-- 服务器或公网部署必须设置 `ADMIN_PASSWORD`，否则管理端和账户管理接口会保持开放；`/health` 会在未设置时返回告警。
+- 服务器或公网部署必须设置 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`，否则管理端和账户管理接口会保持开放；`/health` 会在未设置密码时返回告警。
 - 建议只在可信网络中暴露管理端，公网部署请自行加反向代理鉴权。
 
 ## 上游项目

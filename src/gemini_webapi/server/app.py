@@ -164,6 +164,7 @@ class SystemSettingsRequest(BaseModel):
 
 
 class AdminLoginRequest(BaseModel):
+    username: str | None = None
     password: str
 
 
@@ -1318,6 +1319,13 @@ def _admin_session_valid(config: ServerConfig, value: str | None) -> bool:
     return hmac.compare_digest(signature, expected)
 
 
+def _admin_username_valid(config: ServerConfig, username: str | None) -> bool:
+    # ADMIN_USERNAME 是服务器部署时的可选增强；未配置时保持旧版“只输密码”的登录方式。
+    if not config.admin_username:
+        return True
+    return hmac.compare_digest((username or "").strip(), config.admin_username)
+
+
 def _admin_login_client_key(request: Request) -> str:
     """按客户端来源聚合管理员登录失败次数，避免公网部署时被简单爆破。"""
     forwarded_for = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
@@ -1845,6 +1853,9 @@ def create_app(config: ServerConfig | None = None):
         return {
             "ok": True,
             "version": app.version,
+            "build": {
+                "commit": config.git_commit,
+            },
             "models": _openai_model_ids(),
             "accounts": {
                 "total": len(accounts),
@@ -1859,6 +1870,7 @@ def create_app(config: ServerConfig | None = None):
             },
             "auth": {
                 "admin_enabled": bool(config.admin_password),
+                "admin_username_configured": bool(config.admin_username),
                 "api_key_required": bool(
                     config.require_api_key
                     or config.api_keys
@@ -1881,6 +1893,7 @@ def create_app(config: ServerConfig | None = None):
         enabled = bool(config.admin_password)
         return {
             "enabled": enabled,
+            "username_required": bool(config.admin_username),
             "authenticated": _admin_session_valid(
                 config,
                 request.cookies.get("gemini_admin_session"),
@@ -1907,7 +1920,10 @@ def create_app(config: ServerConfig | None = None):
                 },
                 headers={"Retry-After": str(retry_after)},
             )
-        if not hmac.compare_digest(request.password, config.admin_password):
+        if not _admin_username_valid(config, request.username) or not hmac.compare_digest(
+            request.password,
+            config.admin_password,
+        ):
             _record_admin_login_failure(
                 app.state.admin_login_failures,
                 client_key,

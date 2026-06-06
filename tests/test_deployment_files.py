@@ -29,10 +29,12 @@ class DeploymentFileTests(unittest.TestCase):
     def test_env_example_defaults_are_server_safe(self):
         env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
 
+        self.assertIn("ADMIN_USERNAME=admin", env_example)
         self.assertIn("ADMIN_PASSWORD=change-this-admin-password", env_example)
         self.assertIn("REQUIRE_API_KEY=true", env_example)
         self.assertIn("API_KEYS=sk-change-this-external-key", env_example)
         self.assertIn("CORS_ALLOW_ORIGINS=https://your-panel.example.com", env_example)
+        self.assertIn("GIT_COMMIT=", env_example)
 
     def test_readme_documents_file_head_probes(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
