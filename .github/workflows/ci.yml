@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  external-api-regression:
+    name: External API regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[server]"
+
+      - name: Run deployment and external API tests
+        run: |
+          python -m unittest tests.test_deployment_files tests.test_smoke_deploy tests.test_server_models tests.test_server_tool_calls tests.test_server_database tests.test_server_rotator tests.test_server_endpoints
+
+      - name: Compile Python sources
+        run: python -m compileall -q src tests cli.py scripts
+
+      - name: Check patch whitespace
+        run: git diff --check
