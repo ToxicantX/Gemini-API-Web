@@ -197,6 +197,8 @@ def run_smoke(
     probe_endpoints: bool = False,
     probe_model: str = "gemini",
     file_probes: bool = False,
+    file_smoke_path: str | None = None,
+    file_smoke_purpose: str = "assistants",
     responses_prompt: str | None = None,
     responses_model: str = "gemini",
     responses_stream: bool = False,
@@ -355,6 +357,99 @@ def run_smoke(
                 _require(body_text == "", f"HEAD {path} should not return a body")
                 _require("x-request-id" in {key.lower(): value for key, value in headers.items()}, f"HEAD {path} missing X-Request-ID")
             results.append("file probes ok")
+
+    if file_smoke_path:
+        # 完整文件生命周期 smoke 不触发模型调用，但会验证外部文件上传、读取和删除链路。
+        source = Path(file_smoke_path)
+        _require(source.is_file(), f"file smoke path does not exist: {file_smoke_path}")
+        if health.get("auth", {}).get("api_key_required") and not api_key:
+            upload_status, _, _ = _multipart_request(
+                base_url,
+                "/v1/files",
+                timeout=timeout,
+                file_path=file_smoke_path,
+                fields={"purpose": file_smoke_purpose},
+            )
+            _require(upload_status == 401, "/v1/files upload should require an API key")
+            results.append("file lifecycle protection ok")
+        else:
+            upload_status, upload, upload_headers = _multipart_request(
+                base_url,
+                "/v1/files",
+                timeout=timeout,
+                api_key=api_key,
+                file_path=file_smoke_path,
+                fields={"purpose": file_smoke_purpose},
+            )
+            _require(upload_status == 200, f"/v1/files upload returned {upload_status}")
+            _require("x-request-id" in {key.lower(): value for key, value in upload_headers.items()}, "file upload response missing X-Request-ID")
+            _require(upload.get("object") == "file", "file upload response is not an OpenAI file object")
+            file_id = str(upload.get("id") or "")
+            _require(file_id.startswith("file-"), "file upload response missing file id")
+            _require(upload.get("filename") == source.name, "file upload response returned unexpected filename")
+            _require(int(upload.get("bytes") or -1) == source.stat().st_size, "file upload response returned unexpected byte size")
+            _require(upload.get("purpose") == file_smoke_purpose, "file upload response returned unexpected purpose")
+
+            list_status, listed, list_headers = _request(
+                base_url,
+                "/v1/files",
+                timeout=timeout,
+                api_key=api_key,
+            )
+            _require(list_status == 200, f"/v1/files returned {list_status}")
+            _require("x-request-id" in {key.lower(): value for key, value in list_headers.items()}, "file list response missing X-Request-ID")
+            _require(listed.get("object") == "list", "file list response is not an OpenAI list")
+            _require(any(item.get("id") == file_id for item in listed.get("data", [])), "file list response missing uploaded file")
+
+            detail_status, detail, detail_headers = _request(
+                base_url,
+                f"/v1/files/{file_id}",
+                timeout=timeout,
+                api_key=api_key,
+            )
+            _require(detail_status == 200, f"/v1/files/{file_id} returned {detail_status}")
+            _require("x-request-id" in {key.lower(): value for key, value in detail_headers.items()}, "file detail response missing X-Request-ID")
+            _require(detail.get("id") == file_id, "file detail returned unexpected id")
+
+            content_status, content_body, content_headers = _raw_request(
+                base_url,
+                f"/v1/files/{file_id}/content",
+                timeout=timeout,
+                api_key=api_key,
+            )
+            _require(content_status == 200, f"/v1/files/{file_id}/content returned {content_status}")
+            _require("x-request-id" in {key.lower(): value for key, value in content_headers.items()}, "file content response missing X-Request-ID")
+            expected_body = source.read_bytes().decode("utf-8", errors="replace")
+            _require(content_body == expected_body, "file content response did not match uploaded file")
+
+            native_status, native, native_headers = _request(
+                base_url,
+                "/v1/gemini/files",
+                timeout=timeout,
+                api_key=api_key,
+            )
+            _require(native_status == 200, f"/v1/gemini/files returned {native_status}")
+            _require("x-request-id" in {key.lower(): value for key, value in native_headers.items()}, "native file list response missing X-Request-ID")
+            _require(any(item.get("id") == file_id for item in native.get("files", [])), "native file list missing uploaded file")
+
+            delete_status, deleted, delete_headers = _request(
+                base_url,
+                f"/v1/files/{file_id}",
+                timeout=timeout,
+                api_key=api_key,
+                method="DELETE",
+            )
+            _require(delete_status == 200, f"DELETE /v1/files/{file_id} returned {delete_status}")
+            _require("x-request-id" in {key.lower(): value for key, value in delete_headers.items()}, "file delete response missing X-Request-ID")
+            _require(deleted.get("deleted") is True, "file delete response missing deleted=true")
+            missing_status, _, _ = _request(
+                base_url,
+                f"/v1/files/{file_id}",
+                timeout=timeout,
+                api_key=api_key,
+            )
+            _require(missing_status == 404, "deleted file detail should return 404")
+            results.append("file lifecycle ok")
 
     media_status, media, _ = _request(
         base_url,
@@ -768,6 +863,12 @@ def main() -> int:
         help="Verify HEAD /v1/files and HEAD /v1/gemini/files probes.",
     )
     parser.add_argument(
+        "--file-smoke-path",
+        default="",
+        help="Optional local file for a full /v1/files upload/list/read/delete smoke request.",
+    )
+    parser.add_argument("--file-smoke-purpose", default="assistants")
+    parser.add_argument(
         "--responses-prompt",
         default="",
         help="Optional prompt for a real /v1/responses smoke request.",
@@ -822,6 +923,8 @@ def main() -> int:
             probe_endpoints=args.probe_endpoints,
             probe_model=args.probe_model,
             file_probes=args.file_probes,
+            file_smoke_path=args.file_smoke_path or None,
+            file_smoke_purpose=args.file_smoke_purpose,
             responses_prompt=args.responses_prompt or None,
             responses_model=args.responses_model,
             responses_stream=args.responses_stream,

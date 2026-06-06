@@ -318,6 +318,170 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertEqual(seen_heads, ["/v1/files", "/v1/gemini/files"])
         self.assertIn("file probes ok", results)
 
+    def test_smoke_can_check_file_lifecycle(self):
+        uploaded_file_id = "file-smoke-1"
+        seen_delete = False
+
+        def fake_urlopen(request, timeout):
+            nonlocal seen_delete
+            path = request.full_url.replace("http://service", "")
+            auth = request.headers.get("Authorization")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if not auth:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-401"},
+                    BytesIO(
+                        json.dumps(
+                            {"error": {"message": "Invalid or missing API key."}}
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/files" and request.get_method() == "POST":
+                body = request.data.decode("utf-8", errors="replace")
+                self.assertIn('name="purpose"', body)
+                self.assertIn("assistants", body)
+                self.assertIn('name="file"; filename="smoke.txt"', body)
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "id": uploaded_file_id,
+                        "object": "file",
+                        "filename": "smoke.txt",
+                        "bytes": 11,
+                        "purpose": "assistants",
+                    },
+                    {"X-Request-ID": "req-file-upload"},
+                )
+            if path == "/v1/files" and request.get_method() == "GET":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "object": "list",
+                        "data": [
+                            {
+                                "id": uploaded_file_id,
+                                "object": "file",
+                                "filename": "smoke.txt",
+                                "bytes": 11,
+                                "purpose": "assistants",
+                            }
+                        ],
+                    },
+                    {"X-Request-ID": "req-file-list"},
+                )
+            if path == f"/v1/files/{uploaded_file_id}" and request.get_method() == "GET":
+                if seen_delete:
+                    raise urllib.error.HTTPError(
+                        request.full_url,
+                        404,
+                        "Not Found",
+                        {"X-Request-ID": "req-file-missing"},
+                        BytesIO(json.dumps({"error": {"message": "not found"}}).encode("utf-8")),
+                    )
+                return FakeHTTPResponse(
+                    200,
+                    {"id": uploaded_file_id, "object": "file", "purpose": "assistants"},
+                    {"X-Request-ID": "req-file-detail"},
+                )
+            if path == f"/v1/files/{uploaded_file_id}/content":
+                return FakeHTTPResponse(
+                    200,
+                    headers={"X-Request-ID": "req-file-content"},
+                    body="hello smoke",
+                )
+            if path == "/v1/gemini/files":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "files": [
+                            {
+                                "id": uploaded_file_id,
+                                "filename": "smoke.txt",
+                                "size": 11,
+                            }
+                        ],
+                    },
+                    {"X-Request-ID": "req-native-files"},
+                )
+            if path == f"/v1/files/{uploaded_file_id}" and request.get_method() == "DELETE":
+                seen_delete = True
+                return FakeHTTPResponse(
+                    200,
+                    {"id": uploaded_file_id, "object": "file", "deleted": True},
+                    {"X-Request-ID": "req-file-delete"},
+                )
+            raise AssertionError(path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            smoke_file = f"{tmp}\\smoke.txt"
+            with open(smoke_file, "w", encoding="utf-8") as handle:
+                handle.write("hello smoke")
+            with patch("urllib.request.urlopen", fake_urlopen):
+                results = smoke_deploy.run_smoke(
+                    "http://service",
+                    "sk-test",
+                    file_smoke_path=smoke_file,
+                )
+
+        self.assertTrue(seen_delete)
+        self.assertIn("file lifecycle ok", results)
+
+    def test_smoke_checks_file_lifecycle_api_key_protection(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            raise urllib.error.HTTPError(
+                request.full_url,
+                401,
+                "Unauthorized",
+                {"X-Request-ID": "req-401"},
+                BytesIO(
+                    json.dumps(
+                        {"error": {"message": "Invalid or missing API key."}}
+                    ).encode("utf-8")
+                ),
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            smoke_file = f"{tmp}\\smoke.txt"
+            with open(smoke_file, "w", encoding="utf-8") as handle:
+                handle.write("hello smoke")
+            with patch("urllib.request.urlopen", fake_urlopen):
+                results = smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    file_smoke_path=smoke_file,
+                )
+
+        self.assertIn("file lifecycle protection ok", results)
+
     def test_smoke_checks_file_probe_api_key_protection(self):
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")

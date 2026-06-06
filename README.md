@@ -135,6 +135,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --file-probes
 ```
 
+需要验证 OpenAI 兼容文件接口的完整生命周期时，可以传入一个本地小文件。脚本会实际调用 `/v1/files` 上传、列表、详情、内容读取、`/v1/gemini/files` 原生列表和删除；不会触发模型调用：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --file-smoke-path ./sample.txt
+```
+
 需要验证媒体历史和代理链接结构时，可以加 `--media-history`。这不会触发模型调用，只会检查 `/v1/gemini/media` 是否能返回媒体索引、原始 URL 和 `content_url`：
 
 ```sh
