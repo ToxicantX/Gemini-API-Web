@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 
 _ACTIVE_API_KEY_HEADER = "authorization"
+_SMOKE_USER_AGENT = "Gemini-API-Web-Smoke/1.0"
 _CORS_REQUEST_HEADERS = (
     "authorization",
     "x-api-key",
@@ -91,7 +92,11 @@ def _raw_request(
     body: dict | None = None,
 ) -> tuple[int, str, dict[str, str]]:
     url = f"{base_url.rstrip('/')}{path}"
-    request_headers = {"Accept": "application/json"}
+    request_headers = {
+        "Accept": "application/json",
+        # 部分边缘安全规则会拦截 Python urllib 默认 UA，显式设置便于部署冒烟稳定通过。
+        "User-Agent": _SMOKE_USER_AGENT,
+    }
     if headers:
         request_headers.update(headers)
     if api_key:
@@ -197,6 +202,8 @@ def _raw_multipart_request(
     headers = {
         "Accept": "application/json",
         "Content-Type": f"multipart/form-data; boundary={boundary}",
+        # 部分边缘安全规则会拦截 Python urllib 默认 UA，显式设置便于部署冒烟稳定通过。
+        "User-Agent": _SMOKE_USER_AGENT,
     }
     if api_key:
         headers.update(_api_key_auth_header(api_key, api_key_header))
@@ -561,7 +568,7 @@ def _run_smoke_impl(
     media_content_probe_limit: int = 3,
     probe_endpoints: bool = False,
     error_probes: bool = False,
-    probe_model: str = "gemini",
+    probe_model: str = "gemini-3.1-pro",
     file_probes: bool = False,
     file_smoke_path: str | None = None,
     file_smoke_purpose: str = "assistants",
@@ -683,7 +690,11 @@ def _run_smoke_impl(
         )
         _require(models_status == 200, f"/v1/models with API key returned {models_status}")
         _require(models.get("object") == "list", "/v1/models did not return an OpenAI list")
-        _require(any(item.get("id") == "gemini" for item in models.get("data", [])), "/v1/models missing gemini")
+        model_ids = {item.get("id") for item in models.get("data", [])}
+        _require(
+            {"gemini-3.1-pro", "gemini-3.5-flash", "gemini-3.1-flash-lite"}.issubset(model_ids),
+            "/v1/models missing current Gemini models",
+        )
         _require("x-request-id" in {key.lower(): value for key, value in headers.items()}, "authorized response missing X-Request-ID")
         results.append("authorized models ok")
 
@@ -1623,7 +1634,7 @@ def run_smoke(
     media_content_probe_limit: int = 3,
     probe_endpoints: bool = False,
     error_probes: bool = False,
-    probe_model: str = "gemini",
+    probe_model: str = "gemini-3.1-pro",
     file_probes: bool = False,
     file_smoke_path: str | None = None,
     file_smoke_purpose: str = "assistants",
@@ -1815,7 +1826,7 @@ def main() -> int:
         action="store_true",
         help="Verify OpenAI-compatible 401/404/405 error responses and request IDs.",
     )
-    parser.add_argument("--probe-model", default="gemini")
+    parser.add_argument("--probe-model", default="gemini-3.1-pro")
     parser.add_argument(
         "--file-probes",
         action="store_true",

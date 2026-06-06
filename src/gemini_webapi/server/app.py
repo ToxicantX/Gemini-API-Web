@@ -287,10 +287,6 @@ class ImageGenerationRequest(BaseModel):
     store_media: bool = False
 
 
-MODEL_ALIASES = {
-    "gemini": "gemini-3.1-pro",
-}
-
 PUBLIC_MODEL_IDS = {
     "gemini-3.1-pro",
     "gemini-3.5-flash",
@@ -953,10 +949,7 @@ def _legacy_function_call_from_tool_call(tool_call: dict[str, Any]) -> dict[str,
 
 
 def _openai_model_ids() -> list[str]:
-    return [
-        "gemini",
-        *PUBLIC_MODEL_ORDER,
-    ]
+    return list(PUBLIC_MODEL_ORDER)
 
 
 def _openai_model_object(model_id: str, created: int | None = None) -> dict[str, Any]:
@@ -993,19 +986,19 @@ def _resolve_model_arg(model: str | None) -> str | None:
         raise ValueError(
             f"Model '{model}' is no longer exposed. Use gemini-3.1-pro, gemini-3.5-flash, or gemini-3.1-flash-lite."
         )
-    resolved = MODEL_ALIASES.get(model_key, model_key)
-    if resolved not in PUBLIC_MODEL_IDS:
+    if model_key not in PUBLIC_MODEL_IDS:
         raise ValueError(
-            f"Unsupported model '{model}'. Use gemini, gemini-3.1-pro, gemini-3.5-flash, or gemini-3.1-flash-lite."
+            f"Unsupported model '{model}'. Use gemini-3.1-pro, gemini-3.5-flash, or gemini-3.1-flash-lite."
         )
-    return resolved
+    return model_key
 
 
 def _resolve_openai_image_model_arg(model: str | None) -> str | None:
     """解析 OpenAI 图片端点的模型名；兼容图片模型别名但不加入公开模型列表。"""
     model_key = (model or "").strip().lower()
     if model_key in OPENAI_IMAGE_MODEL_ALIASES:
-        return _resolve_model_arg("gemini")
+        # 图片端点兼容 OpenAI 图片模型名，但内部仍落到当前真实 Gemini 模型。
+        return "gemini-3.1-pro"
     return _resolve_model_arg(model)
 
 

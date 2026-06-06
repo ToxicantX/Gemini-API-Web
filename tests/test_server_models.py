@@ -31,8 +31,6 @@ class ServerModelTests(unittest.TestCase):
         )
 
     def test_resolves_only_current_public_models(self):
-        self.assertEqual(_resolve_model_arg("gemini"), "gemini-3.1-pro")
-        self.assertEqual(_resolve_model_arg(" GEMINI "), "gemini-3.1-pro")
         self.assertEqual(_resolve_model_arg("gemini-3.1-pro"), "gemini-3.1-pro")
         self.assertEqual(_resolve_model_arg(" Gemini-3.1-Pro "), "gemini-3.1-pro")
         self.assertEqual(_resolve_model_arg("gemini-3.5-flash"), "gemini-3.5-flash")
@@ -59,6 +57,8 @@ class ServerModelTests(unittest.TestCase):
 
     def test_unknown_models_are_rejected(self):
         for model in (
+            "gemini",
+            " GEMINI ",
             "gemini-3.1-pro-plus",
             "gemini-3.5-flash-advanced",
             "not-a-real-model",
@@ -81,7 +81,6 @@ class ServerModelTests(unittest.TestCase):
         self.assertEqual(
             _openai_model_ids(),
             [
-                "gemini",
                 "gemini-3.1-flash-lite",
                 "gemini-3.5-flash",
                 "gemini-3.1-pro",
