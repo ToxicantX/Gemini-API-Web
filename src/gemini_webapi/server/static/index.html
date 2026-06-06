@@ -480,7 +480,9 @@
             <div class="card"><strong id="metricMedia">0</strong><span class="hint">媒体索引</span></div>
             <div class="card"><strong id="metricErrorRate">0%</strong><span class="hint">最近错误率</span></div>
             <div class="card"><strong id="metricWarnings">0</strong><span class="hint">预警项</span></div>
+            <div class="card"><strong id="metricReadiness">未知</strong><span class="hint">调用就绪</span></div>
           </div>
+          <div id="readinessPanel" class="notice">正在检查外部调用就绪状态...</div>
           <div class="charts">
             <div class="chart-box">
               <div class="row"><b>错误率</b><span id="errorGaugeText" class="hint">最近 80 条</span></div>
@@ -498,7 +500,7 @@
             <div id="mediaCooldownOverview" class="cooldown-grid"></div>
           </div>
           <div class="three">
-            <div class="item"><b>Gemini 3.1 Pro</b><span class="hint">model: gemini 或 gemini-3.1-pro</span></div>
+            <div class="item"><b>Gemini 3.1 Pro</b><span class="hint">model: gemini-3.1-pro</span></div>
             <div class="item"><b>Gemini 3.5 Flash</b><span class="hint">model: gemini-3.5-flash</span></div>
             <div class="item"><b>Gemini 3.1 Flash-Lite</b><span class="hint">model: gemini-3.1-flash-lite</span></div>
           </div>
@@ -534,7 +536,6 @@
           <div class="stack">
             <label>模型
               <select id="nativeModel">
-                <option value="gemini">gemini / 3.1 Pro</option>
                 <option value="gemini-3.1-pro">gemini-3.1-pro</option>
                 <option value="gemini-3.5-flash">gemini-3.5-flash</option>
                 <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
@@ -635,7 +636,6 @@
               </label>
               <label>模型
                 <select id="mediaGenerateModel">
-                  <option value="gemini">gemini / 3.1 Pro</option>
                   <option value="gemini-3.1-pro">gemini-3.1-pro</option>
                   <option value="gemini-3.5-flash">gemini-3.5-flash</option>
                   <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
@@ -791,7 +791,7 @@
   </div>
 
   <script>
-    const state = { status: null, logs: [], media: [], mediaCooldowns: null, gems: [], jobs: [], files: [], mediaFiles: [], systemSettings: null, authWindow: null, adminReady: false };
+    const state = { status: null, readiness: null, logs: [], media: [], mediaCooldowns: null, gems: [], jobs: [], files: [], mediaFiles: [], systemSettings: null, authWindow: null, adminReady: false };
     const $ = id => document.getElementById(id);
 
     function storedApiKey() { return localStorage.getItem("gemini-api-key") || ""; }
@@ -912,7 +912,7 @@
     }
 
     async function refreshAll() {
-      await Promise.all([refreshStatus(), refreshLogs(), refreshMedia(), refreshMediaCooldowns(), refreshJobs()]);
+      await Promise.all([refreshStatus(), refreshReadiness(), refreshLogs(), refreshMedia(), refreshMediaCooldowns(), refreshJobs()]);
     }
     async function refreshStatus() {
       try {
@@ -928,6 +928,15 @@
       } catch (error) {
         $("healthDot").classList.remove("ok");
         setMsg(`离线：${error.message}`);
+      }
+    }
+    async function refreshReadiness() {
+      try {
+        state.readiness = await api("/v1/generation-readiness");
+        renderMetrics();
+      } catch (error) {
+        state.readiness = { ok: false, ready: false, reasons: [{ code: "readiness_error", message: error.message }] };
+        renderMetrics();
       }
     }
     async function refreshLogs() {
@@ -974,8 +983,45 @@
       $("metricMedia").textContent = state.media.length;
       $("metricErrorRate").textContent = `${errorRate}%`;
       $("metricWarnings").textContent = warnings.length;
+      $("metricReadiness").textContent = state.readiness?.ready ? "就绪" : "未就绪";
+      renderReadinessPanel();
       renderDashboardCharts(errorRate, warnings);
       renderMediaCooldownOverview(accounts);
+    }
+    function readinessReasonText(reason) {
+      const map = {
+        no_accounts: "还没有授权 Gemini 账户，请到“账户设置”使用网页授权或手动添加 Cookie。",
+        no_available_accounts: "账户都已停用或过期，请重新验证、启用或重新授权。",
+        readiness_error: "调用就绪检查失败，请检查外部 API Key、管理员会话或服务状态。",
+      };
+      return map[reason?.code] || reason?.message || "当前还不能确认生成条件。";
+    }
+    function renderReadinessPanel() {
+      const data = state.readiness;
+      if (!data) {
+        $("readinessPanel").className = "notice";
+        $("readinessPanel").textContent = "正在检查外部调用就绪状态...";
+        return;
+      }
+      const accounts = data.accounts || {};
+      const ready = data.ready === true;
+      const reasons = data.reasons || [];
+      $("readinessPanel").className = `notice ${ready ? "" : "danger"}`.trim();
+      $("readinessPanel").innerHTML = `
+        <div class="diagnostic">
+          <div>
+            <div class="diagnostic-title">${ready ? "外部调用已就绪" : "外部调用未就绪"}</div>
+            <div class="hint">
+              账户 ${accounts.available ?? 0}/${accounts.total ?? 0} 可用，
+              当前账户 #${accounts.current_account_id ?? "-"}。
+              ${ready ? "OpenAI 兼容接口和 Gemini 原生接口可以开始真实生成。" : reasons.map(readinessReasonText).join(" ")}
+            </div>
+          </div>
+          <div class="diagnostic-actions">
+            <button data-panel-action="auth">网页授权</button>
+            <button data-panel-action="validate-all">验证全部账户</button>
+          </div>
+        </div>`;
     }
     function dashboardWarnings(accounts, errorRate) {
       const warnings = [];
@@ -1579,7 +1625,7 @@
       await api("/v1/settings", { method: "PATCH", body: JSON.stringify({ switch_on_uses: Number($("switchOnUses").value || 0), failure_threshold: Number($("failureThreshold").value || 0) }) });
       await refreshStatus();
     };
-    $("currentAccountPanel").onclick = async event => {
+    async function handleAccountPanelAction(event) {
       const btn = event.target.closest("button[data-panel-action]");
       if (!btn) return;
       const action = btn.dataset.panelAction;
@@ -1594,7 +1640,9 @@
       if (action === "validate-all") {
         $("validateAllBtn").click();
       }
-    };
+    }
+    $("readinessPanel").onclick = handleAccountPanelAction;
+    $("currentAccountPanel").onclick = handleAccountPanelAction;
     $("switchNextBtn").onclick = async () => { await api("/v1/accounts/switch", { method: "POST", body: "{}" }); await refreshAll(); };
     async function startAuth() {
       const data = await api("/v1/auth/session", { method: "POST", body: "{}" });
