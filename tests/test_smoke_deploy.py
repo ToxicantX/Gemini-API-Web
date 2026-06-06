@@ -174,6 +174,32 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {"object": "list", "data": [{"id": "gemini"}]},
                 )
+            if path == "/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"X-Request-ID": "req-models-alias"},
+                )
+            if path == "/models/gemini":
+                self.assertEqual(request.get_method(), "HEAD")
+                return FakeHTTPResponse(
+                    200,
+                    headers={"X-Request-ID": "req-model-alias-head"},
+                    body="",
+                )
+            if path == "/v1/engines":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"X-Request-ID": "req-engines"},
+                )
+            if path == "/v1/engines/gemini":
+                self.assertEqual(request.get_method(), "HEAD")
+                return FakeHTTPResponse(
+                    200,
+                    headers={"X-Request-ID": "req-engine-head"},
+                    body="",
+                )
             if path == "/v1":
                 return FakeHTTPResponse(
                     200,

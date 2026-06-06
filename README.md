@@ -123,7 +123,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 
 如果还没有生成 API Key，可以先不传 `--api-key`；脚本会确认外部 `/v1/*` 已被 401 正确保护。
 
-需要验证外部 SDK 或 API 网关常用的非消耗型探测端点时，可以加 `--probe-endpoints`。脚本会检查 `/v1`、`HEAD /v1/models` 和 `/v1/models/{model}`：
+需要验证外部 SDK 或 API 网关常用的非消耗型探测端点时，可以加 `--probe-endpoints`。脚本会检查 `/v1`、`HEAD /v1/models`、`/v1/models/{model}`，以及根路径误填和旧版 SDK 常用的 `/models`、`/models/{model}`、`/v1/engines`、`/v1/engines/{model}` 只读别名：
 
 ```sh
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --probe-endpoints

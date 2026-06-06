@@ -220,6 +220,42 @@ def run_smoke(
             _require(detail.get("object") == "model", "model detail is not an OpenAI model object")
             _require(detail.get("id") == probe_model, "model detail returned unexpected id")
             _require("x-request-id" in {key.lower(): value for key, value in detail_headers.items()}, "model detail response missing X-Request-ID")
+            alias_status, alias_models, alias_headers = _request(
+                base_url,
+                "/models",
+                timeout=timeout,
+                api_key=api_key,
+            )
+            _require(alias_status == 200, f"/models returned {alias_status}")
+            _require(alias_models.get("object") == "list", "/models did not return an OpenAI list")
+            _require("x-request-id" in {key.lower(): value for key, value in alias_headers.items()}, "/models response missing X-Request-ID")
+            alias_head_status, _, alias_head_headers = _raw_request(
+                base_url,
+                f"/models/{probe_model}",
+                timeout=timeout,
+                api_key=api_key,
+                method="HEAD",
+            )
+            _require(alias_head_status == 200, f"HEAD /models/{probe_model} returned {alias_head_status}")
+            _require("x-request-id" in {key.lower(): value for key, value in alias_head_headers.items()}, "HEAD /models/{model} missing X-Request-ID")
+            engines_status, engines, engines_headers = _request(
+                base_url,
+                "/v1/engines",
+                timeout=timeout,
+                api_key=api_key,
+            )
+            _require(engines_status == 200, f"/v1/engines returned {engines_status}")
+            _require(engines.get("object") == "list", "/v1/engines did not return an OpenAI list")
+            _require("x-request-id" in {key.lower(): value for key, value in engines_headers.items()}, "/v1/engines response missing X-Request-ID")
+            engine_head_status, _, engine_head_headers = _raw_request(
+                base_url,
+                f"/v1/engines/{probe_model}",
+                timeout=timeout,
+                api_key=api_key,
+                method="HEAD",
+            )
+            _require(engine_head_status == 200, f"HEAD /v1/engines/{probe_model} returned {engine_head_status}")
+            _require("x-request-id" in {key.lower(): value for key, value in engine_head_headers.items()}, "HEAD /v1/engines/{model} missing X-Request-ID")
             results.append("endpoint probes ok")
 
     if file_probes:
