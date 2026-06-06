@@ -129,6 +129,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --responses-prompt "用一句话回复 ok" --responses-model gemini
 ```
 
+如果外部客户端会使用 Responses 流式事件，可以再加 `--responses-stream`，脚本会额外验证 `response.completed` 事件和 `[DONE]` 结束标记：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --responses-prompt "用一句话回复 ok" --responses-stream
+```
+
 需要验证 OpenAI 图片端点时，可以显式传入 `--image-prompt`。这会实际调用 `/v1/images/generations` 并消耗一次图片生成次数：
 
 ```sh

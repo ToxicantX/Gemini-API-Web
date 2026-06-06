@@ -99,6 +99,16 @@ def _sse_data_items(body_text: str) -> list[str]:
     return items
 
 
+def _sse_event_names(body_text: str) -> list[str]:
+    events: list[str] = []
+    for line in body_text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("event:"):
+            continue
+        events.append(stripped.removeprefix("event:").strip())
+    return events
+
+
 def run_smoke(
     base_url: str,
     api_key: str | None,
@@ -113,6 +123,7 @@ def run_smoke(
     image_response_format: str = "url",
     responses_prompt: str | None = None,
     responses_model: str = "gemini",
+    responses_stream: bool = False,
     fail_on_warnings: bool = False,
 ) -> list[str]:
     results: list[str] = []
@@ -291,6 +302,31 @@ def run_smoke(
         )
         results.append("responses api ok")
 
+        if responses_stream:
+            stream_status, stream_body, stream_headers = _raw_request(
+                base_url,
+                "/v1/responses",
+                api_key=api_key,
+                method="POST",
+                body={
+                    "model": responses_model,
+                    "input": responses_prompt,
+                    "stream": True,
+                },
+            )
+            _require(stream_status == 200, f"stream /v1/responses returned {stream_status}")
+            content_type = next(
+                (value for key, value in stream_headers.items() if key.lower() == "content-type"),
+                "",
+            )
+            _require("text/event-stream" in content_type.lower(), "responses stream is not text/event-stream")
+            _require("x-request-id" in {key.lower(): value for key, value in stream_headers.items()}, "responses stream missing X-Request-ID")
+            events = _sse_event_names(stream_body)
+            data_items = _sse_data_items(stream_body)
+            _require("response.completed" in events, "responses stream missing response.completed event")
+            _require("[DONE]" in data_items, "responses stream missing [DONE]")
+            results.append("responses stream ok")
+
     return results
 
 
@@ -329,6 +365,11 @@ def main() -> int:
     )
     parser.add_argument("--responses-model", default="gemini")
     parser.add_argument(
+        "--responses-stream",
+        action="store_true",
+        help="Also verify streaming /v1/responses when --responses-prompt is set.",
+    )
+    parser.add_argument(
         "--fail-on-warnings",
         action="store_true",
         help="Fail when /health reports deployment warnings.",
@@ -348,6 +389,7 @@ def main() -> int:
             image_response_format=args.image_response_format,
             responses_prompt=args.responses_prompt or None,
             responses_model=args.responses_model,
+            responses_stream=args.responses_stream,
             fail_on_warnings=args.fail_on_warnings,
         )
     except Exception as exc:
