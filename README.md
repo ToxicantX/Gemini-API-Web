@@ -152,9 +152,9 @@ environment:
   ADMIN_PASSWORD: ""
   ADMIN_SESSION_SECRET: ""
   ADMIN_COOKIE_SECURE: "false"
-  REQUIRE_API_KEY: "false"
+  REQUIRE_API_KEY: "true"
   API_KEYS: ""
-  CORS_ALLOW_ORIGINS: "*"
+  CORS_ALLOW_ORIGINS: "https://your-panel.example.com"
 ```
 
 含义：
@@ -171,7 +171,7 @@ environment:
 - `ADMIN_COOKIE_SECURE`：管理员会话 Cookie 是否只允许 HTTPS 发送。直连本地 HTTP 保持 `false`；通过 HTTPS 域名反向代理部署时建议设为 `true`。
 - `REQUIRE_API_KEY`：是否强制外部 `/v1/*` 接口必须使用 API Key。服务器部署建议设为 `true`；即使暂未配置或生成 API Key，也不会让外部接口无密钥开放。
 - `API_KEYS`：外部调用鉴权密钥，多个值可用英文逗号分隔；也可以在管理端“系统设置”里生成和管理。
-- `CORS_ALLOW_ORIGINS`：允许浏览器跨域调用的来源，默认 `*`。公网部署时建议改成你的面板域名，多个来源用英文逗号分隔。
+- `CORS_ALLOW_ORIGINS`：允许浏览器跨域调用的来源，Docker Compose 默认使用示例面板域名。公网部署时建议改成你的实际面板或调用方域名，多个来源用英文逗号分隔；本地调试需要任意来源时可手动设为 `*`。
 
 开启 `REQUIRE_API_KEY=true` 时，至少需要同时配置 `API_KEYS` 或 `ADMIN_PASSWORD` 之一：前者可直接给外部客户端调用，后者可先登录管理端再到“系统设置”生成第一个 API Key。若两者都为空，外部接口会被拒绝，`/health` 会返回配置告警。
 
