@@ -12,6 +12,13 @@ from urllib.parse import urlparse
 
 
 _ACTIVE_API_KEY_HEADER = "authorization"
+_CORS_REQUEST_HEADERS = (
+    "authorization",
+    "x-api-key",
+    "api-key",
+    "openai-api-key",
+    "content-type",
+)
 
 
 def _normalize_api_key_header(value: str | None) -> str:
@@ -407,9 +414,16 @@ def _require_cors_preflight(
         allow_origin in {origin, "*"},
         f"{label} CORS preflight returned unexpected allow-origin",
     )
-    allow_headers = lower_headers.get("access-control-allow-headers", "").lower()
-    _require("authorization" in allow_headers, f"{label} CORS preflight missing authorization header")
-    _require("content-type" in allow_headers, f"{label} CORS preflight missing content-type header")
+    allow_headers = {
+        item.strip().lower()
+        for item in lower_headers.get("access-control-allow-headers", "").split(",")
+        if item.strip()
+    }
+    for header_name in _CORS_REQUEST_HEADERS:
+        _require(
+            header_name in allow_headers,
+            f"{label} CORS preflight missing {header_name} header",
+        )
     allow_methods = lower_headers.get("access-control-allow-methods", "").lower()
     _require("post" in allow_methods, f"{label} CORS preflight missing POST method")
     _require("x-request-id" in lower_headers, f"{label} CORS preflight missing X-Request-ID")
@@ -620,7 +634,7 @@ def _run_smoke_impl(
             headers={
                 "Origin": cors_origin,
                 "Access-Control-Request-Method": "POST",
-                "Access-Control-Request-Headers": "authorization,content-type",
+                "Access-Control-Request-Headers": ",".join(_CORS_REQUEST_HEADERS),
                 "X-Request-ID": "smoke-cors-preflight",
             },
         )
