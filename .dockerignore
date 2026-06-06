@@ -4,6 +4,15 @@
 assets
 tests
 data
+.env
+.env.*
+!.env.example
+accounts.json
+cookies.json
+*.db
+*.sqlite
+*.sqlite3
+media-cache
 __pycache__
 *.pyc
 *.pyo

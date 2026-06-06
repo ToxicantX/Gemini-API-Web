@@ -36,6 +36,29 @@ class DeploymentFileTests(unittest.TestCase):
         self.assertNotIn("6080:6080", compose)
         self.assertNotIn('"6080:6080"', compose)
 
+    def test_dockerignore_excludes_sensitive_runtime_files(self):
+        dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+        entries = {
+            line.strip()
+            for line in dockerignore.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+
+        # 构建镜像时也不能把本地真实 Cookie、数据库或 .env 发送进 Docker build context。
+        for entry in (
+            "data",
+            ".env",
+            ".env.*",
+            "!.env.example",
+            "accounts.json",
+            "cookies.json",
+            "*.db",
+            "*.sqlite",
+            "*.sqlite3",
+            "media-cache",
+        ):
+            self.assertIn(entry, entries)
+
     def test_compose_passes_server_deployment_env(self):
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
