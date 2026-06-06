@@ -133,7 +133,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 需要验证外部 SDK 或 API 网关常用的非消耗型探测端点时，可以加 `--probe-endpoints`。脚本会检查 `/v1`、`HEAD /v1/models`、`/v1/models/{model}`，以及根路径误填和旧版 SDK 常用的 `/models`、`/models/{model}`、`/v1/engines`、`/v1/engines/{model}` 只读别名：
 
 ```sh
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --probe-endpoints
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --probe-endpoints --probe-model gemini
 ```
 
 需要验证外部客户端常见错误路径时，可以加 `--error-probes`。脚本会检查未授权的 `401`、不存在接口的 `404` 和错误方法的 `405` 是否都返回 OpenAI 兼容错误体，并带有 `X-Request-ID`，不会触发模型调用：
@@ -157,7 +157,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 需要验证 OpenAI 兼容文件接口的完整生命周期时，可以传入一个本地小文件。脚本会实际调用 `/v1/files` 上传、列表、详情、内容读取、`/v1/gemini/files` 原生列表和删除；不会触发模型调用：
 
 ```sh
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --file-smoke-path ./sample.txt
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --file-smoke-path ./sample.txt --file-smoke-purpose assistants
 ```
 
 需要验证媒体历史和代理链接结构时，可以加 `--media-history`。这不会触发模型调用，只会检查 `/v1/gemini/media` 是否能返回媒体索引、原始 URL 和 `content_url`：
@@ -175,7 +175,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 如果已经有媒体历史记录，还可以同时验证 `content_url` 的公开内容链接是否支持 `HEAD` 探测，适合检查反向代理和外部客户端预览链路：
 
 ```sh
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --media-history --media-content-probes
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --media-history --media-content-probes --media-content-probe-limit 3
 ```
 
 也可以同时验证管理员登录链路，确认登录 Cookie 能访问管理接口：
@@ -199,7 +199,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 需要验证旧版 OpenAI Completions API 时，可以显式传入 `--completion-prompt`，脚本会实际调用 `/v1/completions` 并校验 `text_completion` 返回结构：
 
 ```sh
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --completion-prompt "补全这句话：Gemini API Web"
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --completion-prompt "补全这句话：Gemini API Web" --completion-model gemini
 ```
 
 如果外部客户端会使用 Completions 流式响应，可以再加 `--completion-stream`，脚本会额外验证 `text_completion.chunk` 和 `[DONE]` 结束标记：
@@ -235,21 +235,21 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 需要验证 OpenAI 图片端点时，可以显式传入 `--image-prompt`。这会实际调用 `/v1/images/generations` 并消耗一次图片生成次数：
 
 ```sh
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --image-prompt "生成一张简单的蓝色图标" --image-model gpt-image-2
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --image-prompt "生成一张简单的蓝色图标" --image-model gpt-image-2 --image-response-format url
 ```
 
 需要验证 OpenAI 图片编辑或图片变体端点时，可以传入本地图片文件。脚本会实际调用 `/v1/images/edits` 或 `/v1/images/variations`，并消耗一次图片生成次数：
 
 ```sh
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --image-edit-file ./source.png --image-edit-prompt "把背景改成浅蓝色"
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --image-edit-file ./source.png --image-edit-prompt "把背景改成浅蓝色" --image-edit-mask-file ./mask.png
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --image-variation-file ./source.png
 ```
 
 需要验证 OpenAI 音频转写或翻译端点时，可以传入本地音频文件。脚本会使用 multipart/form-data 实际调用 `/v1/audio/transcriptions` 或 `/v1/audio/translations`，并校验返回的 `text` 字段：
 
 ```sh
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --audio-transcription-file ./sample.wav
-python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --audio-translation-file ./sample.mp3
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --audio-transcription-file ./sample.wav --audio-model gemini
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --audio-translation-file ./sample.mp3 --audio-model gemini
 ```
 
 如果外部客户端使用非 JSON 音频响应，可以加 `--audio-response-format text|verbose_json|srt|vtt` 验证对应格式：

@@ -193,6 +193,23 @@ class DeploymentFileTests(unittest.TestCase):
         self.assertTrue(documented_flags)
         self.assertEqual(set(), documented_flags - cli_flags)
 
+    def test_key_smoke_cli_flags_are_documented(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        script = (ROOT / "scripts" / "smoke_deploy.py").read_text(encoding="utf-8")
+        documented_flags = {
+            flag
+            for line in readme.splitlines()
+            if "python scripts/smoke_deploy.py" in line
+            for flag in re.findall(r"--[a-z0-9-]+", line)
+        }
+        cli_flags = set(re.findall(r'add_argument\(\s*"(--[a-z0-9-]+)"', script))
+        internal_defaults = {
+            "--base-url",
+        }
+
+        # 部署 smoke 的公开 CLI 参数都应该至少在 README 示例里出现一次，避免有功能却不知道怎么用。
+        self.assertEqual(set(), cli_flags - documented_flags - internal_defaults)
+
 
 if __name__ == "__main__":
     unittest.main()
