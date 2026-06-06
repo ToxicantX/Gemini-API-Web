@@ -366,6 +366,26 @@ def _require_cors_preflight(
     _require("post" in allow_methods, f"{label} CORS preflight missing POST method")
 
 
+def _require_cors_actual_response(
+    status: int,
+    headers: dict[str, str],
+    *,
+    origin: str,
+    label: str,
+) -> None:
+    """校验真实跨域响应头，确保浏览器端能读取排障用的请求编号。"""
+    lower_headers = {key.lower(): value for key, value in headers.items()}
+    _require(status in {200, 401}, f"{label} CORS actual response returned {status}")
+    allow_origin = lower_headers.get("access-control-allow-origin", "")
+    _require(
+        allow_origin in {origin, "*"},
+        f"{label} CORS actual response returned unexpected allow-origin",
+    )
+    expose_headers = lower_headers.get("access-control-expose-headers", "").lower()
+    _require("x-request-id" in expose_headers, f"{label} CORS actual response does not expose X-Request-ID")
+    _require("x-request-id" in lower_headers, f"{label} CORS actual response missing X-Request-ID")
+
+
 def _require_chat_completion_response(data: dict) -> None:
     """校验非流式 Chat Completions 基础结构，贴近 OpenAI SDK 的解析预期。"""
     _require(data.get("object") == "chat.completion", "chat response is not an OpenAI chat completion")
@@ -544,6 +564,20 @@ def _run_smoke_impl(
             label="/v1/chat/completions",
         )
         results.append("cors preflight ok")
+        cors_actual_status, _, cors_actual_headers = _request(
+            base_url,
+            "/v1/models",
+            timeout=timeout,
+            api_key=api_key,
+            headers={"Origin": cors_origin},
+        )
+        _require_cors_actual_response(
+            cors_actual_status,
+            cors_actual_headers,
+            origin=cors_origin,
+            label="/v1/models",
+        )
+        results.append("cors actual response ok")
 
     unauth_status, unauth, unauth_headers = _request(
         base_url,

@@ -150,7 +150,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --health-probes
 ```
 
-需要验证浏览器跨域调用的预检请求时，可以加 `--cors-probes`。脚本会向 `/v1/chat/completions` 发送 `OPTIONS` 预检，并检查 `Authorization`、`Content-Type` 和 `POST` 是否被允许：
+需要验证浏览器跨域调用时，可以加 `--cors-probes`。脚本会向 `/v1/chat/completions` 发送 `OPTIONS` 预检，检查 `Authorization`、`Content-Type` 和 `POST` 是否被允许；随后再带 `Origin` 请求 `/v1/models`，确认真实响应会暴露 `X-Request-ID`，方便前端和外部 SDK 排查线上问题：
 
 ```sh
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --cors-probes --cors-origin https://your-panel.example.com
