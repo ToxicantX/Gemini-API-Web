@@ -186,6 +186,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --readiness-probes
 ```
 
+如果当前确实还没有可用账号，可以加 `--unavailable-generation-probe` 验证外部生成失败形态。这个检查会发送一次 `/v1/chat/completions` 请求；当 `/health` 报告可用账号数为 0 时，预期返回 OpenAI 兼容错误体、HTTP `503` 和 `error.type=service_unavailable`，避免外部客户端误判为 API Key 错误。账号授权完成后不要再使用这个参数，改用 `--require-account` 或真实生成 smoke：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --unavailable-generation-probe
+```
+
 如果已经有媒体历史记录，还可以同时验证 `content_url` 的公开内容链接是否支持 `HEAD` 探测，并检查 `Content-Type` 是否与图片/视频/音频类型匹配、`Content-Length` 是否为合法非负数。这个检查适合发现反向代理、对象存储或 CDN 把媒体响应头弄丢，导致外部客户端无法预览的问题：
 
 ```sh
