@@ -230,6 +230,7 @@ def run_smoke(
     audio_transcription_file: str | None = None,
     audio_translation_file: str | None = None,
     audio_model: str = "gemini",
+    health_probes: bool = False,
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
 ) -> list[str]:
@@ -250,6 +251,29 @@ def run_smoke(
     if fail_on_warnings and warnings:
         # 正式部署前可开启严格模式，把默认密码、默认会话密钥等安全提示直接视为失败。
         raise AssertionError(f"/health returned {len(warnings)} warning(s)")
+
+    if health_probes:
+        # 部署平台和反向代理常用 /healthz、/readyz、/livez 以及 HEAD 探测服务状态。
+        for path in ("/healthz", "/readyz", "/livez"):
+            probe_status, probe, probe_headers = _request(
+                base_url,
+                path,
+                timeout=timeout,
+            )
+            _require(probe_status == 200, f"{path} returned {probe_status}")
+            _require(probe.get("ok") is True, f"{path} did not return ok=true")
+            _require("models" in probe, f"{path} missing models")
+            _require("x-request-id" in {key.lower(): value for key, value in probe_headers.items()}, f"{path} response missing X-Request-ID")
+            head_status, head_body, head_headers = _raw_request(
+                base_url,
+                path,
+                timeout=timeout,
+                method="HEAD",
+            )
+            _require(head_status == 200, f"HEAD {path} returned {head_status}")
+            _require(head_body == "", f"HEAD {path} should not return a body")
+            _require("x-request-id" in {key.lower(): value for key, value in head_headers.items()}, f"HEAD {path} missing X-Request-ID")
+        results.append("health probes ok")
 
     unauth_status, unauth, unauth_headers = _request(
         base_url,
@@ -962,6 +986,11 @@ def main() -> int:
         action="store_true",
         help="Fail when /health reports deployment warnings.",
     )
+    parser.add_argument(
+        "--health-probes",
+        action="store_true",
+        help="Verify GET/HEAD /healthz, /readyz, and /livez deployment probes.",
+    )
     args = parser.parse_args()
     try:
         results = run_smoke(
@@ -995,6 +1024,7 @@ def main() -> int:
             audio_transcription_file=args.audio_transcription_file or None,
             audio_translation_file=args.audio_translation_file or None,
             audio_model=args.audio_model,
+            health_probes=args.health_probes,
             timeout=max(1.0, args.timeout),
             fail_on_warnings=args.fail_on_warnings,
         )

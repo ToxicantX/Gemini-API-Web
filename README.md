@@ -129,6 +129,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --probe-endpoints
 ```
 
+需要验证部署平台或反向代理常用的探活别名时，可以加 `--health-probes`。脚本会检查 `GET/HEAD /healthz`、`GET/HEAD /readyz` 和 `GET/HEAD /livez`：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --health-probes
+```
+
 需要验证文件接口的 HEAD 探测时，可以加 `--file-probes`。脚本会检查 `HEAD /v1/files` 和 `HEAD /v1/gemini/files`，不会上传文件或触发模型调用：
 
 ```sh

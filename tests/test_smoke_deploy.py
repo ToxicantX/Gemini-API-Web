@@ -64,6 +64,66 @@ class SmokeDeployTests(unittest.TestCase):
 
         self.assertEqual(timeouts, [45, 45, 45])
 
+    def test_smoke_can_check_health_probe_aliases(self):
+        seen = []
+
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path in {"/healthz", "/readyz", "/livez"}:
+                seen.append((request.get_method(), path))
+                if request.get_method() == "HEAD":
+                    return FakeHTTPResponse(
+                        200,
+                        headers={"X-Request-ID": f"req-head-{path[1:]}"},
+                        body="",
+                    )
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                    {"X-Request-ID": f"req-get-{path[1:]}"},
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                None,
+                health_probes=True,
+            )
+
+        self.assertEqual(
+            seen,
+            [
+                ("GET", "/healthz"),
+                ("HEAD", "/healthz"),
+                ("GET", "/readyz"),
+                ("HEAD", "/readyz"),
+                ("GET", "/livez"),
+                ("HEAD", "/livez"),
+            ],
+        )
+        self.assertIn("health probes ok", results)
+
     def test_smoke_accepts_api_key_protected_deployment_without_key(self):
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")
