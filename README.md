@@ -147,6 +147,12 @@ Smoke 测试会把 `/health` 返回的部署安全警告打印为 `health warnin
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --fail-on-warnings
 ```
 
+Smoke 测试默认每个 HTTP 请求最多等待 120 秒。图片生成、Responses 流式或代理链路较慢时，可以按需调大：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --chat-prompt "用一句话回复 ok" --timeout 300
+```
+
 ## 添加账号
 
 推荐使用管理端的“网页授权”：

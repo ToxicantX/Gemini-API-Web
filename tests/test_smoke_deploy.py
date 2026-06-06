@@ -34,6 +34,35 @@ class FakeHTTPResponse:
 
 
 class SmokeDeployTests(unittest.TestCase):
+    def test_smoke_uses_configurable_request_timeout(self):
+        timeouts = []
+
+        def fake_urlopen(request, timeout):
+            timeouts.append(timeout)
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            smoke_deploy.run_smoke("http://service", None, timeout=45)
+
+        self.assertEqual(timeouts, [45, 45, 45])
+
     def test_smoke_accepts_api_key_protected_deployment_without_key(self):
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")

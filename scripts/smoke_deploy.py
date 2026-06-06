@@ -11,6 +11,7 @@ def _request(
     base_url: str,
     path: str,
     *,
+    timeout: float,
     api_key: str | None = None,
     headers: dict[str, str] | None = None,
     method: str = "GET",
@@ -19,6 +20,7 @@ def _request(
     status, body_text, response_headers = _raw_request(
         base_url,
         path,
+        timeout=timeout,
         api_key=api_key,
         headers=headers,
         method=method,
@@ -35,6 +37,7 @@ def _raw_request(
     base_url: str,
     path: str,
     *,
+    timeout: float,
     api_key: str | None = None,
     headers: dict[str, str] | None = None,
     method: str = "GET",
@@ -57,7 +60,7 @@ def _raw_request(
         method=method,
     )
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             response_body = response.read()
             status = response.status
             response_headers = dict(response.headers.items())
@@ -124,11 +127,12 @@ def run_smoke(
     responses_prompt: str | None = None,
     responses_model: str = "gemini",
     responses_stream: bool = False,
+    timeout: float = 120.0,
     fail_on_warnings: bool = False,
 ) -> list[str]:
     results: list[str] = []
 
-    health_status, health, _ = _request(base_url, "/health")
+    health_status, health, _ = _request(base_url, "/health", timeout=timeout)
     _require(health_status == 200, f"/health returned {health_status}")
     _require(health.get("ok") is True, "/health did not return ok=true")
     _require("models" in health, "/health missing models")
@@ -144,7 +148,11 @@ def run_smoke(
         # 正式部署前可开启严格模式，把默认密码、默认会话密钥等安全提示直接视为失败。
         raise AssertionError(f"/health returned {len(warnings)} warning(s)")
 
-    unauth_status, unauth, unauth_headers = _request(base_url, "/v1/models")
+    unauth_status, unauth, unauth_headers = _request(
+        base_url,
+        "/v1/models",
+        timeout=timeout,
+    )
     if health.get("auth", {}).get("api_key_required"):
         _require(unauth_status == 401, "/v1/models should require an API key")
         _require("x-request-id" in {key.lower(): value for key, value in unauth_headers.items()}, "401 response missing X-Request-ID")
@@ -155,14 +163,24 @@ def run_smoke(
         results.append("open local api ok")
 
     if api_key:
-        models_status, models, headers = _request(base_url, "/v1/models", api_key=api_key)
+        models_status, models, headers = _request(
+            base_url,
+            "/v1/models",
+            timeout=timeout,
+            api_key=api_key,
+        )
         _require(models_status == 200, f"/v1/models with API key returned {models_status}")
         _require(models.get("object") == "list", "/v1/models did not return an OpenAI list")
         _require(any(item.get("id") == "gemini" for item in models.get("data", [])), "/v1/models missing gemini")
         _require("x-request-id" in {key.lower(): value for key, value in headers.items()}, "authorized response missing X-Request-ID")
         results.append("authorized models ok")
 
-    media_status, media, _ = _request(base_url, "/v1/media-cooldowns", api_key=api_key)
+    media_status, media, _ = _request(
+        base_url,
+        "/v1/media-cooldowns",
+        timeout=timeout,
+        api_key=api_key,
+    )
     if health.get("auth", {}).get("api_key_required") and not api_key:
         _require(media_status == 401, "/v1/media-cooldowns should require an API key")
         results.append("media cooldown protection ok")
@@ -172,7 +190,11 @@ def run_smoke(
         results.append("media cooldown summary ok")
 
     if admin_password:
-        admin_status, admin, _ = _request(base_url, "/v1/admin/status")
+        admin_status, admin, _ = _request(
+            base_url,
+            "/v1/admin/status",
+            timeout=timeout,
+        )
         _require(admin_status == 200, f"/v1/admin/status returned {admin_status}")
         _require(admin.get("enabled") is True, "admin login is not enabled")
         payload = {"password": admin_password}
@@ -185,6 +207,7 @@ def run_smoke(
         login_status, login, login_headers = _request(
             base_url,
             "/v1/admin/login",
+            timeout=timeout,
             method="POST",
             body=payload,
         )
@@ -195,6 +218,7 @@ def run_smoke(
         logs_status, logs, _ = _request(
             base_url,
             "/v1/request-logs",
+            timeout=timeout,
             headers={"Cookie": cookie},
         )
         _require(logs_status == 200, f"/v1/request-logs with admin cookie returned {logs_status}")
@@ -206,6 +230,7 @@ def run_smoke(
         chat_status, chat, chat_headers = _request(
             base_url,
             "/v1/chat/completions",
+            timeout=timeout,
             api_key=api_key,
             method="POST",
             body={
@@ -230,6 +255,7 @@ def run_smoke(
             stream_status, stream_body, stream_headers = _raw_request(
                 base_url,
                 "/v1/chat/completions",
+                timeout=timeout,
                 api_key=api_key,
                 method="POST",
                 body={
@@ -259,6 +285,7 @@ def run_smoke(
         image_status, image, image_headers = _request(
             base_url,
             "/v1/images/generations",
+            timeout=timeout,
             api_key=api_key,
             method="POST",
             body={
@@ -284,6 +311,7 @@ def run_smoke(
         responses_status, responses, responses_headers = _request(
             base_url,
             "/v1/responses",
+            timeout=timeout,
             api_key=api_key,
             method="POST",
             body={
@@ -306,6 +334,7 @@ def run_smoke(
             stream_status, stream_body, stream_headers = _raw_request(
                 base_url,
                 "/v1/responses",
+                timeout=timeout,
                 api_key=api_key,
                 method="POST",
                 body={
@@ -334,6 +363,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke test a deployed Gemini API Web service.")
     parser.add_argument("--base-url", default="http://localhost:7860")
     parser.add_argument("--api-key", default="")
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=120.0,
+        help="Per-request timeout in seconds for smoke HTTP calls.",
+    )
     parser.add_argument("--admin-username", default="")
     parser.add_argument("--admin-password", default="")
     parser.add_argument(
@@ -390,6 +425,7 @@ def main() -> int:
             responses_prompt=args.responses_prompt or None,
             responses_model=args.responses_model,
             responses_stream=args.responses_stream,
+            timeout=max(1.0, args.timeout),
             fail_on_warnings=args.fail_on_warnings,
         )
     except Exception as exc:
