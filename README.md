@@ -132,7 +132,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --auth-header-probes
 ```
 
-需要验证外部 SDK 或 API 网关常用的非消耗型探测端点时，可以加 `--probe-endpoints`。脚本会检查 `/v1`、`HEAD /v1/models`、`/v1/models/{model}`，以及根路径误填和旧版 SDK 常用的 `/models`、`/models/{model}`、`/v1/engines`、`/v1/engines/{model}` 只读别名：
+需要验证外部 SDK 或 API 网关常用的非消耗型探测端点时，可以加 `--probe-endpoints`。脚本会检查 `/v1`、`HEAD /v1/models`、`/v1/models/{model}`，以及根路径误填和旧版 SDK 常用的 `/models`、`/models/{model}`、`/v1/engines`、`/v1/engines/{model}`、`/engines`、`/engines/{model}` 只读别名：
 
 ```sh
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --probe-endpoints --probe-model gemini

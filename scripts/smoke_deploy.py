@@ -803,6 +803,24 @@ def _run_smoke_impl(
             )
             _require(engine_head_status == 200, f"HEAD /v1/engines/{probe_model} returned {engine_head_status}")
             _require("x-request-id" in {key.lower(): value for key, value in engine_head_headers.items()}, "HEAD /v1/engines/{model} missing X-Request-ID")
+            rootless_engines_status, rootless_engines, rootless_engines_headers = _request(
+                base_url,
+                "/engines",
+                timeout=timeout,
+                api_key=api_key,
+            )
+            _require(rootless_engines_status == 200, f"/engines returned {rootless_engines_status}")
+            _require(rootless_engines.get("object") == "list", "/engines did not return an OpenAI list")
+            _require("x-request-id" in {key.lower(): value for key, value in rootless_engines_headers.items()}, "/engines response missing X-Request-ID")
+            rootless_engine_head_status, _, rootless_engine_head_headers = _raw_request(
+                base_url,
+                f"/engines/{probe_model}",
+                timeout=timeout,
+                api_key=api_key,
+                method="HEAD",
+            )
+            _require(rootless_engine_head_status == 200, f"HEAD /engines/{probe_model} returned {rootless_engine_head_status}")
+            _require("x-request-id" in {key.lower(): value for key, value in rootless_engine_head_headers.items()}, "HEAD /engines/{model} missing X-Request-ID")
             results.append("endpoint probes ok")
 
     if file_probes:
@@ -1723,7 +1741,7 @@ def main() -> int:
     parser.add_argument(
         "--probe-endpoints",
         action="store_true",
-        help="Verify /v1 root, HEAD /v1/models, and /v1/models/{model} probes.",
+        help="Verify /v1 root, model, and legacy engine probe endpoints.",
     )
     parser.add_argument(
         "--error-probes",

@@ -842,6 +842,19 @@ class SmokeDeployTests(unittest.TestCase):
                     headers={"X-Request-ID": "req-engine-head"},
                     body="",
                 )
+            if path == "/engines":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"X-Request-ID": "req-rootless-engines"},
+                )
+            if path == "/engines/gemini":
+                self.assertEqual(request.get_method(), "HEAD")
+                return FakeHTTPResponse(
+                    200,
+                    headers={"X-Request-ID": "req-rootless-engine-head"},
+                    body="",
+                )
             if path == "/v1":
                 if request.get_method() == "HEAD":
                     seen_heads.append(path)
