@@ -202,6 +202,9 @@ class DeploymentFileTests(unittest.TestCase):
         self.assertIn("REQUIRE_API_KEY=true", readme)
         self.assertIn("CORS_ALLOW_ORIGINS", readme)
         self.assertIn("OBJECT_STORAGE_ENABLED", readme)
+        self.assertIn("HOST_PORT", readme)
+        self.assertIn("HOST", readme)
+        self.assertIn("PORT", readme)
 
     def test_readme_documents_deployment_smoke_test(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
