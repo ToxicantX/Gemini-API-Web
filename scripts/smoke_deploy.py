@@ -127,6 +127,7 @@ def run_smoke(
     media_history: bool = False,
     probe_endpoints: bool = False,
     probe_model: str = "gemini",
+    file_probes: bool = False,
     responses_prompt: str | None = None,
     responses_model: str = "gemini",
     responses_stream: bool = False,
@@ -220,6 +221,32 @@ def run_smoke(
             _require(detail.get("id") == probe_model, "model detail returned unexpected id")
             _require("x-request-id" in {key.lower(): value for key, value in detail_headers.items()}, "model detail response missing X-Request-ID")
             results.append("endpoint probes ok")
+
+    if file_probes:
+        # 文件接口的 HEAD 探测不读取正文，适合验证外部 SDK 和网关的连通性检查。
+        head_paths = ("/v1/files", "/v1/gemini/files")
+        if health.get("auth", {}).get("api_key_required") and not api_key:
+            status, _, _ = _raw_request(
+                base_url,
+                head_paths[0],
+                timeout=timeout,
+                method="HEAD",
+            )
+            _require(status == 401, "HEAD /v1/files should require an API key")
+            results.append("file probe protection ok")
+        else:
+            for path in head_paths:
+                status, body_text, headers = _raw_request(
+                    base_url,
+                    path,
+                    timeout=timeout,
+                    api_key=api_key,
+                    method="HEAD",
+                )
+                _require(status == 200, f"HEAD {path} returned {status}")
+                _require(body_text == "", f"HEAD {path} should not return a body")
+                _require("x-request-id" in {key.lower(): value for key, value in headers.items()}, f"HEAD {path} missing X-Request-ID")
+            results.append("file probes ok")
 
     media_status, media, _ = _request(
         base_url,
@@ -581,6 +608,11 @@ def main() -> int:
     )
     parser.add_argument("--probe-model", default="gemini")
     parser.add_argument(
+        "--file-probes",
+        action="store_true",
+        help="Verify HEAD /v1/files and HEAD /v1/gemini/files probes.",
+    )
+    parser.add_argument(
         "--responses-prompt",
         default="",
         help="Optional prompt for a real /v1/responses smoke request.",
@@ -634,6 +666,7 @@ def main() -> int:
             media_history=args.media_history,
             probe_endpoints=args.probe_endpoints,
             probe_model=args.probe_model,
+            file_probes=args.file_probes,
             responses_prompt=args.responses_prompt or None,
             responses_model=args.responses_model,
             responses_stream=args.responses_stream,

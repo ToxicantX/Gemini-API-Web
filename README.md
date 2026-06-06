@@ -129,6 +129,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --probe-endpoints
 ```
 
+需要验证文件接口的 HEAD 探测时，可以加 `--file-probes`。脚本会检查 `HEAD /v1/files` 和 `HEAD /v1/gemini/files`，不会上传文件或触发模型调用：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --file-probes
+```
+
 需要验证媒体历史和代理链接结构时，可以加 `--media-history`。这不会触发模型调用，只会检查 `/v1/gemini/media` 是否能返回媒体索引、原始 URL 和 `content_url`：
 
 ```sh
