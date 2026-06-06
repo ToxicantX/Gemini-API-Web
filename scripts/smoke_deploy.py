@@ -130,6 +130,8 @@ def run_smoke(
     completion_prompt: str | None = None,
     completion_model: str = "gemini",
     completion_stream: bool = False,
+    gemini_prompt: str | None = None,
+    gemini_model: str = "gemini",
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
 ) -> list[str]:
@@ -409,6 +411,32 @@ def run_smoke(
             _require("choices" in first_chunk, "completion stream chunk missing choices")
             results.append("completions stream ok")
 
+    if gemini_prompt:
+        # Gemini 原生接口暴露分类输出，适合验证非 OpenAI 兼容调用面的基础结构。
+        gemini_status, gemini, gemini_headers = _request(
+            base_url,
+            "/v1/gemini/generate",
+            timeout=timeout,
+            api_key=api_key,
+            method="POST",
+            body={
+                "model": gemini_model,
+                "prompt": gemini_prompt,
+            },
+        )
+        _require(gemini_status == 200, f"/v1/gemini/generate returned {gemini_status}")
+        _require("x-request-id" in {key.lower(): value for key, value in gemini_headers.items()}, "gemini generate response missing X-Request-ID")
+        _require(gemini.get("ok") is True, "gemini generate body missing ok=true")
+        _require(gemini.get("model") in {gemini_model, "gemini"}, "gemini generate body has unexpected model")
+        _require(isinstance(gemini.get("output"), dict), "gemini generate body missing output object")
+        _require("metadata" in gemini, "gemini generate body missing metadata")
+        output = gemini["output"]
+        _require(
+            bool(output.get("text") or output.get("images") or output.get("videos") or output.get("media")),
+            "gemini generate output is empty",
+        )
+        results.append("gemini generate ok")
+
     return results
 
 
@@ -469,6 +497,12 @@ def main() -> int:
         help="Also verify streaming /v1/completions when --completion-prompt is set.",
     )
     parser.add_argument(
+        "--gemini-prompt",
+        default="",
+        help="Optional prompt for a real /v1/gemini/generate smoke request.",
+    )
+    parser.add_argument("--gemini-model", default="gemini")
+    parser.add_argument(
         "--fail-on-warnings",
         action="store_true",
         help="Fail when /health reports deployment warnings.",
@@ -492,6 +526,8 @@ def main() -> int:
             completion_prompt=args.completion_prompt or None,
             completion_model=args.completion_model,
             completion_stream=args.completion_stream,
+            gemini_prompt=args.gemini_prompt or None,
+            gemini_model=args.gemini_model,
             timeout=max(1.0, args.timeout),
             fail_on_warnings=args.fail_on_warnings,
         )

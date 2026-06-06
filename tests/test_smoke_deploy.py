@@ -1101,6 +1101,119 @@ class SmokeDeployTests(unittest.TestCase):
 
         self.assertIn("completion stream missing [DONE]", str(raised.exception))
 
+    def test_smoke_can_check_gemini_native_generate_shape(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            auth = request.headers.get("Authorization")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if not auth:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-401"},
+                    BytesIO(
+                        json.dumps(
+                            {"error": {"message": "Invalid or missing API key."}}
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/gemini/generate":
+                body = json.loads(request.data.decode("utf-8"))
+                self.assertEqual(body["model"], "gemini-3.1-pro")
+                self.assertEqual(body["prompt"], "native ping")
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "account": 1,
+                        "model": "gemini-3.1-pro",
+                        "metadata": {"request_id": "req-gemini"},
+                        "output": {
+                            "text": "native pong",
+                            "thoughts": "",
+                            "images": [],
+                            "videos": [],
+                            "media": [],
+                        },
+                    },
+                    {"X-Request-ID": "req-gemini"},
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                "sk-test",
+                gemini_prompt="native ping",
+                gemini_model="gemini-3.1-pro",
+            )
+
+        self.assertIn("gemini generate ok", results)
+
+    def test_smoke_rejects_empty_gemini_native_output(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/gemini/generate":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "account": 1,
+                        "model": "gemini",
+                        "metadata": {},
+                        "output": {
+                            "text": "",
+                            "images": [],
+                            "videos": [],
+                            "media": [],
+                        },
+                    },
+                    {"X-Request-ID": "req-gemini"},
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(AssertionError) as raised:
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    gemini_prompt="native ping",
+                )
+
+        self.assertIn("gemini generate output is empty", str(raised.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
