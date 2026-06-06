@@ -1677,9 +1677,10 @@ def create_app(config: ServerConfig | None = None):
         if (
             (allowed_api_keys or config.require_api_key)
             and (
-                path in {"/v1", "/v1/", "/models"}
+                path in {"/v1", "/v1/", "/models", "/engines"}
                 or path.startswith("/v1/")
                 or path.startswith("/models/")
+                or path.startswith("/engines/")
             )
             and path not in {
                 "/v1/status",

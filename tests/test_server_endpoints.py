@@ -331,6 +331,14 @@ class ServerEndpointTests(unittest.TestCase):
                     "/models/GEMINI",
                     headers={"Authorization": "Bearer sk-external"},
                 )
+                rootless_engines = client.get(
+                    "/engines",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                rootless_engine_detail = client.get(
+                    "/engines/gemini-3.1-pro",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
                 echoed = client.get(
                     "/v1/models",
                     headers={
@@ -340,8 +348,13 @@ class ServerEndpointTests(unittest.TestCase):
                 )
                 unauthenticated = client.get("/v1/models")
                 rootless_unauthenticated = client.get("/models")
+                rootless_engines_unauthenticated = client.get("/engines")
                 rootless_head = client.head(
                     "/models",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                rootless_engines_head = client.head(
+                    "/engines",
                     headers={"Authorization": "Bearer sk-external"},
                 )
 
@@ -350,13 +363,20 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(rootless.json()["data"], generated.json()["data"])
             self.assertEqual(rootless_detail.status_code, 200)
             self.assertEqual(rootless_detail.json()["id"], "gemini-3.1-pro")
+            self.assertEqual(rootless_engines.status_code, 200)
+            self.assertEqual(rootless_engine_detail.status_code, 200)
+            self.assertEqual(rootless_engine_detail.json()["id"], "gemini-3.1-pro")
             self.assertTrue(generated.headers["x-request-id"].startswith("req-"))
             self.assertEqual(echoed.status_code, 200)
             self.assertEqual(echoed.headers["x-request-id"], "client-request-1")
             self.assertEqual(unauthenticated.status_code, 401)
             self.assertEqual(rootless_unauthenticated.status_code, 401)
+            # 根路径 engines 探测也属于外部调用面，公网部署时必须和 models 一样校验 API Key。
+            self.assertEqual(rootless_engines_unauthenticated.status_code, 401)
             self.assertEqual(rootless_head.status_code, 200)
+            self.assertEqual(rootless_engines_head.status_code, 200)
             self.assertFalse(rootless_head.text)
+            self.assertFalse(rootless_engines_head.text)
             self.assertTrue(unauthenticated.headers["x-request-id"].startswith("req-"))
 
     def test_v1_root_is_api_key_protected_capability_summary(self):
