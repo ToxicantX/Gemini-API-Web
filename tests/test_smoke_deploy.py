@@ -153,6 +153,102 @@ class SmokeDeployTests(unittest.TestCase):
 
         self.assertIn("/health returned 1 warning(s)", str(raised.exception))
 
+    def test_smoke_checks_admin_login_when_credentials_are_provided(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/admin/status":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "enabled": True,
+                        "username_required": True,
+                        "authenticated": False,
+                    },
+                )
+            if path == "/v1/admin/login":
+                body = json.loads(request.data.decode("utf-8"))
+                self.assertEqual(body, {"username": "admin", "password": "pass"})
+                return FakeHTTPResponse(
+                    200,
+                    {"ok": True, "enabled": True, "authenticated": True},
+                    {
+                        "Set-Cookie": "gemini_admin_session=abc.def; HttpOnly; Path=/",
+                    },
+                )
+            if path == "/v1/request-logs":
+                self.assertIn(
+                    "gemini_admin_session=abc.def",
+                    request.headers.get("Cookie", ""),
+                )
+                return FakeHTTPResponse(200, {"logs": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                None,
+                admin_username="admin",
+                admin_password="pass",
+            )
+
+        self.assertIn("admin login ok", results)
+
+    def test_smoke_requires_admin_username_when_server_requires_it(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/admin/status":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "enabled": True,
+                        "username_required": True,
+                        "authenticated": False,
+                    },
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(AssertionError) as raised:
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    admin_password="pass",
+                )
+
+        self.assertIn("pass --admin-username", str(raised.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

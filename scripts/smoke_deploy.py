@@ -12,13 +12,26 @@ def _request(
     path: str,
     *,
     api_key: str | None = None,
+    headers: dict[str, str] | None = None,
     method: str = "GET",
+    body: dict | None = None,
 ) -> tuple[int, dict, dict[str, str]]:
     url = f"{base_url.rstrip('/')}{path}"
-    headers = {"Accept": "application/json"}
+    request_headers = {"Accept": "application/json"}
+    if headers:
+        request_headers.update(headers)
     if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    request = urllib.request.Request(url, headers=headers, method=method)
+        request_headers["Authorization"] = f"Bearer {api_key}"
+    data = None
+    if body is not None:
+        request_headers["Content-Type"] = "application/json"
+        data = json.dumps(body).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=data,
+        headers=request_headers,
+        method=method,
+    )
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             body = response.read()
@@ -40,10 +53,28 @@ def _require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def _cookie_header(headers: dict[str, str]) -> str:
+    raw_cookie = ""
+    for key, value in headers.items():
+        if key.lower() == "set-cookie":
+            raw_cookie = value
+            break
+    if not raw_cookie:
+        return ""
+    parts: list[str] = []
+    for item in raw_cookie.split(","):
+        cookie_pair = item.split(";", 1)[0].strip()
+        if "=" in cookie_pair:
+            parts.append(cookie_pair)
+    return "; ".join(parts)
+
+
 def run_smoke(
     base_url: str,
     api_key: str | None,
     *,
+    admin_username: str | None = None,
+    admin_password: str | None = None,
     fail_on_warnings: bool = False,
 ) -> list[str]:
     results: list[str] = []
@@ -91,6 +122,36 @@ def run_smoke(
         _require(media.get("ok") is True, "/v1/media-cooldowns missing ok=true")
         results.append("media cooldown summary ok")
 
+    if admin_password:
+        admin_status, admin, _ = _request(base_url, "/v1/admin/status")
+        _require(admin_status == 200, f"/v1/admin/status returned {admin_status}")
+        _require(admin.get("enabled") is True, "admin login is not enabled")
+        payload = {"password": admin_password}
+        if admin.get("username_required"):
+            _require(
+                bool(admin_username),
+                "admin username is required; pass --admin-username",
+            )
+            payload["username"] = admin_username
+        login_status, login, login_headers = _request(
+            base_url,
+            "/v1/admin/login",
+            method="POST",
+            body=payload,
+        )
+        _require(login_status == 200, f"/v1/admin/login returned {login_status}")
+        _require(login.get("authenticated") is True, "admin login did not authenticate")
+        cookie = _cookie_header(login_headers)
+        _require("gemini_admin_session=" in cookie, "admin login missing session cookie")
+        logs_status, logs, _ = _request(
+            base_url,
+            "/v1/request-logs",
+            headers={"Cookie": cookie},
+        )
+        _require(logs_status == 200, f"/v1/request-logs with admin cookie returned {logs_status}")
+        _require("logs" in logs, "/v1/request-logs missing logs")
+        results.append("admin login ok")
+
     return results
 
 
@@ -98,6 +159,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke test a deployed Gemini API Web service.")
     parser.add_argument("--base-url", default="http://localhost:7860")
     parser.add_argument("--api-key", default="")
+    parser.add_argument("--admin-username", default="")
+    parser.add_argument("--admin-password", default="")
     parser.add_argument(
         "--fail-on-warnings",
         action="store_true",
@@ -108,6 +171,8 @@ def main() -> int:
         results = run_smoke(
             args.base_url,
             args.api_key or None,
+            admin_username=args.admin_username or None,
+            admin_password=args.admin_password or None,
             fail_on_warnings=args.fail_on_warnings,
         )
     except Exception as exc:

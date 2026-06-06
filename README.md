@@ -105,6 +105,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 
 如果还没有生成 API Key，可以先不传 `--api-key`；脚本会确认外部 `/v1/*` 已被 401 正确保护。
 
+也可以同时验证管理员登录链路，确认登录 Cookie 能访问管理接口：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --admin-username admin --admin-password your-admin-password
+```
+
 Smoke 测试会把 `/health` 返回的部署安全警告打印为 `health warning: ...`，例如仍在使用 Docker Compose 占位管理员密码或占位会话密钥。正式上服务器前建议开启严格模式，让这些警告直接导致测试失败：
 
 ```sh
