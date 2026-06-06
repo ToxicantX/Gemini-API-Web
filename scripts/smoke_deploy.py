@@ -501,12 +501,12 @@ def _require_cors_actual_response(
     _require("x-request-id" in lower_headers, f"{label} CORS actual response missing X-Request-ID")
 
 
-def _require_chat_completion_response(data: dict) -> None:
+def _require_chat_completion_response(data: dict, *, expected_model: str) -> None:
     """校验非流式 Chat Completions 基础结构，贴近 OpenAI SDK 的解析预期。"""
     _require(data.get("object") == "chat.completion", "chat response is not an OpenAI chat completion")
     _require(str(data.get("id") or "").startswith("chatcmpl-"), "chat response missing chatcmpl id")
     _require(isinstance(data.get("created"), int), "chat response missing integer created")
-    _require(bool(data.get("model")), "chat response missing model")
+    _require(data.get("model") == expected_model, "chat response has unexpected model")
     usage = data.get("usage")
     _require(isinstance(usage, dict), "chat response missing usage")
     for field in ("prompt_tokens", "completion_tokens", "total_tokens"):
@@ -524,12 +524,17 @@ def _require_chat_completion_response(data: dict) -> None:
     )
 
 
-def _require_chat_completion_stream_chunk(data: dict, *, final: bool = False) -> None:
+def _require_chat_completion_stream_chunk(
+    data: dict,
+    *,
+    expected_model: str,
+    final: bool = False,
+) -> None:
     """校验 Chat Completions 流式 chunk，避免外部 SDK 解析 SSE 时缺关键字段。"""
     _require(data.get("object") == "chat.completion.chunk", "stream chunk is not an OpenAI chat completion chunk")
     _require(str(data.get("id") or "").startswith("chatcmpl-"), "stream chunk missing chatcmpl id")
     _require(isinstance(data.get("created"), int), "stream chunk missing integer created")
-    _require(bool(data.get("model")), "stream chunk missing model")
+    _require(data.get("model") == expected_model, "stream chunk has unexpected model")
     choices = data.get("choices")
     _require(isinstance(choices, list), "stream chunk missing choices")
     if final and choices == []:
@@ -565,9 +570,9 @@ def _require_responses_stream_usage_event(data: dict) -> None:
         _require(isinstance(usage.get(field), int), f"responses stream usage missing {field}")
 
 
-def _require_chat_tool_call_response(data: dict) -> None:
+def _require_chat_tool_call_response(data: dict, *, expected_model: str) -> None:
     """校验 Chat Completions 工具调用返回 OpenAI 客户端可执行的结构。"""
-    _require_chat_completion_response(data)
+    _require_chat_completion_response(data, expected_model=expected_model)
     choices = data.get("choices") or []
     choice = choices[0]
     _require(choice.get("finish_reason") == "tool_calls", "tool probe finish_reason is not tool_calls")
@@ -1403,7 +1408,7 @@ def _run_smoke_impl(
         )
         _require(chat_status == 200, f"/v1/chat/completions returned {chat_status}")
         _require("x-request-id" in {key.lower(): value for key, value in chat_headers.items()}, "chat response missing X-Request-ID")
-        _require_chat_completion_response(chat)
+        _require_chat_completion_response(chat, expected_model=chat_model)
         results.append("chat completions ok")
 
         if chat_stream:
@@ -1433,14 +1438,18 @@ def _run_smoke_impl(
             chunks = [item for item in data_items if item != "[DONE]"]
             _require(bool(chunks), "stream response missing data chunks")
             parsed_chunks = [json.loads(item) for item in chunks]
-            _require_chat_completion_stream_chunk(parsed_chunks[0])
+            _require_chat_completion_stream_chunk(parsed_chunks[0], expected_model=chat_model)
             final_chunks = [
                 item
                 for item in parsed_chunks
                 if (item.get("choices") or [{}])[0].get("finish_reason") is not None
             ]
             _require(bool(final_chunks), "stream response missing final finish_reason chunk")
-            _require_chat_completion_stream_chunk(final_chunks[-1], final=True)
+            _require_chat_completion_stream_chunk(
+                final_chunks[-1],
+                expected_model=chat_model,
+                final=True,
+            )
             usage_chunks = [item for item in parsed_chunks if item.get("choices") == []]
             _require(bool(usage_chunks), "stream response missing include_usage chunk")
             _require_openai_stream_usage_chunk(usage_chunks[-1], label="chat")
@@ -1491,7 +1500,7 @@ def _run_smoke_impl(
         )
         _require(tool_status == 200, f"tool probe /v1/chat/completions returned {tool_status}")
         _require("x-request-id" in {key.lower(): value for key, value in tool_headers.items()}, "tool probe response missing X-Request-ID")
-        _require_chat_tool_call_response(tool_chat)
+        _require_chat_tool_call_response(tool_chat, expected_model=chat_model)
         results.append("chat tool_calls ok")
 
     if image_prompt:

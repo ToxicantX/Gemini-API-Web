@@ -300,6 +300,7 @@ PUBLIC_MODEL_ORDER = [
     "gemini-3.1-pro",
 ]
 DEFAULT_MODEL_ID = "gemini-3.1-pro"
+OPENAI_MODEL_CREATED_AT = int(time.time())
 
 OPENAI_IMAGE_MODEL_ALIASES = {
     "gpt-image-1",
@@ -959,7 +960,7 @@ def _openai_model_object(model_id: str, created: int | None = None) -> dict[str,
     return {
         "id": model_id,
         "object": "model",
-        "created": created or int(time.time()),
+        "created": created or OPENAI_MODEL_CREATED_AT,
         "owned_by": "google",
     }
 
@@ -969,7 +970,7 @@ def _openai_engine_object(model_id: str, created: int | None = None) -> dict[str
     return {
         "id": model_id,
         "object": "engine",
-        "created": created or int(time.time()),
+        "created": created or OPENAI_MODEL_CREATED_AT,
         "owner": "google",
         "ready": True,
     }
@@ -3032,10 +3033,9 @@ def create_app(config: ServerConfig | None = None):
     @app.api_route("/models", methods=["GET", "HEAD"])
     @app.api_route("/v1/models", methods=["GET", "HEAD"])
     async def models() -> dict[str, Any]:
-        now = int(time.time())
         return {
             "object": "list",
-            "data": [_openai_model_object(model_id, now) for model_id in _openai_model_ids()],
+            "data": [_openai_model_object(model_id) for model_id in _openai_model_ids()],
         }
 
     @app.api_route("/models/{model_id}", methods=["GET", "HEAD"])
@@ -3050,10 +3050,9 @@ def create_app(config: ServerConfig | None = None):
     @app.api_route("/engines", methods=["GET", "HEAD"])
     @app.api_route("/v1/engines", methods=["GET", "HEAD"])
     async def engines() -> dict[str, Any]:
-        now = int(time.time())
         return {
             "object": "list",
-            "data": [_openai_engine_object(model_id, now) for model_id in _openai_model_ids()],
+            "data": [_openai_engine_object(model_id) for model_id in _openai_model_ids()],
         }
 
     @app.api_route("/engines/{model_id}", methods=["GET", "HEAD"])

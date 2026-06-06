@@ -2420,6 +2420,61 @@ class SmokeDeployTests(unittest.TestCase):
 
         self.assertIn("chat completions ok", results)
 
+    def test_smoke_rejects_chat_completion_unexpected_model(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/chat/completions":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "id": "chatcmpl-test",
+                        "object": "chat.completion",
+                        "created": 1,
+                        "model": "gemini",
+                        "choices": [
+                            {
+                                "index": 0,
+                                "message": {"role": "assistant", "content": "pong"},
+                                "finish_reason": "stop",
+                            }
+                        ],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
+                    },
+                    {"X-Request-ID": "req-chat"},
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(AssertionError) as raised:
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    chat_prompt="ping",
+                    chat_model="gemini-3.1-pro",
+                )
+
+        self.assertIn("unexpected model", str(raised.exception))
+
     def test_smoke_rejects_empty_chat_completion_message(self):
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")
@@ -2765,6 +2820,77 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertTrue(seen_stream)
         self.assertIn("chat completions ok", results)
         self.assertIn("chat stream ok", results)
+
+    def test_smoke_rejects_chat_stream_unexpected_model(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/chat/completions":
+                body = json.loads(request.data.decode("utf-8"))
+                if body.get("stream"):
+                    return FakeHTTPResponse(
+                        200,
+                        headers={
+                            "Content-Type": "text/event-stream; charset=utf-8",
+                            "X-Request-ID": "req-stream",
+                        },
+                        body=(
+                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}\n\n'
+                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n'
+                            'data: {"id":"chatcmpl-stream","object":"chat.completion.chunk","created":1,"model":"gemini","choices":[],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}\n\n'
+                            "data: [DONE]\n\n"
+                        ),
+                    )
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "id": "chatcmpl-test",
+                        "object": "chat.completion",
+                        "created": 1,
+                        "model": "gemini-3.1-pro",
+                        "choices": [
+                            {
+                                "index": 0,
+                                "message": {"role": "assistant", "content": "pong"},
+                                "finish_reason": "stop",
+                            }
+                        ],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
+                    },
+                    {"X-Request-ID": "req-chat"},
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(AssertionError) as raised:
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    chat_prompt="ping",
+                    chat_model="gemini-3.1-pro",
+                    chat_stream=True,
+                )
+
+        self.assertIn("unexpected model", str(raised.exception))
 
     def test_smoke_rejects_stream_without_done_marker(self):
         def fake_urlopen(request, timeout):
