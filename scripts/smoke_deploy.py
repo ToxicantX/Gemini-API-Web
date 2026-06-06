@@ -40,7 +40,12 @@ def _require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
-def run_smoke(base_url: str, api_key: str | None) -> list[str]:
+def run_smoke(
+    base_url: str,
+    api_key: str | None,
+    *,
+    fail_on_warnings: bool = False,
+) -> list[str]:
     results: list[str] = []
 
     health_status, health, _ = _request(base_url, "/health")
@@ -48,6 +53,16 @@ def run_smoke(base_url: str, api_key: str | None) -> list[str]:
     _require(health.get("ok") is True, "/health did not return ok=true")
     _require("models" in health, "/health missing models")
     results.append("health ok")
+    warnings = [
+        str(item)
+        for item in health.get("warnings", [])
+        if str(item).strip()
+    ]
+    for warning in warnings:
+        results.append(f"health warning: {warning}")
+    if fail_on_warnings and warnings:
+        # 正式部署前可开启严格模式，把默认密码、默认会话密钥等安全提示直接视为失败。
+        raise AssertionError(f"/health returned {len(warnings)} warning(s)")
 
     unauth_status, unauth, unauth_headers = _request(base_url, "/v1/models")
     if health.get("auth", {}).get("api_key_required"):
@@ -83,9 +98,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke test a deployed Gemini API Web service.")
     parser.add_argument("--base-url", default="http://localhost:7860")
     parser.add_argument("--api-key", default="")
+    parser.add_argument(
+        "--fail-on-warnings",
+        action="store_true",
+        help="Fail when /health reports deployment warnings.",
+    )
     args = parser.parse_args()
     try:
-        results = run_smoke(args.base_url, args.api_key or None)
+        results = run_smoke(
+            args.base_url,
+            args.api_key or None,
+            fail_on_warnings=args.fail_on_warnings,
+        )
     except Exception as exc:
         print(f"smoke failed: {exc}", file=sys.stderr)
         return 1

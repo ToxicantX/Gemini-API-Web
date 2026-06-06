@@ -95,6 +95,64 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertIn("authorized models ok", results)
         self.assertIn("media cooldown summary ok", results)
 
+    def test_smoke_reports_health_warnings(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                        "warnings": [
+                            "ADMIN_PASSWORD is still using the Docker Compose placeholder value.",
+                        ],
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke("http://service", None)
+
+        self.assertIn("health ok", results)
+        self.assertIn(
+            "health warning: ADMIN_PASSWORD is still using the Docker Compose placeholder value.",
+            results,
+        )
+
+    def test_smoke_can_fail_on_health_warnings(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                        "warnings": ["ADMIN_SESSION_SECRET is still using a placeholder."],
+                    },
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(AssertionError) as raised:
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    fail_on_warnings=True,
+                )
+
+        self.assertIn("/health returned 1 warning(s)", str(raised.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
