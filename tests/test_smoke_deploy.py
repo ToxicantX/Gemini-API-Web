@@ -494,6 +494,105 @@ class SmokeDeployTests(unittest.TestCase):
 
         self.assertIn("missing [DONE]", str(raised.exception))
 
+    def test_smoke_can_check_image_generation_shape(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            auth = request.headers.get("Authorization")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if not auth:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-401"},
+                    BytesIO(
+                        json.dumps(
+                            {"error": {"message": "Invalid or missing API key."}}
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/images/generations":
+                body = json.loads(request.data.decode("utf-8"))
+                self.assertEqual(body["model"], "gpt-image-2")
+                self.assertEqual(body["prompt"], "draw a small icon")
+                self.assertEqual(body["response_format"], "url")
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "created": 1,
+                        "data": [
+                            {
+                                "url": "http://service/v1/gemini/media/token/content",
+                                "revised_prompt": "draw a small icon",
+                            }
+                        ],
+                    },
+                    {"X-Request-ID": "req-image"},
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                "sk-test",
+                image_prompt="draw a small icon",
+                image_model="gpt-image-2",
+            )
+
+        self.assertIn("image generation ok", results)
+
+    def test_smoke_rejects_image_generation_without_data(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/images/generations":
+                return FakeHTTPResponse(
+                    200,
+                    {"created": 1, "data": []},
+                    {"X-Request-ID": "req-image"},
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(AssertionError) as raised:
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    image_prompt="draw",
+                )
+
+        self.assertIn("image response missing data", str(raised.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

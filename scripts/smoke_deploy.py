@@ -108,6 +108,9 @@ def run_smoke(
     chat_prompt: str | None = None,
     chat_model: str = "gemini",
     chat_stream: bool = False,
+    image_prompt: str | None = None,
+    image_model: str = "gemini",
+    image_response_format: str = "url",
     fail_on_warnings: bool = False,
 ) -> list[str]:
     results: list[str] = []
@@ -238,6 +241,31 @@ def run_smoke(
             _require("choices" in first_chunk, "stream chunk missing choices")
             results.append("chat stream ok")
 
+    if image_prompt:
+        # 图片生成会消耗媒体生成次数，因此只在显式传入 --image-prompt 时执行。
+        image_status, image, image_headers = _request(
+            base_url,
+            "/v1/images/generations",
+            api_key=api_key,
+            method="POST",
+            body={
+                "model": image_model,
+                "prompt": image_prompt,
+                "response_format": image_response_format,
+            },
+        )
+        _require(image_status == 200, f"/v1/images/generations returned {image_status}")
+        _require("x-request-id" in {key.lower(): value for key, value in image_headers.items()}, "image response missing X-Request-ID")
+        data = image.get("data") or []
+        _require(bool(data), "image response missing data")
+        first_item = data[0]
+        if image_response_format == "b64_json":
+            _require(bool(first_item.get("b64_json")), "image response missing b64_json")
+        else:
+            url = str(first_item.get("url") or "")
+            _require(url.startswith(("http://", "https://")), "image response missing absolute url")
+        results.append("image generation ok")
+
     return results
 
 
@@ -259,6 +287,17 @@ def main() -> int:
         help="Also verify streaming /v1/chat/completions when --chat-prompt is set.",
     )
     parser.add_argument(
+        "--image-prompt",
+        default="",
+        help="Optional prompt for a real /v1/images/generations smoke request.",
+    )
+    parser.add_argument("--image-model", default="gemini")
+    parser.add_argument(
+        "--image-response-format",
+        default="url",
+        choices=("url", "b64_json"),
+    )
+    parser.add_argument(
         "--fail-on-warnings",
         action="store_true",
         help="Fail when /health reports deployment warnings.",
@@ -273,6 +312,9 @@ def main() -> int:
             chat_prompt=args.chat_prompt or None,
             chat_model=args.chat_model,
             chat_stream=args.chat_stream,
+            image_prompt=args.image_prompt or None,
+            image_model=args.image_model,
+            image_response_format=args.image_response_format,
             fail_on_warnings=args.fail_on_warnings,
         )
     except Exception as exc:
