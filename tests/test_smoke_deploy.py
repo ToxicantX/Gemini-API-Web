@@ -1392,6 +1392,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     headers={
                         "Content-Type": "image/png" if "token" in path else "video/mp4",
+                        "Content-Length": "128" if "token" in path else "4096",
                         "X-Request-ID": "req-media-head",
                     },
                     body="",
@@ -1412,6 +1413,78 @@ class SmokeDeployTests(unittest.TestCase):
             ["/v1/gemini/media/token/content", "/v1/gemini/media/absolute/content"],
         )
         self.assertIn("media content probes ok (2)", results)
+
+    def test_smoke_rejects_media_content_type_mismatch(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            auth = request.headers.get("Authorization")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if not auth and path != "/v1/gemini/media/video/content":
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-401"},
+                    BytesIO(
+                        json.dumps(
+                            {"error": {"message": "Invalid or missing API key."}}
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/gemini/media?limit=5":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "media": [
+                            {
+                                "kind": "video",
+                                "url": "https://googlevideo.com/demo.mp4",
+                                "content_url": "/v1/gemini/media/video/content",
+                            },
+                        ],
+                    },
+                    {"X-Request-ID": "req-media-history"},
+                )
+            if path == "/v1/gemini/media/video/content":
+                self.assertEqual(request.get_method(), "HEAD")
+                return FakeHTTPResponse(
+                    200,
+                    headers={
+                        "Content-Type": "image/png",
+                        "Content-Length": "123",
+                        "X-Request-ID": "req-media-head",
+                    },
+                    body="",
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaisesRegex(
+                AssertionError,
+                "unexpected Content-Type",
+            ):
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    "sk-test",
+                    media_history=True,
+                    media_content_probes=True,
+                )
 
     def test_smoke_skips_media_content_probe_without_records(self):
         def fake_urlopen(request, timeout):

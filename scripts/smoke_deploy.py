@@ -344,6 +344,36 @@ def _require_media_cooldown_summary(data: dict) -> None:
         )
 
 
+def _require_media_content_headers(
+    headers: dict[str, str],
+    *,
+    kind: str,
+    label: str,
+) -> None:
+    """校验媒体代理 HEAD 响应头，确保外部客户端能识别预览类型。"""
+    lower_headers = {key.lower(): value for key, value in headers.items()}
+    content_type = lower_headers.get("content-type", "")
+    _require(bool(content_type), f"{label} missing Content-Type")
+    media_type = content_type.split(";", 1)[0].strip().lower()
+    expected_prefixes = {
+        "image": ("image/",),
+        "web_image": ("image/",),
+        "video": ("video/",),
+        "audio": ("audio/",),
+    }.get(str(kind or "").strip().lower(), ("image/", "video/", "audio/"))
+    _require(
+        media_type.startswith(expected_prefixes),
+        f"{label} returned unexpected Content-Type: {content_type}",
+    )
+    content_length = lower_headers.get("content-length")
+    if content_length:
+        try:
+            size = int(content_length)
+        except ValueError as exc:
+            raise AssertionError(f"{label} returned invalid Content-Length") from exc
+        _require(size >= 0, f"{label} returned negative Content-Length")
+
+
 def _require_cors_preflight(
     status: int,
     headers: dict[str, str],
@@ -967,15 +997,11 @@ def _run_smoke_impl(
                         )
                         _require(status == 200, f"HEAD {content_path} returned {status}")
                         _require(body_text == "", f"HEAD {content_path} should not return a body")
-                        content_type = next(
-                            (
-                                value
-                                for key, value in headers.items()
-                                if key.lower() == "content-type"
-                            ),
-                            "",
+                        _require_media_content_headers(
+                            headers,
+                            kind=str(item.get("kind") or ""),
+                            label=f"HEAD {content_path}",
                         )
-                        _require(bool(content_type), f"HEAD {content_path} missing Content-Type")
                         checked += 1
                     results.append(f"media content probes ok ({checked})")
 
