@@ -976,6 +976,131 @@ class SmokeDeployTests(unittest.TestCase):
 
         self.assertIn("completion body missing choices", str(raised.exception))
 
+    def test_smoke_can_check_completions_stream_shape(self):
+        seen_stream = False
+
+        def fake_urlopen(request, timeout):
+            nonlocal seen_stream
+            path = request.full_url.replace("http://service", "")
+            auth = request.headers.get("Authorization")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if not auth:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-401"},
+                    BytesIO(
+                        json.dumps(
+                            {"error": {"message": "Invalid or missing API key."}}
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/completions":
+                body = json.loads(request.data.decode("utf-8"))
+                if body.get("stream"):
+                    seen_stream = True
+                    return FakeHTTPResponse(
+                        200,
+                        headers={
+                            "Content-Type": "text/event-stream; charset=utf-8",
+                            "X-Request-ID": "req-completion-stream",
+                        },
+                        body=(
+                            'data: {"object":"text_completion.chunk","choices":[{"text":" done"}]}\n\n'
+                            "data: [DONE]\n\n"
+                        ),
+                    )
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "id": "cmpl-test",
+                        "object": "text_completion",
+                        "choices": [{"index": 0, "text": " done"}],
+                    },
+                    {"X-Request-ID": "req-completion"},
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                "sk-test",
+                completion_prompt="complete this",
+                completion_stream=True,
+            )
+
+        self.assertTrue(seen_stream)
+        self.assertIn("completions api ok", results)
+        self.assertIn("completions stream ok", results)
+
+    def test_smoke_rejects_completion_stream_without_done_marker(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/completions":
+                body = json.loads(request.data.decode("utf-8"))
+                if body.get("stream"):
+                    return FakeHTTPResponse(
+                        200,
+                        headers={
+                            "Content-Type": "text/event-stream",
+                            "X-Request-ID": "req-completion-stream",
+                        },
+                        body='data: {"object":"text_completion.chunk","choices":[]}\n\n',
+                    )
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "id": "cmpl-test",
+                        "object": "text_completion",
+                        "choices": [{"index": 0, "text": " done"}],
+                    },
+                    {"X-Request-ID": "req-completion"},
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(AssertionError) as raised:
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    completion_prompt="complete this",
+                    completion_stream=True,
+                )
+
+        self.assertIn("completion stream missing [DONE]", str(raised.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

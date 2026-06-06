@@ -129,6 +129,7 @@ def run_smoke(
     responses_stream: bool = False,
     completion_prompt: str | None = None,
     completion_model: str = "gemini",
+    completion_stream: bool = False,
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
 ) -> list[str]:
@@ -379,6 +380,35 @@ def run_smoke(
         _require(bool(choices[0].get("text")), "completion body missing choice text")
         results.append("completions api ok")
 
+        if completion_stream:
+            stream_status, stream_body, stream_headers = _raw_request(
+                base_url,
+                "/v1/completions",
+                timeout=timeout,
+                api_key=api_key,
+                method="POST",
+                body={
+                    "model": completion_model,
+                    "prompt": completion_prompt,
+                    "stream": True,
+                },
+            )
+            _require(stream_status == 200, f"stream /v1/completions returned {stream_status}")
+            content_type = next(
+                (value for key, value in stream_headers.items() if key.lower() == "content-type"),
+                "",
+            )
+            _require("text/event-stream" in content_type.lower(), "completion stream is not text/event-stream")
+            _require("x-request-id" in {key.lower(): value for key, value in stream_headers.items()}, "completion stream missing X-Request-ID")
+            data_items = _sse_data_items(stream_body)
+            _require("[DONE]" in data_items, "completion stream missing [DONE]")
+            chunks = [item for item in data_items if item != "[DONE]"]
+            _require(bool(chunks), "completion stream missing data chunks")
+            first_chunk = json.loads(chunks[0])
+            _require(first_chunk.get("object") == "text_completion.chunk", "completion stream chunk is not a text completion chunk")
+            _require("choices" in first_chunk, "completion stream chunk missing choices")
+            results.append("completions stream ok")
+
     return results
 
 
@@ -434,6 +464,11 @@ def main() -> int:
     )
     parser.add_argument("--completion-model", default="gemini")
     parser.add_argument(
+        "--completion-stream",
+        action="store_true",
+        help="Also verify streaming /v1/completions when --completion-prompt is set.",
+    )
+    parser.add_argument(
         "--fail-on-warnings",
         action="store_true",
         help="Fail when /health reports deployment warnings.",
@@ -456,6 +491,7 @@ def main() -> int:
             responses_stream=args.responses_stream,
             completion_prompt=args.completion_prompt or None,
             completion_model=args.completion_model,
+            completion_stream=args.completion_stream,
             timeout=max(1.0, args.timeout),
             fail_on_warnings=args.fail_on_warnings,
         )

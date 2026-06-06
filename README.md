@@ -129,6 +129,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --completion-prompt "补全这句话：Gemini API Web"
 ```
 
+如果外部客户端会使用 Completions 流式响应，可以再加 `--completion-stream`，脚本会额外验证 `text_completion.chunk` 和 `[DONE]` 结束标记：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --completion-prompt "补全这句话：Gemini API Web" --completion-stream
+```
+
 需要验证新版 OpenAI Responses API 时，可以显式传入 `--responses-prompt`，脚本会实际调用 `/v1/responses` 并校验 `output_text` 和 `output` 结构：
 
 ```sh
