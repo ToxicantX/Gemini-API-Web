@@ -1,3 +1,4 @@
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -84,6 +85,30 @@ class DeploymentFileTests(unittest.TestCase):
             "media-cache/",
         ):
             self.assertIn(entry, entries)
+
+    def test_tracked_files_do_not_include_runtime_secrets(self):
+        result = subprocess.run(
+            ["git", "ls-files"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        tracked = {line.strip().replace("\\", "/") for line in result.stdout.splitlines()}
+        allowed = {".env.example", "data/accounts.example.json"}
+
+        # 忽略规则只能阻止新增文件；这里额外确认仓库当前没有已经被追踪的真实运行时敏感文件。
+        for path in tracked - allowed:
+            name = Path(path).name
+            suffix = Path(path).suffix.lower()
+            self.assertFalse(path.startswith("data/"), path)
+            self.assertFalse(path.startswith("media-cache/"), path)
+            self.assertNotEqual(name, ".env", path)
+            self.assertFalse(name.startswith(".env."), path)
+            self.assertNotIn(name, {"accounts.json", "cookies.json"}, path)
+            self.assertFalse(name.endswith(".cookies"), path)
+            self.assertNotIn(suffix, {".db", ".sqlite", ".sqlite3"}, path)
 
     def test_compose_passes_server_deployment_env(self):
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
