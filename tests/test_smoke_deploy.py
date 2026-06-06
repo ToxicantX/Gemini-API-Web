@@ -1315,6 +1315,88 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertIn(("GET", "/v1/chat/completions", True), seen)
         self.assertIn("error probes ok", results)
 
+    def test_smoke_can_check_unavailable_generation_shape(self):
+        seen_generation = False
+
+        def openai_error(status, error_type, request_id, message):
+            return {
+                "error": {
+                    "message": message,
+                    "type": error_type,
+                    "code": status,
+                    "request_id": request_id,
+                },
+                "request_id": request_id,
+            }
+
+        def fake_urlopen(request, timeout):
+            nonlocal seen_generation
+            path = request.full_url.replace("http://service", "")
+            auth = request.headers.get("Authorization")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
+                        "accounts": {"total": 0, "available": 0, "current_account_id": None},
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if not auth:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-401"},
+                    BytesIO(
+                        json.dumps(
+                            openai_error(
+                                401,
+                                "authentication_error",
+                                "req-401",
+                                "Invalid or missing API key.",
+                            )
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
+                )
+            if path == "/v1/chat/completions":
+                seen_generation = True
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    503,
+                    "Service Unavailable",
+                    {"X-Request-ID": "req-unavailable"},
+                    BytesIO(
+                        json.dumps(
+                            openai_error(
+                                503,
+                                "service_unavailable",
+                                "req-unavailable",
+                                "No active Gemini accounts are available.",
+                            )
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                "sk-test",
+                unavailable_generation_probe=True,
+            )
+
+        self.assertTrue(seen_generation)
+        self.assertIn("unavailable generation ok", results)
+
     def test_smoke_can_check_file_head_probes(self):
         seen_heads = []
 

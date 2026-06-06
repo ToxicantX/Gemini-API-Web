@@ -4123,6 +4123,55 @@ class ServerEndpointTests(unittest.TestCase):
                             expected_message, response.json()["error"]["message"]
                         )
 
+    def test_generation_without_available_account_returns_service_unavailable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=300,
+                auto_refresh=True,
+                auth_url=config.auth_url,
+                auth_headless=True,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                invalid_key = client.post(
+                    "/v1/chat/completions",
+                    headers={"Authorization": "Bearer wrong-key"},
+                    json={
+                        "model": "gemini-3.1-pro",
+                        "messages": [{"role": "user", "content": "test"}],
+                    },
+                )
+                no_account = client.post(
+                    "/v1/chat/completions",
+                    headers={"Authorization": "Bearer sk-external"},
+                    json={
+                        "model": "gemini-3.1-pro",
+                        "messages": [{"role": "user", "content": "test"}],
+                    },
+                )
+
+            self.assertEqual(invalid_key.status_code, 401)
+            self.assertEqual(invalid_key.json()["error"]["type"], "authentication_error")
+            self.assertEqual(no_account.status_code, 503)
+            data = no_account.json()
+            self.assertEqual(data["error"]["type"], "service_unavailable")
+            self.assertEqual(data["error"]["code"], 503)
+            self.assertIn("No active Gemini accounts", data["error"]["message"])
+            self.assertTrue(no_account.headers["x-request-id"].startswith("req-"))
+            self.assertEqual(data["request_id"], no_account.headers["x-request-id"])
+
     def test_native_gemini_stream_uses_proxy_friendly_sse_headers(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)

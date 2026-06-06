@@ -6,6 +6,14 @@ class AuthError(Exception):
     pass
 
 
+class NoAvailableAccountsError(Exception):
+    """
+    没有可用于生成的 Gemini 账号，属于服务暂不可用而不是外部 API Key 鉴权失败。
+    """
+
+    pass
+
+
 class APIError(Exception):
     """
     Exception for package-level errors which need to be fixed in the future development (e.g. validation errors).

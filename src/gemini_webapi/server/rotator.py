@@ -13,6 +13,7 @@ from ..exceptions import (
     AuthError,
     MediaGenerationEmptyResult,
     MediaGenerationTemporarilyUnavailable,
+    NoAvailableAccountsError,
     TemporarilyBlocked,
     UsageLimitExceeded,
     VideoGenerationFailed,
@@ -263,7 +264,7 @@ class AccountRotator:
             )
             return result
 
-        raise last_exc or AuthError("No active Gemini accounts are available. Re-authenticate or enable a valid account.")
+        raise last_exc or NoAvailableAccountsError("No active Gemini accounts are available. Re-authenticate or enable a valid account.")
 
     async def run_stream(
         self,
@@ -329,7 +330,7 @@ class AccountRotator:
                     )
                 continue
         else:
-            raise last_exc or AuthError("No active Gemini accounts are available. Re-authenticate or enable a valid account.")
+            raise last_exc or NoAvailableAccountsError("No active Gemini accounts are available. Re-authenticate or enable a valid account.")
 
         started = datetime.now(timezone.utc)
         try:
@@ -387,7 +388,7 @@ class AccountRotator:
     ) -> Account:
         active = self.store.get_active_accounts()
         if not active:
-            raise AuthError("No active Gemini accounts are available. Re-authenticate or enable a valid account.")
+            raise NoAvailableAccountsError("No active Gemini accounts are available. Re-authenticate or enable a valid account.")
 
         current_id = self._current_account_id()
         if media_generation_mode in MEDIA_GENERATION_MODES:
@@ -567,7 +568,7 @@ class AccountRotator:
     async def _switch_to_next_locked(self, current_account_id: int | None = None) -> Account:
         active = self.store.get_active_accounts()
         if not active:
-            raise AuthError("No active Gemini accounts are available. Re-authenticate or enable a valid account.")
+            raise NoAvailableAccountsError("No active Gemini accounts are available. Re-authenticate or enable a valid account.")
         ids = [account.id for account in active]
         if current_account_id not in ids:
             current_account_id = self._current_account_id()

@@ -31,6 +31,7 @@ from ..exceptions import (
     MediaGenerationEmptyResult,
     MediaGenerationTemporarilyUnavailable,
     ModelInvalid,
+    NoAvailableAccountsError,
     VideoGenerationFailed,
     VideoGenerationNotSubmitted,
 )
@@ -1031,6 +1032,8 @@ def _ensure_media_generation_result(output: Any, mode: str | None) -> None:
 
 
 def _error_status(exc: Exception) -> int:
+    if isinstance(exc, NoAvailableAccountsError):
+        return 503
     if isinstance(exc, AuthError):
         return 401
     if isinstance(exc, (ValueError, ModelInvalid)):
@@ -1738,6 +1741,8 @@ def create_app(config: ServerConfig | None = None):
         error_type = "invalid_request_error"
         if exc.status_code in {401, 403}:
             error_type = "authentication_error"
+        elif exc.status_code == 503:
+            error_type = "service_unavailable"
         return JSONResponse(
             status_code=exc.status_code,
             content=_openai_error(

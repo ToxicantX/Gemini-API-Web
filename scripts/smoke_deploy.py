@@ -617,6 +617,7 @@ def _run_smoke_impl(
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
     readiness_probes: bool = False,
+    unavailable_generation_probe: bool = False,
     require_account: bool = False,
 ) -> list[str]:
     results: list[str] = []
@@ -840,6 +841,38 @@ def _run_smoke_impl(
             label="wrong method endpoint",
         )
         results.append("error probes ok")
+
+    if unavailable_generation_probe:
+        _require(
+            bool(api_key) or not health.get("auth", {}).get("api_key_required"),
+            "--unavailable-generation-probe requires --api-key when API key auth is enabled",
+        )
+        available_accounts = int(account_summary.get("available") or 0)
+        _require(
+            available_accounts == 0,
+            "--unavailable-generation-probe only runs when /health reports zero available Gemini accounts.",
+        )
+        # 账号池不可用时应返回服务暂不可用，而不是伪装成外部 API Key 鉴权失败。
+        unavailable_status, unavailable, unavailable_headers = _request(
+            base_url,
+            "/v1/chat/completions",
+            timeout=timeout,
+            api_key=api_key,
+            method="POST",
+            body={
+                "model": chat_model,
+                "messages": [{"role": "user", "content": "smoke no available account"}],
+            },
+        )
+        _require_openai_error(
+            unavailable_status,
+            unavailable,
+            unavailable_headers,
+            expected_status=503,
+            expected_type="service_unavailable",
+            label="unavailable generation",
+        )
+        results.append("unavailable generation ok")
 
     if probe_endpoints:
         # 外部 SDK、API 网关和反向代理经常先探测根路径、模型列表 HEAD 和模型详情。
@@ -1761,6 +1794,7 @@ def run_smoke(
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
     readiness_probes: bool = False,
+    unavailable_generation_probe: bool = False,
     require_account: bool = False,
 ) -> list[str]:
     global _ACTIVE_API_KEY_HEADER
@@ -1814,6 +1848,7 @@ def run_smoke(
             timeout=timeout,
             fail_on_warnings=fail_on_warnings,
             readiness_probes=readiness_probes,
+            unavailable_generation_probe=unavailable_generation_probe,
             require_account=require_account,
         )
     finally:
@@ -2009,6 +2044,11 @@ def main() -> int:
         help="Verify /v1/generation-readiness without consuming model calls.",
     )
     parser.add_argument(
+        "--unavailable-generation-probe",
+        action="store_true",
+        help="When no account is available, verify generation returns OpenAI-compatible 503.",
+    )
+    parser.add_argument(
         "--require-account",
         action="store_true",
         help="Fail unless /health reports at least one available Gemini account.",
@@ -2062,6 +2102,7 @@ def main() -> int:
             timeout=max(1.0, args.timeout),
             fail_on_warnings=args.fail_on_warnings,
             readiness_probes=args.readiness_probes,
+            unavailable_generation_probe=args.unavailable_generation_probe,
             require_account=args.require_account,
         )
     except Exception as exc:
