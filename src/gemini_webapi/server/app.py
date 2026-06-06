@@ -301,6 +301,13 @@ PUBLIC_MODEL_ORDER = [
     "gemini-3.1-pro",
 ]
 
+OPENAI_IMAGE_MODEL_ALIASES = {
+    "gpt-image-1",
+    "gpt-image-2",
+    "dall-e-2",
+    "dall-e-3",
+}
+
 REMOVED_MODEL_IDS = {
     "gemini-3-pro",
     "gemini-3-pro-preview",
@@ -990,6 +997,14 @@ def _resolve_model_arg(model: str | None) -> str | None:
             f"Unsupported model '{model}'. Use gemini, gemini-3.1-pro, gemini-3.5-flash, or gemini-3.1-flash-lite."
         )
     return resolved
+
+
+def _resolve_openai_image_model_arg(model: str | None) -> str | None:
+    """解析 OpenAI 图片端点的模型名；兼容图片模型别名但不加入公开模型列表。"""
+    model_key = (model or "").strip().lower()
+    if model_key in OPENAI_IMAGE_MODEL_ALIASES:
+        return _resolve_model_arg("gemini")
+    return _resolve_model_arg(model)
 
 
 def _generation_mode_arg(mode: str | None) -> str | None:
@@ -3438,7 +3453,7 @@ def create_app(config: ServerConfig | None = None):
         request_id = request_id or f"img-{uuid.uuid4().hex}"
         generation_mode = "image"
         try:
-            resolved_model = _resolve_model_arg(model)
+            resolved_model = _resolve_openai_image_model_arg(model)
 
             async def operation(client):
                 kwargs: dict[str, Any] = {"generation_mode": generation_mode}

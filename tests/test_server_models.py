@@ -13,6 +13,7 @@ from gemini_webapi.server.app import (
     _openai_model_object,
     _openai_model_ids,
     _public_media_content_path,
+    _resolve_openai_image_model_arg,
     _resolve_model_arg,
 )
 from gemini_webapi.constants import Model
@@ -63,6 +64,16 @@ class ServerModelTests(unittest.TestCase):
             "not-a-real-model",
         ):
             with self.subTest(model=model):
+                with self.assertRaises(ValueError):
+                    _resolve_model_arg(model)
+
+    def test_openai_image_models_are_endpoint_only_aliases(self):
+        for model in ("gpt-image-1", "gpt-image-2", "dall-e-2", "dall-e-3"):
+            with self.subTest(model=model):
+                self.assertEqual(
+                    _resolve_openai_image_model_arg(model),
+                    "gemini-3.1-pro",
+                )
                 with self.assertRaises(ValueError):
                     _resolve_model_arg(model)
 

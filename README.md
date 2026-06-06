@@ -429,6 +429,8 @@ curl http://localhost:7860/v1/images/generations \
 
 `/v1/images/generations` 会调用 Gemini 图片生成模式，并返回本服务的媒体代理链接；支持 `response_format=url` 和 `response_format=b64_json`。URL 返回值是随机 token 的内容下载地址，外部客户端展示图片时无需再次携带 API Key；`b64_json` 会在生成后读取图片内容并返回 base64。当前每次请求只支持生成 1 个结果，`n>1` 会返回 400，避免客户端误以为已经生成多张图片。
 
+部分 OpenAI 图片客户端会固定传 `gpt-image-1`、`gpt-image-2`、`dall-e-2` 或 `dall-e-3`。这些名字只在 `/v1/images/*` 图片端点内作为兼容别名接受，底层仍会使用当前真实 Gemini 模型，不会出现在 `/v1/models` 列表里，也不会恢复旧模型映射。
+
 OpenAI 兼容图片编辑：
 
 ```sh

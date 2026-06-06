@@ -2832,7 +2832,7 @@ class ServerEndpointTests(unittest.TestCase):
                         "X-Request-ID": "client-image-1",
                     },
                     json={
-                        "model": "gemini-3.5-flash",
+                        "model": "gpt-image-2",
                         "prompt": "make image",
                     },
                 )
@@ -2880,7 +2880,8 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertFalse(content_head.content)
             self.assertEqual(media_list_without_key.status_code, 401)
             self.assertEqual(media_list_with_key.status_code, 200)
-            self.assertEqual(calls[0][1]["model"], "gemini-3.5-flash")
+            # OpenAI 图片模型名只作为图片端点兼容别名，底层仍调用当前真实 Gemini 模型。
+            self.assertEqual(calls[0][1]["model"], "gemini-3.1-pro")
             self.assertEqual(calls[0][1]["generation_mode"], "image")
             self.assertEqual(base64_response.status_code, 200)
             self.assertEqual(
