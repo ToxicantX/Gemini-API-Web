@@ -661,7 +661,7 @@ curl http://localhost:7860/v1/gemini/stream \
 - `POST /v1/auth/session`
 - `POST /v1/auth/save`
 
-除 `GET /health`、`/healthz`、`/readyz`、`/livez` 外，上述接口属于管理端调用面。服务器部署并设置 `ADMIN_PASSWORD` 后，它们只接受管理员网页登录态，不接受外部 `API_KEYS` 直接调用；`API_KEYS` 只用于 OpenAI 兼容接口和 Gemini 原生生成/媒体/文件等外部调用面。这样可以避免外部客户端拿到模型调用 Key 后顺手修改账号池、授权浏览器或系统设置。
+除 `GET /health`、`/healthz`、`/readyz`、`/livez` 和只读的 `GET /v1/media-cooldowns` 外，上述接口属于管理端调用面。服务器部署并设置 `ADMIN_PASSWORD` 后，账号、授权、设置、日志和冷却清理等管理操作只接受管理员网页登录态，不接受外部 `API_KEYS` 直接调用；`API_KEYS` 只用于 OpenAI 兼容接口、Gemini 原生生成/媒体/文件等外部调用面，以及读取媒体冷却摘要。这样可以避免外部客户端拿到模型调用 Key 后顺手修改账号池、授权浏览器或系统设置。
 
 账号列表和当前账号状态通过 `GET /v1/status` 返回。
 
