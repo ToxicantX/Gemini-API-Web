@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 from io import BytesIO
+from io import StringIO
 import urllib.error
 
 from scripts import smoke_deploy
@@ -35,6 +36,19 @@ class FakeHTTPResponse:
 
 
 class SmokeDeployTests(unittest.TestCase):
+    def test_cli_help_describes_full_cors_probe_scope(self):
+        with patch("sys.argv", ["smoke_deploy.py", "--help"]), patch(
+            "sys.stdout",
+            new_callable=StringIO,
+        ) as stdout:
+            with self.assertRaises(SystemExit) as raised:
+                smoke_deploy.main()
+
+        self.assertEqual(raised.exception.code, 0)
+        help_text = stdout.getvalue()
+        self.assertIn("--cors-probes", help_text)
+        self.assertIn("preflight and actual response", help_text)
+
     def test_smoke_uses_configurable_request_timeout(self):
         timeouts = []
 

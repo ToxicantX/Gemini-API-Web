@@ -1729,7 +1729,7 @@ def main() -> int:
     parser.add_argument(
         "--cors-probes",
         action="store_true",
-        help="Verify browser CORS preflight for /v1/chat/completions.",
+        help="Verify browser CORS preflight and actual response header exposure.",
     )
     parser.add_argument(
         "--cors-origin",
