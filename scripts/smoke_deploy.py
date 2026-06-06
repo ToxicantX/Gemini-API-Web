@@ -598,6 +598,24 @@ def _require_responses_stream_usage_event(data: dict) -> None:
         _require(isinstance(usage.get(field), int), f"responses stream usage missing {field}")
 
 
+def _require_responses_response(data: dict, *, expected_model: str, label: str = "responses") -> None:
+    """校验 OpenAI Responses API 返回结构，确保外部 SDK 能稳定读取模型、输出和用量。"""
+    _require(data.get("object") == "response", f"{label} body is not an OpenAI response object")
+    _require(str(data.get("id") or "").startswith("resp_"), f"{label} body missing resp_ id")
+    _require(data.get("status") == "completed", f"{label} body status is not completed")
+    _require(data.get("model") == expected_model, f"{label} body has unexpected model")
+    usage = data.get("usage")
+    _require(isinstance(usage, dict), f"{label} body missing usage")
+    for field in ("input_tokens", "output_tokens", "total_tokens"):
+        _require(isinstance(usage.get(field), int), f"{label} body usage missing {field}")
+    output = data.get("output") or []
+    _require(bool(output), f"{label} body missing output")
+    _require(
+        bool(data.get("output_text") or any(item.get("type") == "function_call" for item in output if isinstance(item, dict))),
+        f"{label} body missing output_text or function_call",
+    )
+
+
 def _require_chat_tool_call_response(data: dict, *, expected_model: str) -> None:
     """校验 Chat Completions 工具调用返回 OpenAI 客户端可执行的结构。"""
     _require_chat_completion_response(data, expected_model=expected_model)
@@ -1695,13 +1713,7 @@ def _run_smoke_impl(
         )
         _require(responses_status == 200, f"/v1/responses returned {responses_status}")
         _require("x-request-id" in {key.lower(): value for key, value in responses_headers.items()}, "responses response missing X-Request-ID")
-        _require(responses.get("object") == "response", "responses body is not an OpenAI response object")
-        output = responses.get("output") or []
-        _require(bool(output), "responses body missing output")
-        _require(
-            bool(responses.get("output_text") or any(item.get("type") == "function_call" for item in output if isinstance(item, dict))),
-            "responses body missing output_text or function_call",
-        )
+        _require_responses_response(responses, expected_model=responses_model)
         results.append("responses api ok")
 
         if responses_stream:
@@ -1736,6 +1748,11 @@ def _run_smoke_impl(
             ]
             _require(bool(completed_items), "responses stream missing completed data")
             _require_responses_stream_usage_event(completed_items[-1])
+            _require_responses_response(
+                completed_items[-1]["response"],
+                expected_model=responses_model,
+                label="responses stream completed",
+            )
             results.append("responses stream ok")
 
     if completion_prompt:

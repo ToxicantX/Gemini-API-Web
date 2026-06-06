@@ -3552,6 +3552,8 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "id": "resp_test",
                         "object": "response",
+                        "status": "completed",
+                        "model": "gemini-3.1-pro",
                         "output_text": "pong",
                         "output": [
                             {
@@ -3565,6 +3567,11 @@ class SmokeDeployTests(unittest.TestCase):
                                 ],
                             }
                         ],
+                        "usage": {
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-responses"},
                 )
@@ -3605,8 +3612,15 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "id": "resp_test",
                         "object": "response",
+                        "status": "completed",
+                        "model": "gemini-3.1-pro",
                         "output_text": "",
                         "output": [],
+                        "usage": {
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-responses"},
                 )
@@ -3670,7 +3684,7 @@ class SmokeDeployTests(unittest.TestCase):
                         },
                         body=(
                             'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"p"}\n\n'
-                            'event: response.completed\ndata: {"type":"response.completed","response":{"object":"response","usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}}\n\n'
+                            'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp_test","object":"response","status":"completed","model":"gemini-3.1-pro","output_text":"pong","output":[{"id":"msg_test","type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}}\n\n'
                             "data: [DONE]\n\n"
                         ),
                     )
@@ -3679,6 +3693,8 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "id": "resp_test",
                         "object": "response",
+                        "status": "completed",
+                        "model": "gemini-3.1-pro",
                         "output_text": "pong",
                         "output": [
                             {
@@ -3687,6 +3703,11 @@ class SmokeDeployTests(unittest.TestCase):
                                 "content": [{"type": "output_text", "text": "pong"}],
                             }
                         ],
+                        "usage": {
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-responses"},
                 )
@@ -3739,6 +3760,8 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "id": "resp_test",
                         "object": "response",
+                        "status": "completed",
+                        "model": "gemini-3.1-pro",
                         "output_text": "pong",
                         "output": [
                             {
@@ -3746,6 +3769,11 @@ class SmokeDeployTests(unittest.TestCase):
                                 "content": [{"type": "output_text", "text": "pong"}],
                             }
                         ],
+                        "usage": {
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-responses"},
                 )
