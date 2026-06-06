@@ -1064,10 +1064,18 @@ class SmokeDeployTests(unittest.TestCase):
                     },
                 )
             if path == "/v1/request-logs":
-                self.assertIn(
-                    "gemini_admin_session=abc.def",
-                    request.headers.get("Cookie", ""),
-                )
+                if "gemini_admin_session=abc.def" not in request.headers.get("Cookie", ""):
+                    raise urllib.error.HTTPError(
+                        request.full_url,
+                        401,
+                        "Unauthorized",
+                        {"X-Request-ID": "req-admin-401"},
+                        BytesIO(
+                            json.dumps(
+                                {"ok": False, "detail": "Admin login required."}
+                            ).encode("utf-8")
+                        ),
+                    )
                 return FakeHTTPResponse(200, {"logs": []})
             raise AssertionError(path)
 
@@ -1079,7 +1087,86 @@ class SmokeDeployTests(unittest.TestCase):
                 admin_password="pass",
             )
 
-        self.assertIn("admin login ok", results)
+        self.assertIn("admin login and boundary ok", results)
+
+    def test_smoke_rejects_api_key_on_admin_management_endpoints(self):
+        seen_admin_api_key = False
+
+        def fake_urlopen(request, timeout):
+            nonlocal seen_admin_api_key
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if path == "/v1/models":
+                if not request.headers.get("Authorization"):
+                    raise urllib.error.HTTPError(
+                        request.full_url,
+                        401,
+                        "Unauthorized",
+                        {"X-Request-ID": "req-401"},
+                        BytesIO(
+                            json.dumps(
+                                {"error": {"message": "Invalid or missing API key."}}
+                            ).encode("utf-8")
+                        ),
+                    )
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/admin/status":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "enabled": True,
+                        "username_required": False,
+                        "authenticated": False,
+                    },
+                )
+            if path == "/v1/admin/login":
+                return FakeHTTPResponse(
+                    200,
+                    {"ok": True, "enabled": True, "authenticated": True},
+                    {
+                        "Set-Cookie": "gemini_admin_session=abc.def; HttpOnly; Path=/",
+                    },
+                )
+            if path == "/v1/request-logs":
+                if "gemini_admin_session=abc.def" in request.headers.get("Cookie", ""):
+                    return FakeHTTPResponse(200, {"logs": []})
+                if request.headers.get("Authorization") == "Bearer sk-test":
+                    seen_admin_api_key = True
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-admin-401"},
+                    BytesIO(
+                        json.dumps(
+                            {"ok": False, "detail": "Admin login required."}
+                        ).encode("utf-8")
+                    ),
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                "sk-test",
+                admin_password="pass",
+            )
+
+        self.assertTrue(seen_admin_api_key)
+        self.assertIn("admin login and boundary ok", results)
 
     def test_smoke_requires_admin_username_when_server_requires_it(self):
         def fake_urlopen(request, timeout):

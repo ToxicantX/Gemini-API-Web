@@ -626,6 +626,33 @@ def _run_smoke_impl(
                 "admin username is required; pass --admin-username",
             )
             payload["username"] = admin_username
+        protected_status, protected, protected_headers = _request(
+            base_url,
+            "/v1/request-logs",
+            timeout=timeout,
+        )
+        _require(protected_status == 401, "/v1/request-logs should require admin login")
+        _require("x-request-id" in {key.lower(): value for key, value in protected_headers.items()}, "admin protection response missing X-Request-ID")
+        _require(
+            protected.get("detail") == "Admin login required.",
+            "admin protection response did not require admin login",
+        )
+        if api_key:
+            # 外部 API Key 只能调用模型/媒体等外部接口，不能读取后台日志或改管理状态。
+            api_key_admin_status, api_key_admin, _ = _request(
+                base_url,
+                "/v1/request-logs",
+                timeout=timeout,
+                api_key=api_key,
+            )
+            _require(
+                api_key_admin_status == 401,
+                "/v1/request-logs should reject external API key",
+            )
+            _require(
+                api_key_admin.get("detail") == "Admin login required.",
+                "external API key unexpectedly accessed admin endpoint",
+            )
         login_status, login, login_headers = _request(
             base_url,
             "/v1/admin/login",
@@ -645,7 +672,7 @@ def _run_smoke_impl(
         )
         _require(logs_status == 200, f"/v1/request-logs with admin cookie returned {logs_status}")
         _require("logs" in logs, "/v1/request-logs missing logs")
-        results.append("admin login ok")
+        results.append("admin login and boundary ok")
 
     if chat_prompt:
         # 真实模型调用会消耗账号请求次数，因此只在显式传入 --chat-prompt 时执行。
