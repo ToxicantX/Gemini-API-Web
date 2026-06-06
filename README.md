@@ -180,7 +180,7 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --native-probes
 ```
 
-如果已经有媒体历史记录，还可以同时验证 `content_url` 的公开内容链接是否支持 `HEAD` 探测，适合检查反向代理和外部客户端预览链路：
+如果已经有媒体历史记录，还可以同时验证 `content_url` 的公开内容链接是否支持 `HEAD` 探测，并检查 `Content-Type` 是否与图片/视频/音频类型匹配、`Content-Length` 是否为合法非负数。这个检查适合发现反向代理、对象存储或 CDN 把媒体响应头弄丢，导致外部客户端无法预览的问题：
 
 ```sh
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --media-history --media-content-probes --media-content-probe-limit 3
