@@ -74,6 +74,14 @@ class DeploymentFileTests(unittest.TestCase):
         self.assertIn("REQUIRE_API_KEY=true", readme)
         self.assertIn("CORS_ALLOW_ORIGINS", readme)
 
+    def test_readme_documents_deployment_smoke_test(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        script = ROOT / "scripts" / "smoke_deploy.py"
+
+        self.assertTrue(script.is_file())
+        self.assertIn("python scripts/smoke_deploy.py", readme)
+        self.assertIn("--api-key", readme)
+
 
 if __name__ == "__main__":
     unittest.main()

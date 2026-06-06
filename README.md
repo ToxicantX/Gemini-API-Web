@@ -97,6 +97,14 @@ curl http://localhost:7860/health
 
 如果部署时设置 `GIT_COMMIT`，`/health` 会在 `build.commit` 中返回该值，方便确认服务器当前运行的镜像或源码版本；未设置时返回空字符串。
 
+部署完成后可以运行轻量 smoke 测试，确认探活、外部 API Key 鉴权和模型列表可用：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key
+```
+
+如果还没有生成 API Key，可以先不传 `--api-key`；脚本会确认外部 `/v1/*` 已被 401 正确保护。
+
 ## 添加账号
 
 推荐使用管理端的“网页授权”：
