@@ -1084,6 +1084,94 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertEqual(seen_heads, ["/v1", "/v1/models"])
         self.assertIn("endpoint probes ok", results)
 
+    def test_smoke_can_check_admin_ui_probe(self):
+        seen_ui = False
+
+        def fake_urlopen(request, timeout):
+            nonlocal seen_ui
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/":
+                seen_ui = True
+                self.assertEqual(request.headers.get("Accept"), "text/html")
+                return FakeHTTPResponse(
+                    200,
+                    headers={"Content-Type": "text/html; charset=utf-8"},
+                    body="""
+                    <title>Gemini API 管理端</title>
+                    <div id="readinessPanel">外部调用未就绪</div>
+                    <strong id="metricReadiness">未知</strong>
+                    <button>网页授权</button>
+                    <option value="gemini-3.1-pro">gemini-3.1-pro</option>
+                    <option value="gemini-3.5-flash">gemini-3.5-flash</option>
+                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
+                    """,
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke("http://service", None, ui_probes=True)
+
+        self.assertTrue(seen_ui)
+        self.assertIn("admin ui ok", results)
+
+    def test_smoke_admin_ui_probe_rejects_old_model_alias_label(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/":
+                return FakeHTTPResponse(
+                    200,
+                    headers={"Content-Type": "text/html; charset=utf-8"},
+                    body="""
+                    <title>Gemini API 管理端</title>
+                    <div id="readinessPanel">外部调用未就绪</div>
+                    <strong id="metricReadiness">未知</strong>
+                    <button>网页授权</button>
+                    <option value="gemini-3.1-pro">gemini-3.1-pro</option>
+                    <option value="gemini-3.5-flash">gemini-3.5-flash</option>
+                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
+                    <option value="gemini">gemini / 3.1 Pro</option>
+                    """,
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(AssertionError) as raised:
+                smoke_deploy.run_smoke("http://service", None, ui_probes=True)
+
+        self.assertIn("old gemini alias", str(raised.exception))
+
     def test_smoke_rejects_head_probe_body(self):
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")

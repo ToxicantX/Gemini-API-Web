@@ -150,6 +150,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --health-probes
 ```
 
+需要验证管理端首页是否已经更新到当前版本时，可以加 `--ui-probes`。脚本只读取 `/` 的 HTML，不触发模型调用；会检查看板里的“调用就绪”诊断、网页授权入口、当前真实模型名，并确认旧的 `gemini / 3.1 Pro` 别名文案没有回流：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --ui-probes
+```
+
 需要验证浏览器跨域调用时，可以加 `--cors-probes`。脚本会向 `/v1/chat/completions` 发送 `OPTIONS` 预检，检查 `Authorization`、`X-API-Key`、`API-Key`、`OpenAI-API-Key`、`Content-Type` 和 `POST` 是否被允许；随后再带 `Origin` 请求 `/v1/models`，确认真实响应会暴露 `X-Request-ID`，方便前端和外部 SDK 排查线上问题：
 
 ```sh

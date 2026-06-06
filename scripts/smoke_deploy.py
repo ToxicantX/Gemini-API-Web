@@ -401,6 +401,26 @@ def _require_generation_readiness(data: dict) -> None:
     )
 
 
+def _require_admin_ui(body: str) -> None:
+    """校验管理端首页包含关键诊断入口，避免线上部署后页面仍是旧版本。"""
+    _require("<title>Gemini API 管理端</title>" in body, "admin UI title is missing")
+    _require("metricReadiness" in body, "admin UI missing generation readiness metric")
+    _require("readinessPanel" in body, "admin UI missing generation readiness panel")
+    _require("外部调用未就绪" in body, "admin UI missing readiness diagnostic copy")
+    _require("网页授权" in body, "admin UI missing web authorization action")
+    _require("gemini-3.1-pro" in body, "admin UI missing gemini-3.1-pro model option")
+    _require("gemini-3.5-flash" in body, "admin UI missing gemini-3.5-flash model option")
+    _require(
+        "gemini-3.1-flash-lite" in body,
+        "admin UI missing gemini-3.1-flash-lite model option",
+    )
+    _require("gemini / 3.1 Pro" not in body, "admin UI still exposes the old gemini alias label")
+    _require(
+        "model: gemini 或" not in body,
+        "admin UI still documents the old gemini alias label",
+    )
+
+
 def _require_media_content_headers(
     headers: dict[str, str],
     *,
@@ -612,6 +632,7 @@ def _run_smoke_impl(
     audio_model: str = "gemini-3.1-pro",
     audio_response_format: str = "json",
     health_probes: bool = False,
+    ui_probes: bool = False,
     cors_probes: bool = False,
     cors_origin: str = "https://your-panel.example.com",
     timeout: float = 120.0,
@@ -667,6 +688,23 @@ def _run_smoke_impl(
             )
             _require_head_response(head_status, head_body, head_headers, label=f"HEAD {path}")
         results.append("health probes ok")
+
+    if ui_probes:
+        # 管理端首页是服务器自助授权和诊断入口；这里只检查静态 HTML，不触发任何模型调用。
+        ui_status, ui_body, ui_headers = _raw_request(
+            base_url,
+            "/",
+            timeout=timeout,
+            headers={"Accept": "text/html"},
+        )
+        _require(ui_status == 200, f"admin UI returned {ui_status}")
+        content_type = next(
+            (value for key, value in ui_headers.items() if key.lower() == "content-type"),
+            "",
+        )
+        _require("html" in content_type.lower(), "admin UI did not return HTML")
+        _require_admin_ui(ui_body)
+        results.append("admin ui ok")
 
     if cors_probes:
         # 浏览器客户端会先发 OPTIONS 预检；这里不消耗模型调用，只验证跨域调用面能过网关。
@@ -1789,6 +1827,7 @@ def run_smoke(
     audio_model: str = "gemini-3.1-pro",
     audio_response_format: str = "json",
     health_probes: bool = False,
+    ui_probes: bool = False,
     cors_probes: bool = False,
     cors_origin: str = "https://your-panel.example.com",
     timeout: float = 120.0,
@@ -1843,6 +1882,7 @@ def run_smoke(
             audio_model=audio_model,
             audio_response_format=audio_response_format,
             health_probes=health_probes,
+            ui_probes=ui_probes,
             cors_probes=cors_probes,
             cors_origin=cors_origin,
             timeout=timeout,
@@ -2029,6 +2069,11 @@ def main() -> int:
         help="Verify GET/HEAD /healthz, /readyz, and /livez deployment probes.",
     )
     parser.add_argument(
+        "--ui-probes",
+        action="store_true",
+        help="Verify the admin UI contains readiness diagnostics and current model labels.",
+    )
+    parser.add_argument(
         "--cors-probes",
         action="store_true",
         help="Verify browser CORS preflight and actual response header exposure.",
@@ -2097,6 +2142,7 @@ def main() -> int:
             audio_model=args.audio_model,
             audio_response_format=args.audio_response_format,
             health_probes=args.health_probes,
+            ui_probes=args.ui_probes,
             cors_probes=args.cors_probes,
             cors_origin=args.cors_origin,
             timeout=max(1.0, args.timeout),
