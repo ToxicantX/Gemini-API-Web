@@ -127,6 +127,8 @@ def run_smoke(
     responses_prompt: str | None = None,
     responses_model: str = "gemini",
     responses_stream: bool = False,
+    completion_prompt: str | None = None,
+    completion_model: str = "gemini",
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
 ) -> list[str]:
@@ -356,6 +358,27 @@ def run_smoke(
             _require("[DONE]" in data_items, "responses stream missing [DONE]")
             results.append("responses stream ok")
 
+    if completion_prompt:
+        # 旧版 OpenAI 兼容客户端仍可能调用 /v1/completions，这里显式验证文本补全结构。
+        completion_status, completion, completion_headers = _request(
+            base_url,
+            "/v1/completions",
+            timeout=timeout,
+            api_key=api_key,
+            method="POST",
+            body={
+                "model": completion_model,
+                "prompt": completion_prompt,
+            },
+        )
+        _require(completion_status == 200, f"/v1/completions returned {completion_status}")
+        _require("x-request-id" in {key.lower(): value for key, value in completion_headers.items()}, "completion response missing X-Request-ID")
+        _require(completion.get("object") == "text_completion", "completion body is not an OpenAI text completion")
+        choices = completion.get("choices") or []
+        _require(bool(choices), "completion body missing choices")
+        _require(bool(choices[0].get("text")), "completion body missing choice text")
+        results.append("completions api ok")
+
     return results
 
 
@@ -405,6 +428,12 @@ def main() -> int:
         help="Also verify streaming /v1/responses when --responses-prompt is set.",
     )
     parser.add_argument(
+        "--completion-prompt",
+        default="",
+        help="Optional prompt for a real /v1/completions smoke request.",
+    )
+    parser.add_argument("--completion-model", default="gemini")
+    parser.add_argument(
         "--fail-on-warnings",
         action="store_true",
         help="Fail when /health reports deployment warnings.",
@@ -425,6 +454,8 @@ def main() -> int:
             responses_prompt=args.responses_prompt or None,
             responses_model=args.responses_model,
             responses_stream=args.responses_stream,
+            completion_prompt=args.completion_prompt or None,
+            completion_model=args.completion_model,
             timeout=max(1.0, args.timeout),
             fail_on_warnings=args.fail_on_warnings,
         )
