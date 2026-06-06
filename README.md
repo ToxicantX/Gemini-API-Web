@@ -322,7 +322,9 @@ environment:
   IMMEDIATE_SWITCH_STATUS_CODES: "429,503"
   REQUEST_TIMEOUT: "300"
   GEMINI_AUTO_REFRESH: "true"
+  GEMINI_AUTH_URL: "https://gemini.google.com/"
   GEMINI_AUTH_HEADLESS: "false"
+  GEMINI_PROXY: ""
   ADMIN_USERNAME: "admin"
   ADMIN_PASSWORD: "change-this-admin-password"
   ADMIN_SESSION_SECRET: "change-this-to-a-long-random-string"
@@ -342,7 +344,9 @@ environment:
 - `IMMEDIATE_SWITCH_STATUS_CODES`：遇到这些 HTTP 状态码时立即切换。
 - `REQUEST_TIMEOUT`：请求超时时间，单位秒。
 - `GEMINI_AUTO_REFRESH`：是否启用 Cookie 自动刷新。
+- `GEMINI_AUTH_URL`：网页登录授权浏览器的起始地址，默认打开 Gemini 官网。
 - `GEMINI_AUTH_HEADLESS`：授权浏览器是否无头运行。需要 noVNC 登录时保持 `false`。
+- `GEMINI_PROXY`：Gemini Web 请求代理。服务器无法直连 Google 时可填写 HTTP/HTTPS 代理地址；为空时会继续兼容读取系统的 `HTTPS_PROXY`、`HTTP_PROXY` 等变量。
 - `ADMIN_USERNAME`：管理员账号。为空时管理端保持旧版“只输密码”模式；服务器部署建议设置。
 - `ADMIN_PASSWORD`：管理员密码。为空时不启用管理端登录，只适合本地可信环境；Docker Compose 默认提供占位值，服务器部署必须修改。
 - `ADMIN_SESSION_SECRET`：管理员会话签名密钥。Docker Compose 默认提供占位值，服务器部署必须改成一段随机长字符串。
@@ -896,6 +900,7 @@ gemini-webapi-server
 - Google 可能调整 Gemini Web 页面结构，某些原生能力可能会受账号权限、地区、订阅状态或上游 SDK 适配影响。
 - 服务器或公网部署必须修改 Docker Compose 默认的 `ADMIN_PASSWORD` 和 `ADMIN_SESSION_SECRET`，并建议设置 `ADMIN_USERNAME`；`/health` 会在未设置密码或仍使用占位值时返回告警。
 - 服务器或公网部署必须启用外部 API Key 鉴权，建议保持 `REQUIRE_API_KEY=true`，并通过 `API_KEYS` 或管理端“系统设置”生成外部调用密钥。
+- HTTPS 反向代理部署时建议设置 `ADMIN_COOKIE_SECURE=true`；若服务器访问 Gemini 需要代理，可以在 `.env` 中配置 `GEMINI_PROXY`。
 - 建议只在可信网络中暴露管理端，公网部署请收紧 `CORS_ALLOW_ORIGINS`，并按需再加反向代理鉴权。
 
 ## 上游项目

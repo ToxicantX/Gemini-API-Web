@@ -181,9 +181,41 @@ class DeploymentFileTests(unittest.TestCase):
         self.assertIn("HOST=0.0.0.0", env_example)
         self.assertIn("PORT=7860", env_example)
         self.assertIn("GIT_COMMIT=", env_example)
+        self.assertIn("GEMINI_AUTH_URL=https://gemini.google.com/", env_example)
+        self.assertIn("GEMINI_PROXY=", env_example)
         self.assertIn("OBJECT_STORAGE_ENABLED=false", env_example)
         self.assertIn("OBJECT_STORAGE_PREFIX=gemini-web", env_example)
         self.assertIn("OBJECT_STORAGE_FORCE_PATH_STYLE=true", env_example)
+
+    def test_server_config_env_vars_are_documented_or_internal(self):
+        env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+        config = (ROOT / "src" / "gemini_webapi" / "server" / "config.py").read_text(
+            encoding="utf-8"
+        )
+        documented = {
+            line.split("=", 1)[0].strip()
+            for line in env_example.splitlines()
+            if line.strip() and not line.strip().startswith("#") and "=" in line
+        }
+        env_names = set(
+            re.findall(
+                r'(?:os\.getenv|_env_int|_env_bool|_env_list|_env_codes)\("([A-Za-z0-9_]+)"',
+                config,
+            )
+        )
+        internal_or_backcompat = {
+            "GEMINI_DATA_DIR",
+            "GEMINI_DATABASE_PATH",
+            "GEMINI_ACCOUNTS_FILE",
+            "OPENAI_API_KEYS",
+            "HTTPS_PROXY",
+            "https_proxy",
+            "HTTP_PROXY",
+            "http_proxy",
+        }
+
+        # 服务端新增环境变量时，要么进入 .env.example/compose 部署模板，要么明确属于内部路径或兼容别名。
+        self.assertEqual(set(), env_names - documented - internal_or_backcompat)
 
     def test_readme_documents_file_head_probes(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
