@@ -18,6 +18,16 @@ class DeploymentFileTests(unittest.TestCase):
         self.assertEqual(exposed_ports, ["EXPOSE 7860"])
         self.assertNotIn("EXPOSE 6080", dockerfile)
 
+    def test_dockerfile_has_healthcheck_for_api_process(self):
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+
+        # 镜像健康检查必须探测同容器内的 /health，避免服务器只看到进程存活但 API 已不可用。
+        self.assertIn("HEALTHCHECK", dockerfile)
+        self.assertIn("127.0.0.1", dockerfile)
+        self.assertIn("/health", dockerfile)
+        self.assertIn("os.getenv('PORT','7860')", dockerfile)
+        self.assertIn("--retries=3", dockerfile)
+
     def test_compose_does_not_publish_novnc_port(self):
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
