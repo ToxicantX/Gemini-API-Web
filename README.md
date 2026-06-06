@@ -713,8 +713,9 @@ gemini-webapi-server
 - 不要提交 `data/app.db`、`data/accounts.json`、`cookies.json` 或任何真实 Cookie。
 - 本项目通过 Gemini Web 的 Cookie 工作，不是 Google 官方 API Key 接口。
 - Google 可能调整 Gemini Web 页面结构，某些原生能力可能会受账号权限、地区、订阅状态或上游 SDK 适配影响。
-- 服务器或公网部署必须设置 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`，否则管理端和账户管理接口会保持开放；`/health` 会在未设置密码时返回告警。
-- 建议只在可信网络中暴露管理端，公网部署请自行加反向代理鉴权。
+- 服务器或公网部署必须修改 Docker Compose 默认的 `ADMIN_PASSWORD` 和 `ADMIN_SESSION_SECRET`，并建议设置 `ADMIN_USERNAME`；`/health` 会在未设置密码或仍使用占位值时返回告警。
+- 服务器或公网部署必须启用外部 API Key 鉴权，建议保持 `REQUIRE_API_KEY=true`，并通过 `API_KEYS` 或管理端“系统设置”生成外部调用密钥。
+- 建议只在可信网络中暴露管理端，公网部署请收紧 `CORS_ALLOW_ORIGINS`，并按需再加反向代理鉴权。
 
 ## 上游项目
 

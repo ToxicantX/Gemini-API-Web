@@ -65,6 +65,15 @@ class DeploymentFileTests(unittest.TestCase):
         self.assertIn("`/v1/gemini/files`", readme)
         self.assertIn("只返回状态和头部", readme)
 
+    def test_readme_documents_server_security_requirements(self):
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+        # README 尾部安全说明需要覆盖公网部署的三个关键点：管理员密钥、外部 API Key 和 CORS。
+        self.assertIn("ADMIN_SESSION_SECRET", readme)
+        self.assertIn("仍使用占位值", readme)
+        self.assertIn("REQUIRE_API_KEY=true", readme)
+        self.assertIn("CORS_ALLOW_ORIGINS", readme)
+
 
 if __name__ == "__main__":
     unittest.main()
