@@ -160,6 +160,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --media-history
 ```
 
+需要验证 Gemini 原生只读入口时，可以加 `--native-probes`。这不会触发生成调用，只会检查 `/v1/gemini/gems` 和 `/v1/gemini/jobs` 是否能被 API Key 正确保护和访问：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --native-probes
+```
+
 如果已经有媒体历史记录，还可以同时验证 `content_url` 的公开内容链接是否支持 `HEAD` 探测，适合检查反向代理和外部客户端预览链路：
 
 ```sh

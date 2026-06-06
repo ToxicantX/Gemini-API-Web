@@ -257,6 +257,7 @@ def _run_smoke_impl(
     file_probes: bool = False,
     file_smoke_path: str | None = None,
     file_smoke_purpose: str = "assistants",
+    native_probes: bool = False,
     responses_prompt: str | None = None,
     responses_model: str = "gemini",
     responses_stream: bool = False,
@@ -610,6 +611,34 @@ def _run_smoke_impl(
                         _require(bool(content_type), f"HEAD {content_path} missing Content-Type")
                         checked += 1
                     results.append(f"media content probes ok ({checked})")
+
+    if native_probes:
+        # Gemini 原生只读端点不触发模型调用，适合部署后确认 API Key 保护和原生能力入口可达。
+        read_paths = (
+            ("/v1/gemini/gems", "gems"),
+            ("/v1/gemini/jobs", "jobs"),
+        )
+        if health.get("auth", {}).get("api_key_required") and not api_key:
+            for path, _field in read_paths:
+                status, _, _ = _request(
+                    base_url,
+                    path,
+                    timeout=timeout,
+                )
+                _require(status == 401, f"{path} should require an API key")
+            results.append("native probe protection ok")
+        else:
+            for path, field in read_paths:
+                status, body, headers = _request(
+                    base_url,
+                    path,
+                    timeout=timeout,
+                    api_key=api_key,
+                )
+                _require(status == 200, f"{path} returned {status}")
+                _require("x-request-id" in {key.lower(): value for key, value in headers.items()}, f"{path} response missing X-Request-ID")
+                _require(isinstance(body.get(field), list), f"{path} missing {field} list")
+            results.append("native probes ok")
 
     if admin_password:
         admin_status, admin, _ = _request(
@@ -973,6 +1002,7 @@ def run_smoke(
     file_probes: bool = False,
     file_smoke_path: str | None = None,
     file_smoke_purpose: str = "assistants",
+    native_probes: bool = False,
     responses_prompt: str | None = None,
     responses_model: str = "gemini",
     responses_stream: bool = False,
@@ -1014,6 +1044,7 @@ def run_smoke(
             file_probes=file_probes,
             file_smoke_path=file_smoke_path,
             file_smoke_purpose=file_smoke_purpose,
+            native_probes=native_probes,
             responses_prompt=responses_prompt,
             responses_model=responses_model,
             responses_stream=responses_stream,
@@ -1124,6 +1155,11 @@ def main() -> int:
     )
     parser.add_argument("--file-smoke-purpose", default="assistants")
     parser.add_argument(
+        "--native-probes",
+        action="store_true",
+        help="Verify read-only Gemini native endpoints such as /v1/gemini/gems and /v1/gemini/jobs.",
+    )
+    parser.add_argument(
         "--responses-prompt",
         default="",
         help="Optional prompt for a real /v1/responses smoke request.",
@@ -1189,6 +1225,7 @@ def main() -> int:
             file_probes=args.file_probes,
             file_smoke_path=args.file_smoke_path or None,
             file_smoke_purpose=args.file_smoke_purpose,
+            native_probes=args.native_probes,
             responses_prompt=args.responses_prompt or None,
             responses_model=args.responses_model,
             responses_stream=args.responses_stream,
