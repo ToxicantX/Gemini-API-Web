@@ -2339,6 +2339,8 @@ def create_app(config: ServerConfig | None = None):
                 "images": "/v1/images/generations",
                 "audio_transcriptions": "/v1/audio/transcriptions",
                 "audio_translations": "/v1/audio/translations",
+                "generation_readiness": "/v1/generation-readiness",
+                "media_cooldowns": "/v1/media-cooldowns",
                 "gemini_generate": "/v1/gemini/generate",
                 "gemini_stream": "/v1/gemini/stream",
                 "gemini_media": "/v1/gemini/media",

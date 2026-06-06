@@ -416,7 +416,7 @@ ADMIN_USERNAME=admin ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=cha
 - `/v1/models`、`/v1/chat/completions`、`/v1/gemini/generate` 等外部接口不使用管理员登录鉴权，而是使用 `Authorization: Bearer <API_KEY>`。
 - 只配置 `ADMIN_PASSWORD` 不会自动保护外部 `/v1/*` API；服务器部署请同时配置 `API_KEYS`，或设置 `REQUIRE_API_KEY=true` 后在管理端生成 API Key。
 - 鉴权头兼容 `Authorization: Bearer <API_KEY>`、大小写不同的 `bearer`、`X-API-Key: <API_KEY>`、`API-Key: <API_KEY>`，以及部分客户端使用的 `OpenAI-API-Key: <API_KEY>`。
-- Gemini 原生的 Gems、Deep Research、文件、媒体和 Jobs 接口也属于外部 API Key 调用面；账户池、授权浏览器、系统设置和请求日志仍属于管理端。
+- Gemini 原生的 Gems、Deep Research、文件、媒体、Jobs、生成就绪状态和媒体冷却摘要接口也属于外部 API Key 调用面；账户池、授权浏览器、系统设置和请求日志仍属于管理端。
 - 浏览器环境跨域调用会返回 CORS 头；服务器公网部署时建议把 `CORS_ALLOW_ORIGINS` 收紧为可信域名。
 - 未配置任何 `API_KEYS` 且管理端系统设置中没有 API Key 时，默认外部接口保持无密钥模式，便于本地调试；服务器部署建议设置 `REQUIRE_API_KEY=true`。开启后如果还没有任何 API Key，外部接口会返回 401，管理员登录控制台后可在“系统设置”里生成第一个 API Key。
 
@@ -860,6 +860,7 @@ curl http://localhost:7860/v1/gemini/stream \
 - `GET/HEAD /readyz`
 - `GET/HEAD /livez`
 - `GET /v1/status`
+- `GET /v1/generation-readiness`
 - `GET /v1/media-cooldowns`
 - `POST /v1/media-cooldowns/clear`
 - `GET /v1/request-logs`
@@ -879,7 +880,7 @@ curl http://localhost:7860/v1/gemini/stream \
 - `POST /v1/auth/session`
 - `POST /v1/auth/save`
 
-除 `GET /health`、`/healthz`、`/readyz`、`/livez` 和只读的 `GET /v1/media-cooldowns` 外，上述接口属于管理端调用面。服务器部署并设置 `ADMIN_PASSWORD` 后，账号、授权、设置、日志和冷却清理等管理操作只接受管理员网页登录态，不接受外部 `API_KEYS` 直接调用；`API_KEYS` 只用于 OpenAI 兼容接口、Gemini 原生生成/媒体/文件等外部调用面，以及读取媒体冷却摘要。这样可以避免外部客户端拿到模型调用 Key 后顺手修改账号池、授权浏览器或系统设置。
+除 `GET /health`、`/healthz`、`/readyz`、`/livez`、只读的 `GET /v1/generation-readiness` 和 `GET /v1/media-cooldowns` 外，上述接口属于管理端调用面。服务器部署并设置 `ADMIN_PASSWORD` 后，账号、授权、设置、日志和冷却清理等管理操作只接受管理员网页登录态，不接受外部 `API_KEYS` 直接调用；`API_KEYS` 只用于 OpenAI 兼容接口、Gemini 原生生成/媒体/文件等外部调用面，以及读取生成就绪状态和媒体冷却摘要。这样可以避免外部客户端拿到模型调用 Key 后顺手修改账号池、授权浏览器或系统设置。
 
 账号列表和当前账号状态通过 `GET /v1/status` 返回。
 
