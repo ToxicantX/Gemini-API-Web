@@ -2065,6 +2065,96 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(stream_calls[0][1]["model"], "gemini-3.1-pro")
             self.assertEqual(invalid.status_code, 400)
 
+    def test_responses_endpoint_supports_function_tools(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            calls = []
+
+            async def fake_init(self, *args, **kwargs):
+                self.client = FakeSession()
+                self.account_status = AccountStatus.AVAILABLE
+
+            async def fake_close(self):
+                self.client = None
+
+            async def fake_generate_content(self, prompt, **kwargs):
+                calls.append((prompt, kwargs))
+                return ModelOutput(
+                    metadata=["cid", "rid"],
+                    candidates=[
+                        Candidate(
+                            rcid="rcid",
+                            text='{"tool_calls":[{"name":"search_docs","arguments":{"query":"部署"}}]}',
+                        )
+                    ],
+                )
+
+            with (
+                patch.object(GeminiClient, "init", fake_init),
+                patch.object(GeminiClient, "close", fake_close),
+                patch.object(GeminiClient, "generate_content", fake_generate_content),
+                TestClient(app) as client,
+            ):
+                app.state.store.upsert_account(
+                    secure_1psid="psid-one",
+                    cookies={"__Secure-1PSID": "psid-one"},
+                    name="one",
+                )
+                response = client.post(
+                    "/v1/responses",
+                    headers={"Authorization": "Bearer sk-external"},
+                    json={
+                        "model": "gemini",
+                        "input": "查一下部署说明",
+                        "tools": [
+                            {
+                                "type": "function",
+                                "function": {
+                                    "name": "search_docs",
+                                    "description": "Search local deployment docs.",
+                                    "parameters": {
+                                        "type": "object",
+                                        "properties": {"query": {"type": "string"}},
+                                        "required": ["query"],
+                                    },
+                                },
+                            }
+                        ],
+                        "tool_choice": "required",
+                        "parallel_tool_calls": False,
+                    },
+                )
+
+            self.assertEqual(response.status_code, 200)
+            data = response.json()
+            self.assertEqual(data["output_text"], "")
+            self.assertEqual(data["output"][0]["type"], "function_call")
+            self.assertEqual(data["output"][0]["name"], "search_docs")
+            self.assertEqual(data["output"][0]["arguments"], '{"query":"部署"}')
+            self.assertEqual(data["output"][0]["id"], data["output"][0]["call_id"])
+            # Responses API 也需要把工具约束传给 Gemini，外部工具执行器才能拿到结构化调用。
+            self.assertIn("Tool calling is available.", calls[0][0])
+            self.assertIn("You must call one of the available tools.", calls[0][0])
+            self.assertIn("Return at most one tool call.", calls[0][0])
+
     def test_openai_files_endpoint_reuses_gemini_file_storage(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)

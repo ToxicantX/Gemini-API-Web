@@ -267,6 +267,9 @@ class ResponsesRequest(BaseModel):
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
     seed: int | None = None
+    tools: list[ChatToolSpec] | None = None
+    tool_choice: str | dict[str, Any] | None = None
+    parallel_tool_calls: bool | None = None
     user: str | None = None
     metadata: dict[str, Any] | None = None
     store: bool | None = None
@@ -466,6 +469,17 @@ def _responses_prompt(request: ResponsesRequest) -> str:
             response_format=response_format,
         )
         prompt = _append_response_format_instructions(prompt, shim_request)
+    if request.tools:
+        # Responses API 的工具入参复用 Chat Completions 的提示词兼容层，保持两套接口行为一致。
+        prompt = _append_tool_instructions(
+            prompt,
+            ChatCompletionRequest(
+                messages=[ChatMessage(role="user", content="placeholder")],
+                tools=request.tools,
+                tool_choice=request.tool_choice,
+                parallel_tool_calls=request.parallel_tool_calls,
+            ),
+        )
     return _append_responses_token_limit_instruction(prompt, request)
 
 
@@ -474,19 +488,31 @@ def _responses_output(
     response_id: str,
     model: str,
     text: str,
+    tool_calls: list[dict[str, Any]] | None = None,
     created: int | None = None,
 ) -> dict[str, Any]:
     """返回 OpenAI Responses API 的基础响应结构。"""
-    output_id = f"msg_{uuid.uuid4().hex}"
-    content_id = f"out_{uuid.uuid4().hex}"
-    return {
-        "id": response_id,
-        "object": "response",
-        "created_at": created or int(time.time()),
-        "status": "completed",
-        "model": model,
-        "output_text": text,
-        "output": [
+    output: list[dict[str, Any]] = []
+    if tool_calls:
+        for call in tool_calls:
+            function = call.get("function") or {}
+            call_id = call.get("id") or f"call_{uuid.uuid4().hex}"
+            output.append(
+                {
+                    "id": call_id,
+                    "type": "function_call",
+                    "status": "completed",
+                    "call_id": call_id,
+                    "name": function.get("name", ""),
+                    "arguments": function.get("arguments", "{}"),
+                }
+            )
+        output_text = ""
+    else:
+        output_id = f"msg_{uuid.uuid4().hex}"
+        content_id = f"out_{uuid.uuid4().hex}"
+        output_text = text
+        output.append(
             {
                 "id": output_id,
                 "type": "message",
@@ -501,7 +527,15 @@ def _responses_output(
                     }
                 ],
             }
-        ],
+        )
+    return {
+        "id": response_id,
+        "object": "response",
+        "created_at": created or int(time.time()),
+        "status": "completed",
+        "model": model,
+        "output_text": output_text,
+        "output": output,
         "usage": {
             "input_tokens": 0,
             "output_tokens": 0,
@@ -3264,10 +3298,12 @@ def create_app(config: ServerConfig | None = None):
             )
         except Exception as exc:
             raise HTTPException(status_code=_error_status(exc), detail=str(exc)) from exc
+        tool_calls = _tool_calls_from_output_text(output.text, payload.tools)
         return _responses_output(
             response_id=f"resp_{uuid.uuid4().hex}",
             model=model,
             text=output.text,
+            tool_calls=tool_calls,
         )
 
     async def _run_openai_image_request(
