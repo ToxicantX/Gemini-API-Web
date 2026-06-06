@@ -1874,12 +1874,12 @@ class SmokeDeployTests(unittest.TestCase):
                 seen_audio = True
                 body = request.data.decode("utf-8", errors="replace")
                 self.assertIn('name="response_format"', body)
-                self.assertIn("json", body)
+                self.assertIn("srt", body)
                 self.assertIn('name="file"; filename="sample.mp3"', body)
                 return FakeHTTPResponse(
                     200,
-                    {"text": "translated text"},
-                    {"X-Request-ID": "req-audio-translation"},
+                    headers={"X-Request-ID": "req-audio-translation"},
+                    body="1\n00:00:00,000 --> 00:00:00,000\ntranslated text\n",
                 )
             raise AssertionError(path)
 
@@ -1892,10 +1892,59 @@ class SmokeDeployTests(unittest.TestCase):
                     "http://service",
                     None,
                     audio_translation_file=audio_file,
+                    audio_response_format="srt",
                 )
 
         self.assertTrue(seen_audio)
         self.assertIn("audio translation ok", results)
+
+    def test_smoke_can_check_audio_verbose_json_shape(self):
+        seen_audio = False
+
+        def fake_urlopen(request, timeout):
+            nonlocal seen_audio
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/audio/transcriptions":
+                seen_audio = True
+                body = request.data.decode("utf-8", errors="replace")
+                self.assertIn("verbose_json", body)
+                return FakeHTTPResponse(
+                    200,
+                    {"text": "transcribed text", "segments": []},
+                    {"X-Request-ID": "req-audio-translation"},
+                )
+            raise AssertionError(path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            audio_file = f"{tmp}\\sample.wav"
+            with open(audio_file, "wb") as handle:
+                handle.write(b"RIFF")
+            with patch("urllib.request.urlopen", fake_urlopen):
+                results = smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    audio_transcription_file=audio_file,
+                    audio_response_format="verbose_json",
+                )
+
+        self.assertTrue(seen_audio)
+        self.assertIn("audio transcription ok", results)
 
     def test_smoke_rejects_audio_response_without_text(self):
         def fake_urlopen(request, timeout):

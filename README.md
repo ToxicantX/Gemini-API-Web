@@ -246,6 +246,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --audio-translation-file ./sample.mp3
 ```
 
+如果外部客户端使用非 JSON 音频响应，可以加 `--audio-response-format text|verbose_json|srt|vtt` 验证对应格式：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --audio-transcription-file ./sample.wav --audio-response-format srt
+```
+
 Smoke 测试会把 `/health` 返回的部署安全警告打印为 `health warning: ...`，例如仍在使用 Docker Compose 占位管理员密码或占位会话密钥。正式上服务器前建议开启严格模式，让这些警告直接导致测试失败：
 
 ```sh

@@ -124,6 +124,37 @@ def _multipart_request(
     api_key_header: str | None = None,
 ) -> tuple[int, dict, dict[str, str]]:
     """发送 multipart/form-data 请求，用于验证外部文件上传类接口。"""
+    status, body_text, response_headers = _raw_multipart_request(
+        base_url,
+        path,
+        timeout=timeout,
+        file_path=file_path,
+        file_field=file_field,
+        files=files,
+        fields=fields,
+        api_key=api_key,
+        api_key_header=api_key_header,
+    )
+    try:
+        data = json.loads(body_text) if body_text else {}
+    except json.JSONDecodeError:
+        data = {}
+    return status, data, response_headers
+
+
+def _raw_multipart_request(
+    base_url: str,
+    path: str,
+    *,
+    timeout: float,
+    file_path: str | None = None,
+    file_field: str = "file",
+    files: list[tuple[str, str]] | None = None,
+    fields: dict[str, str] | None = None,
+    api_key: str | None = None,
+    api_key_header: str | None = None,
+) -> tuple[int, str, dict[str, str]]:
+    """发送 multipart/form-data 请求并保留原始正文，用于 text/srt/vtt 等非 JSON 响应。"""
     upload_files = list(files or [])
     if file_path is not None:
         upload_files.append((file_field, file_path))
@@ -177,11 +208,7 @@ def _multipart_request(
         response_body = exc.read()
         status = exc.code
         response_headers = dict(exc.headers.items())
-    try:
-        data = json.loads(response_body.decode("utf-8", errors="replace")) if response_body else {}
-    except json.JSONDecodeError:
-        data = {}
-    return status, data, response_headers
+    return status, response_body.decode("utf-8", errors="replace"), response_headers
 
 
 def _media_content_path(base_url: str, content_url: str) -> str:
@@ -241,6 +268,28 @@ def _sse_event_names(body_text: str) -> list[str]:
     return events
 
 
+def _require_audio_response(body_text: str, response_format: str, label: str) -> None:
+    """按 OpenAI 音频 response_format 校验 smoke 响应，覆盖 JSON 和纯文本类格式。"""
+    fmt = response_format or "json"
+    if fmt in {"json", "verbose_json"}:
+        try:
+            data = json.loads(body_text) if body_text else {}
+        except json.JSONDecodeError as exc:
+            raise AssertionError(f"{label} response is not JSON") from exc
+        _require(bool(data.get("text")), f"{label} response missing text")
+        if fmt == "verbose_json":
+            _require(isinstance(data.get("segments"), list), f"{label} verbose_json missing segments")
+        return
+    if fmt == "srt":
+        _require(" --> " in body_text, f"{label} srt response missing timestamp")
+        _require(bool(body_text.strip()), f"{label} srt response is empty")
+        return
+    if fmt == "vtt":
+        _require(body_text.startswith("WEBVTT"), f"{label} vtt response missing WEBVTT header")
+        return
+    _require(bool(body_text.strip()), f"{label} text response is empty")
+
+
 def _run_smoke_impl(
     base_url: str,
     api_key: str | None,
@@ -280,6 +329,7 @@ def _run_smoke_impl(
     audio_transcription_file: str | None = None,
     audio_translation_file: str | None = None,
     audio_model: str = "gemini",
+    audio_response_format: str = "json",
     health_probes: bool = False,
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
@@ -873,7 +923,7 @@ def _run_smoke_impl(
 
     if audio_transcription_file:
         # 音频转写需要上传本地文件，只有显式传入文件路径时才执行真实外部接口验证。
-        audio_status, audio, audio_headers = _multipart_request(
+        audio_status, audio_body, audio_headers = _raw_multipart_request(
             base_url,
             "/v1/audio/transcriptions",
             timeout=timeout,
@@ -881,17 +931,17 @@ def _run_smoke_impl(
             file_path=audio_transcription_file,
             fields={
                 "model": audio_model,
-                "response_format": "json",
+                "response_format": audio_response_format,
             },
         )
         _require(audio_status == 200, f"/v1/audio/transcriptions returned {audio_status}")
         _require("x-request-id" in {key.lower(): value for key, value in audio_headers.items()}, "audio transcription response missing X-Request-ID")
-        _require(bool(audio.get("text")), "audio transcription response missing text")
+        _require_audio_response(audio_body, audio_response_format, "audio transcription")
         results.append("audio transcription ok")
 
     if audio_translation_file:
-        # 音频翻译同样走 OpenAI 兼容 multipart 入口，校验 JSON text 字段即可覆盖外部客户端常用路径。
-        audio_status, audio, audio_headers = _multipart_request(
+        # 音频翻译同样走 OpenAI 兼容 multipart 入口，按调用方指定格式校验响应。
+        audio_status, audio_body, audio_headers = _raw_multipart_request(
             base_url,
             "/v1/audio/translations",
             timeout=timeout,
@@ -899,12 +949,12 @@ def _run_smoke_impl(
             file_path=audio_translation_file,
             fields={
                 "model": audio_model,
-                "response_format": "json",
+                "response_format": audio_response_format,
             },
         )
         _require(audio_status == 200, f"/v1/audio/translations returned {audio_status}")
         _require("x-request-id" in {key.lower(): value for key, value in audio_headers.items()}, "audio translation response missing X-Request-ID")
-        _require(bool(audio.get("text")), "audio translation response missing text")
+        _require_audio_response(audio_body, audio_response_format, "audio translation")
         results.append("audio translation ok")
 
     if responses_prompt:
@@ -1106,6 +1156,7 @@ def run_smoke(
     audio_transcription_file: str | None = None,
     audio_translation_file: str | None = None,
     audio_model: str = "gemini",
+    audio_response_format: str = "json",
     health_probes: bool = False,
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
@@ -1152,6 +1203,7 @@ def run_smoke(
             audio_transcription_file=audio_transcription_file,
             audio_translation_file=audio_translation_file,
             audio_model=audio_model,
+            audio_response_format=audio_response_format,
             health_probes=health_probes,
             timeout=timeout,
             fail_on_warnings=fail_on_warnings,
@@ -1236,6 +1288,12 @@ def main() -> int:
         help="Optional local audio file for a real /v1/audio/translations smoke request.",
     )
     parser.add_argument("--audio-model", default="gemini")
+    parser.add_argument(
+        "--audio-response-format",
+        default="json",
+        choices=("json", "text", "verbose_json", "srt", "vtt"),
+        help="Response format used by audio transcription/translation smoke requests.",
+    )
     parser.add_argument(
         "--media-history",
         action="store_true",
@@ -1357,6 +1415,7 @@ def main() -> int:
             audio_transcription_file=args.audio_transcription_file or None,
             audio_translation_file=args.audio_translation_file or None,
             audio_model=args.audio_model,
+            audio_response_format=args.audio_response_format,
             health_probes=args.health_probes,
             timeout=max(1.0, args.timeout),
             fail_on_warnings=args.fail_on_warnings,
