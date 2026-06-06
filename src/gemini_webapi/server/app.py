@@ -1832,6 +1832,10 @@ def create_app(config: ServerConfig | None = None):
             warnings.append(
                 "ADMIN_PASSWORD is not configured. The admin console and management APIs are open; set ADMIN_PASSWORD for server deployments."
             )
+        elif not config.admin_username:
+            warnings.append(
+                "ADMIN_USERNAME is not configured. The admin console uses password-only login; set ADMIN_USERNAME for server deployments."
+            )
         if (
             config.require_api_key
             and not config.api_keys

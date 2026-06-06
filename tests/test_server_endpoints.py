@@ -178,6 +178,7 @@ class ServerEndpointTests(unittest.TestCase):
                 api_keys=("sk-external",),
                 host=config.host,
                 port=config.port,
+                admin_username="admin",
                 admin_password="admin-pass",
                 admin_session_secret="session-secret",
                 git_commit="abc1234",
@@ -867,6 +868,7 @@ class ServerEndpointTests(unittest.TestCase):
                 api_keys=(),
                 host=config.host,
                 port=config.port,
+                admin_username="admin",
                 admin_password="admin-pass",
                 admin_session_secret="session-secret",
                 require_api_key=True,
@@ -877,7 +879,7 @@ class ServerEndpointTests(unittest.TestCase):
                 blocked = client.get("/v1/models")
                 login = client.post(
                     "/v1/admin/login",
-                    json={"password": "admin-pass"},
+                    json={"username": "admin", "password": "admin-pass"},
                 )
                 # 管理员会话仍可进入系统设置生成第一个外部调用 API Key。
                 generated = client.post("/v1/system-settings/api-keys", json={})
@@ -985,8 +987,48 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertFalse(health.json()["auth"]["api_key_required"])
             self.assertFalse(health.json()["auth"]["api_key_configured"])
             self.assertTrue(health.json()["warnings"])
-            self.assertIn("external /v1/* APIs", health.json()["warnings"][0])
+            self.assertTrue(
+                any(
+                    "external /v1/* APIs" in warning
+                    for warning in health.json()["warnings"]
+                )
+            )
             self.assertEqual(models.status_code, 200)
+
+    def test_health_warns_when_admin_username_is_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                health = client.get("/health")
+
+            self.assertEqual(health.status_code, 200)
+            self.assertTrue(health.json()["auth"]["admin_enabled"])
+            self.assertFalse(health.json()["auth"]["admin_username_configured"])
+            # 健康检查要能提示服务器仍处在“只输密码”的兼容模式，方便部署后排查。
+            self.assertTrue(
+                any(
+                    "ADMIN_USERNAME is not configured" in warning
+                    for warning in health.json()["warnings"]
+                )
+            )
 
     def test_admin_login_guards_management_endpoints(self):
         with tempfile.TemporaryDirectory() as tmp:
