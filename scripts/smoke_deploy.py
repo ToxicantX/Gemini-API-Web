@@ -344,6 +344,31 @@ def _require_media_cooldown_summary(data: dict) -> None:
         )
 
 
+def _require_chat_tool_call_response(data: dict) -> None:
+    """校验 Chat Completions 工具调用返回 OpenAI 客户端可执行的结构。"""
+    _require(data.get("object") == "chat.completion", "tool probe response is not a chat completion")
+    choices = data.get("choices") or []
+    _require(bool(choices), "tool probe response missing choices")
+    choice = choices[0]
+    _require(choice.get("finish_reason") == "tool_calls", "tool probe finish_reason is not tool_calls")
+    message = choice.get("message") or {}
+    tool_calls = message.get("tool_calls") or []
+    _require(isinstance(tool_calls, list) and bool(tool_calls), "tool probe missing tool_calls")
+    call = tool_calls[0]
+    _require(call.get("type") == "function", "tool probe call type is not function")
+    _require(bool(call.get("id")), "tool probe call missing id")
+    function = call.get("function") or {}
+    _require(function.get("name") == "echo_tool", "tool probe returned unexpected function name")
+    arguments = function.get("arguments")
+    _require(isinstance(arguments, str), "tool probe function arguments must be a JSON string")
+    try:
+        parsed_arguments = json.loads(arguments)
+    except json.JSONDecodeError as exc:
+        raise AssertionError("tool probe function arguments are not valid JSON") from exc
+    _require(isinstance(parsed_arguments, dict), "tool probe function arguments are not a JSON object")
+    _require(bool(parsed_arguments), "tool probe function arguments are empty")
+
+
 def _run_smoke_impl(
     base_url: str,
     api_key: str | None,
@@ -355,6 +380,7 @@ def _run_smoke_impl(
     chat_prompt: str | None = None,
     chat_model: str = "gemini",
     chat_stream: bool = False,
+    chat_tool_probe: bool = False,
     image_prompt: str | None = None,
     image_model: str = "gemini",
     image_response_format: str = "url",
@@ -977,6 +1003,54 @@ def _run_smoke_impl(
             _require("choices" in first_chunk, "stream chunk missing choices")
             results.append("chat stream ok")
 
+    if chat_tool_probe:
+        # OpenClaw 等工具型客户端依赖 OpenAI 标准 tool_calls 结构；这里显式验证函数名和 arguments JSON 字符串。
+        _require(
+            bool(api_key) or not health.get("auth", {}).get("api_key_required"),
+            "--chat-tool-probe requires --api-key when API key auth is enabled",
+        )
+        tool_status, tool_chat, tool_headers = _request(
+            base_url,
+            "/v1/chat/completions",
+            timeout=timeout,
+            api_key=api_key,
+            method="POST",
+            body={
+                "model": chat_model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": (
+                            "Call echo_tool with a JSON object containing "
+                            'the key "message" and value "smoke".'
+                        ),
+                    }
+                ],
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "echo_tool",
+                            "description": "Echo a short message for smoke testing.",
+                            "parameters": {
+                                "type": "object",
+                                "properties": {"message": {"type": "string"}},
+                                "required": ["message"],
+                            },
+                        },
+                    }
+                ],
+                "tool_choice": {
+                    "type": "function",
+                    "function": {"name": "echo_tool"},
+                },
+            },
+        )
+        _require(tool_status == 200, f"tool probe /v1/chat/completions returned {tool_status}")
+        _require("x-request-id" in {key.lower(): value for key, value in tool_headers.items()}, "tool probe response missing X-Request-ID")
+        _require_chat_tool_call_response(tool_chat)
+        results.append("chat tool_calls ok")
+
     if image_prompt:
         # 图片生成会消耗媒体生成次数，因此只在显式传入 --image-prompt 时执行。
         image_status, image, image_headers = _request(
@@ -1265,6 +1339,7 @@ def run_smoke(
     chat_prompt: str | None = None,
     chat_model: str = "gemini",
     chat_stream: bool = False,
+    chat_tool_probe: bool = False,
     image_prompt: str | None = None,
     image_model: str = "gemini",
     image_response_format: str = "url",
@@ -1313,6 +1388,7 @@ def run_smoke(
             chat_prompt=chat_prompt,
             chat_model=chat_model,
             chat_stream=chat_stream,
+            chat_tool_probe=chat_tool_probe,
             image_prompt=image_prompt,
             image_model=image_model,
             image_response_format=image_response_format,
@@ -1384,6 +1460,11 @@ def main() -> int:
         "--chat-stream",
         action="store_true",
         help="Also verify streaming /v1/chat/completions when --chat-prompt is set.",
+    )
+    parser.add_argument(
+        "--chat-tool-probe",
+        action="store_true",
+        help="Verify OpenAI Chat Completions tool_calls shape with a real tool request.",
     )
     parser.add_argument(
         "--image-prompt",
@@ -1531,6 +1612,7 @@ def main() -> int:
             chat_prompt=args.chat_prompt or None,
             chat_model=args.chat_model,
             chat_stream=args.chat_stream,
+            chat_tool_probe=args.chat_tool_probe,
             image_prompt=args.image_prompt or None,
             image_model=args.image_model,
             image_response_format=args.image_response_format,

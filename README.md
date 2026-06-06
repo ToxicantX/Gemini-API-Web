@@ -198,6 +198,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --chat-prompt "用一句话回复 ok" --chat-stream
 ```
 
+需要验证 OpenClaw 等工具型客户端能执行函数调用时，可以加 `--chat-tool-probe`。这会实际调用 `/v1/chat/completions`，要求返回 OpenAI 标准 `tool_calls`、`finish_reason=tool_calls`，并校验 `function.arguments` 是可解析的 JSON 字符串：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --chat-tool-probe
+```
+
 需要验证旧版 OpenAI Completions API 时，可以显式传入 `--completion-prompt`，脚本会实际调用 `/v1/completions` 并校验 `text_completion` 返回结构：
 
 ```sh
