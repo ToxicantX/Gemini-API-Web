@@ -364,6 +364,7 @@ def _require_cors_preflight(
     _require("content-type" in allow_headers, f"{label} CORS preflight missing content-type header")
     allow_methods = lower_headers.get("access-control-allow-methods", "").lower()
     _require("post" in allow_methods, f"{label} CORS preflight missing POST method")
+    _require("x-request-id" in lower_headers, f"{label} CORS preflight missing X-Request-ID")
 
 
 def _require_cors_actual_response(
@@ -555,6 +556,7 @@ def _run_smoke_impl(
                 "Origin": cors_origin,
                 "Access-Control-Request-Method": "POST",
                 "Access-Control-Request-Headers": "authorization,content-type",
+                "X-Request-ID": "smoke-cors-preflight",
             },
         )
         _require_cors_preflight(

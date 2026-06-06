@@ -362,12 +362,14 @@ class SmokeDeployTests(unittest.TestCase):
                     request.headers["Access-control-request-method"],
                     "POST",
                 )
+                self.assertEqual(request.headers["X-request-id"], "smoke-cors-preflight")
                 return FakeHTTPResponse(
                     200,
                     headers={
                         "Access-Control-Allow-Origin": "https://panel.example.com",
                         "Access-Control-Allow-Headers": "authorization, content-type",
                         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                        "X-Request-ID": "smoke-cors-preflight",
                     },
                     body="",
                 )
@@ -423,6 +425,7 @@ class SmokeDeployTests(unittest.TestCase):
                         "Access-Control-Allow-Origin": "https://panel.example.com",
                         "Access-Control-Allow-Headers": "content-type",
                         "Access-Control-Allow-Methods": "POST",
+                        "X-Request-ID": "smoke-cors-preflight",
                     },
                     body="",
                 )
@@ -446,6 +449,48 @@ class SmokeDeployTests(unittest.TestCase):
 
         self.assertIn("missing authorization", str(raised.exception))
 
+    def test_smoke_rejects_cors_preflight_without_request_id(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/chat/completions" and request.get_method() == "OPTIONS":
+                return FakeHTTPResponse(
+                    200,
+                    headers={
+                        "Access-Control-Allow-Origin": "https://panel.example.com",
+                        "Access-Control-Allow-Headers": "authorization, content-type",
+                        "Access-Control-Allow-Methods": "POST",
+                    },
+                    body="",
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(AssertionError) as raised:
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    cors_probes=True,
+                    cors_origin="https://panel.example.com",
+                )
+
+        self.assertIn("preflight missing X-Request-ID", str(raised.exception))
+
     def test_smoke_rejects_cors_actual_response_without_exposed_request_id(self):
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")
@@ -465,6 +510,7 @@ class SmokeDeployTests(unittest.TestCase):
                         "Access-Control-Allow-Origin": "https://panel.example.com",
                         "Access-Control-Allow-Headers": "authorization, content-type",
                         "Access-Control-Allow-Methods": "POST",
+                        "X-Request-ID": "smoke-cors-preflight",
                     },
                     body="",
                 )
