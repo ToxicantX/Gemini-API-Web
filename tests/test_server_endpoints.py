@@ -246,6 +246,10 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(data["error"]["type"], "invalid_request_error")
             self.assertEqual(data["error"]["code"], 400)
             self.assertIn("messages", data["error"]["message"])
+            self.assertTrue(response.headers["x-request-id"].startswith("req-"))
+            # 外部客户端有时只保留 JSON 正文，错误体也要能直接回查请求日志。
+            self.assertEqual(data["request_id"], response.headers["x-request-id"])
+            self.assertEqual(data["error"]["request_id"], response.headers["x-request-id"])
 
     def test_not_found_and_method_errors_are_openai_compatible(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -271,7 +275,10 @@ class ServerEndpointTests(unittest.TestCase):
             with TestClient(app) as client:
                 missing = client.get(
                     "/v1/not-a-route",
-                    headers={"Authorization": "Bearer sk-external"},
+                    headers={
+                        "Authorization": "Bearer sk-external",
+                        "X-Request-ID": "client-missing-1",
+                    },
                 )
                 wrong_method = client.get(
                     "/v1/chat/completions",
@@ -285,6 +292,12 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(missing.status_code, 404)
             self.assertEqual(missing.json()["error"]["type"], "invalid_request_error")
             self.assertIn("not found", missing.json()["error"]["message"])
+            self.assertEqual(missing.headers["x-request-id"], "client-missing-1")
+            self.assertEqual(missing.json()["request_id"], "client-missing-1")
+            self.assertEqual(
+                missing.json()["error"]["request_id"],
+                "client-missing-1",
+            )
             self.assertEqual(wrong_method.status_code, 405)
             self.assertEqual(
                 wrong_method.json()["error"]["type"],
@@ -378,6 +391,15 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertFalse(rootless_head.text)
             self.assertFalse(rootless_engines_head.text)
             self.assertTrue(unauthenticated.headers["x-request-id"].startswith("req-"))
+            unauthenticated_body = unauthenticated.json()
+            self.assertEqual(
+                unauthenticated_body["request_id"],
+                unauthenticated.headers["x-request-id"],
+            )
+            self.assertEqual(
+                unauthenticated_body["error"]["request_id"],
+                unauthenticated.headers["x-request-id"],
+            )
 
     def test_v1_root_is_api_key_protected_capability_summary(self):
         with tempfile.TemporaryDirectory() as tmp:

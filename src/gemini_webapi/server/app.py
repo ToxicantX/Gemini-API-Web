@@ -1052,8 +1052,13 @@ def _error_status(exc: Exception) -> int:
     return 500
 
 
-def _openai_error(message: str, status_code: int, error_type: str = "api_error") -> dict:
-    return {
+def _openai_error(
+    message: str,
+    status_code: int,
+    error_type: str = "api_error",
+    request_id: str | None = None,
+) -> dict:
+    error = {
         "error": {
             "message": message,
             "type": error_type,
@@ -1061,6 +1066,11 @@ def _openai_error(message: str, status_code: int, error_type: str = "api_error")
             "code": status_code,
         }
     }
+    if request_id:
+        # 外部客户端有时只记录 JSON 正文，这里和响应头同时暴露请求号，方便回查请求日志。
+        error["request_id"] = request_id
+        error["error"]["request_id"] = request_id
+    return error
 
 
 def _chat_chunk(
@@ -1674,7 +1684,12 @@ def create_app(config: ServerConfig | None = None):
             error_type = "authentication_error"
         return JSONResponse(
             status_code=exc.status_code,
-            content=_openai_error(detail, exc.status_code, error_type),
+            content=_openai_error(
+                detail,
+                exc.status_code,
+                error_type,
+                request_id=_request_id_from_request(request),
+            ),
         )
 
     @app.exception_handler(RequestValidationError)
@@ -1693,7 +1708,12 @@ def create_app(config: ServerConfig | None = None):
             detail = "Invalid request body."
         return JSONResponse(
             status_code=400,
-            content=_openai_error(detail, 400, "invalid_request_error"),
+            content=_openai_error(
+                detail,
+                400,
+                "invalid_request_error",
+                request_id=_request_id_from_request(request),
+            ),
         )
 
     @app.middleware("http")
@@ -1773,6 +1793,7 @@ def create_app(config: ServerConfig | None = None):
                             "API key is required, but no API key has been configured. Log in to the admin console and generate one in System Settings.",
                             401,
                             "authentication_error",
+                            request_id=_request_id_from_request(request),
                         ),
                     ),
                     request,
@@ -1785,6 +1806,7 @@ def create_app(config: ServerConfig | None = None):
                             "Invalid or missing API key.",
                             401,
                             "authentication_error",
+                            request_id=_request_id_from_request(request),
                         ),
                     ),
                     request,
