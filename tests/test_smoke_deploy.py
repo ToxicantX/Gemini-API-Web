@@ -9,6 +9,32 @@ import urllib.error
 from scripts import smoke_deploy
 
 
+V1_ROOT_ENDPOINTS = {
+    "models": "/v1/models",
+    "chat_completions": "/v1/chat/completions",
+    "completions": "/v1/completions",
+    "responses": "/v1/responses",
+    "images": "/v1/images/generations",
+    "image_generations": "/v1/images/generations",
+    "image_edits": "/v1/images/edits",
+    "image_variations": "/v1/images/variations",
+    "audio_transcriptions": "/v1/audio/transcriptions",
+    "audio_translations": "/v1/audio/translations",
+    "files": "/v1/files",
+    "generation_readiness": "/v1/generation-readiness",
+    "media_cooldowns": "/v1/media-cooldowns",
+    "gemini_generate": "/v1/gemini/generate",
+    "gemini_stream": "/v1/gemini/stream",
+    "gemini_media": "/v1/gemini/media",
+    "gemini_files": "/v1/gemini/files",
+    "gemini_gems": "/v1/gemini/gems",
+    "gemini_jobs": "/v1/gemini/jobs",
+    "gemini_deep_research_plan": "/v1/gemini/deep-research/plan",
+    "gemini_deep_research_start": "/v1/gemini/deep-research/start",
+    "gemini_deep_research_wait": "/v1/gemini/deep-research/wait",
+}
+
+
 class FakeHTTPResponse:
     def __init__(
         self,
@@ -1060,7 +1086,7 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "ok": True,
                         "object": "api.root",
-                        "endpoints": {"models": "/v1/models"},
+                        "endpoints": V1_ROOT_ENDPOINTS,
                     },
                     {"X-Request-ID": "req-v1-root"},
                 )
@@ -1209,7 +1235,7 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "ok": True,
                         "object": "api.root",
-                        "endpoints": {"models": "/v1/models"},
+                        "endpoints": V1_ROOT_ENDPOINTS,
                     },
                     {"X-Request-ID": "req-v1-root"},
                 )

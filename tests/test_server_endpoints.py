@@ -453,22 +453,33 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertTrue(data["ok"])
             self.assertEqual(data["object"], "api.root")
             self.assertIn("gemini-3.1-pro", data["models"])
-            self.assertEqual(
-                data["endpoints"]["chat_completions"],
-                "/v1/chat/completions",
-            )
-            self.assertEqual(
-                data["endpoints"]["audio_translations"],
-                "/v1/audio/translations",
-            )
-            self.assertEqual(
-                data["endpoints"]["generation_readiness"],
-                "/v1/generation-readiness",
-            )
-            self.assertEqual(
-                data["endpoints"]["media_cooldowns"],
-                "/v1/media-cooldowns",
-            )
+            expected_endpoints = {
+                "models": "/v1/models",
+                "chat_completions": "/v1/chat/completions",
+                "completions": "/v1/completions",
+                "responses": "/v1/responses",
+                "images": "/v1/images/generations",
+                "image_generations": "/v1/images/generations",
+                "image_edits": "/v1/images/edits",
+                "image_variations": "/v1/images/variations",
+                "audio_transcriptions": "/v1/audio/transcriptions",
+                "audio_translations": "/v1/audio/translations",
+                "files": "/v1/files",
+                "generation_readiness": "/v1/generation-readiness",
+                "media_cooldowns": "/v1/media-cooldowns",
+                "gemini_generate": "/v1/gemini/generate",
+                "gemini_stream": "/v1/gemini/stream",
+                "gemini_media": "/v1/gemini/media",
+                "gemini_files": "/v1/gemini/files",
+                "gemini_gems": "/v1/gemini/gems",
+                "gemini_jobs": "/v1/gemini/jobs",
+                "gemini_deep_research_plan": "/v1/gemini/deep-research/plan",
+                "gemini_deep_research_start": "/v1/gemini/deep-research/start",
+                "gemini_deep_research_wait": "/v1/gemini/deep-research/wait",
+            }
+            for name, path in expected_endpoints.items():
+                with self.subTest(endpoint=name):
+                    self.assertEqual(data["endpoints"][name], path)
             self.assertEqual(authorized_slash.status_code, 200)
             self.assertEqual(unauthorized_head.status_code, 401)
             self.assertEqual(head_root.status_code, 200)

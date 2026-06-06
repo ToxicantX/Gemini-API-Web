@@ -459,6 +459,38 @@ def _require_generation_readiness(data: dict) -> None:
     )
 
 
+def _require_v1_root_endpoints(data: dict) -> None:
+    """校验 /v1 能力摘要列出主要外部调用入口，方便客户端和网关自发现。"""
+    endpoints = data.get("endpoints")
+    _require(isinstance(endpoints, dict), "/v1 missing endpoints")
+    expected = {
+        "models": "/v1/models",
+        "chat_completions": "/v1/chat/completions",
+        "completions": "/v1/completions",
+        "responses": "/v1/responses",
+        "images": "/v1/images/generations",
+        "image_generations": "/v1/images/generations",
+        "image_edits": "/v1/images/edits",
+        "image_variations": "/v1/images/variations",
+        "audio_transcriptions": "/v1/audio/transcriptions",
+        "audio_translations": "/v1/audio/translations",
+        "files": "/v1/files",
+        "generation_readiness": "/v1/generation-readiness",
+        "media_cooldowns": "/v1/media-cooldowns",
+        "gemini_generate": "/v1/gemini/generate",
+        "gemini_stream": "/v1/gemini/stream",
+        "gemini_media": "/v1/gemini/media",
+        "gemini_files": "/v1/gemini/files",
+        "gemini_gems": "/v1/gemini/gems",
+        "gemini_jobs": "/v1/gemini/jobs",
+        "gemini_deep_research_plan": "/v1/gemini/deep-research/plan",
+        "gemini_deep_research_start": "/v1/gemini/deep-research/start",
+        "gemini_deep_research_wait": "/v1/gemini/deep-research/wait",
+    }
+    for name, path in expected.items():
+        _require(endpoints.get(name) == path, f"/v1 endpoints.{name} mismatch")
+
+
 def _require_admin_ui(body: str) -> None:
     """校验管理端首页包含关键诊断入口，避免线上部署后页面仍是旧版本。"""
     _require("<title>Gemini API 管理端</title>" in body, "admin UI title is missing")
@@ -1136,7 +1168,7 @@ def _run_smoke_impl(
         else:
             _require(root_status == 200, f"/v1 returned {root_status}")
             _require(root.get("object") == "api.root", "/v1 did not return api.root")
-            _require(isinstance(root.get("endpoints"), dict), "/v1 missing endpoints")
+            _require_v1_root_endpoints(root)
             _require("x-request-id" in {key.lower(): value for key, value in root_headers.items()}, "/v1 response missing X-Request-ID")
             root_head_status, root_head_body, root_head_headers = _raw_request(
                 base_url,
