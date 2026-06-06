@@ -1234,7 +1234,6 @@ def _external_api_path(path: str) -> bool:
         "/v1/images/variations",
         "/v1/generate",
         "/v1/media-cooldowns",
-        "/v1/media-cooldowns/clear",
         "/v1/gemini/generate",
         "/v1/gemini/stream",
         "/v1/gemini/media",
@@ -1266,9 +1265,13 @@ def _external_api_path(path: str) -> bool:
         "/v1/accounts",
         "/v1/auth",
     )
+    management_exact_paths = {
+        "/v1/media-cooldowns/clear",
+    }
     # 未知 /v1 路径仍属于外部客户端调用面；让有效 API Key 通过后返回真实 404/405。
     return path in {"/v1", "/v1/"} or (
         path.startswith("/v1/") and not path.startswith(management_prefixes)
+        and path not in management_exact_paths
     )
 
 

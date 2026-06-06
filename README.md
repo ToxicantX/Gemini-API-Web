@@ -547,7 +547,7 @@ http://localhost:7860/v1/gemini/media/{media_token}/content
 - 图片、视频、音频触发额度错误后会按账号和媒体类型写入冷却状态，默认 5 小时后恢复尝试。
 - 明确指定 `mode=image|video|audio` 时，如果上游返回 2xx 但没有对应媒体结果，也会写入该账号该媒体类型的 5 小时冷却。
 - 可通过 `GET /v1/media-cooldowns` 查看全局媒体冷却汇总，判断当前账号池是否还能继续生成图片、视频或音频。
-- 确认额度已恢复时，可通过 `POST /v1/media-cooldowns/clear` 清除全局媒体冷却；也可以在看板媒体冷却卡片上按类型清除。
+- 确认额度已恢复时，可在管理端看板媒体冷却卡片上按类型清除，或使用管理员登录态调用 `POST /v1/media-cooldowns/clear`。清理冷却会改变额度保护状态，不允许仅凭外部 API Key 操作。
 
 媒体冷却汇总示例：
 
@@ -581,12 +581,12 @@ curl http://localhost:7860/v1/media-cooldowns \
 
 ```sh
 curl http://localhost:7860/v1/media-cooldowns/clear \
-  -H "Authorization: Bearer sk-your-external-key" \
   -H "Content-Type: application/json" \
+  -b "gemini_admin_session=<admin-session-cookie>" \
   -d '{"kind":"video"}'
 ```
 
-`kind` 可选 `image`、`video`、`audio`；不传 `kind` 时会清除全部媒体冷却。
+`kind` 可选 `image`、`video`、`audio`；不传 `kind` 时会清除全部媒体冷却。该接口属于管理操作，外部 API Key 只能读取 `GET /v1/media-cooldowns`，不能清除冷却。
 
 原生流式接口：
 

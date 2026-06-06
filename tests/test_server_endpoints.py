@@ -3437,14 +3437,25 @@ class ServerEndpointTests(unittest.TestCase):
                     headers={"Authorization": "Bearer sk-external"},
                     json={"kind": "image"},
                 )
+                login = client.post(
+                    "/v1/admin/login",
+                    json={"password": "admin-pass"},
+                )
+                admin_cleared = client.post(
+                    "/v1/media-cooldowns/clear",
+                    json={"kind": "image"},
+                )
 
             self.assertEqual(unauthenticated.status_code, 401)
             self.assertEqual(authorized.status_code, 200)
             by_kind = {item["kind"]: item for item in authorized.json()["summary"]}
             self.assertEqual(by_kind["image"]["blocked"], 1)
-            self.assertEqual(cleared.status_code, 200)
-            self.assertEqual(cleared.json()["cleared"], 1)
-            # 单账号冷却清理属于管理操作，不能仅凭外部 API Key 操作具体账号。
+            # 清理媒体冷却会改变自用额度保护状态，不能仅凭外部 API Key 操作。
+            self.assertEqual(cleared.status_code, 401)
+            self.assertEqual(login.status_code, 200)
+            self.assertEqual(admin_cleared.status_code, 200)
+            self.assertEqual(admin_cleared.json()["cleared"], 1)
+            # 单账号冷却清理同样属于管理操作，不能仅凭外部 API Key 操作具体账号。
             self.assertEqual(account_scoped.status_code, 401)
 
     def test_request_validation_runs_before_account_selection(self):
