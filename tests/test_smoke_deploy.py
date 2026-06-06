@@ -222,6 +222,63 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertIn("authorized models ok", results)
         self.assertIn("media cooldown summary ok", results)
 
+    def test_smoke_can_require_available_account(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
+                        "accounts": {"total": 1, "available": 1, "current_account_id": 1},
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                None,
+                require_account=True,
+            )
+
+        self.assertIn("available account ok", results)
+
+    def test_smoke_rejects_require_account_without_available_accounts(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
+                        "accounts": {"total": 0, "available": 0, "current_account_id": None},
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaisesRegex(
+                AssertionError,
+                "no available Gemini accounts",
+            ):
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    require_account=True,
+                )
+
     def test_smoke_validates_media_cooldown_summary_shape(self):
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")

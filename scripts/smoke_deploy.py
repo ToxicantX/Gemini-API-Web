@@ -591,6 +591,7 @@ def _run_smoke_impl(
     cors_origin: str = "https://your-panel.example.com",
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
+    require_account: bool = False,
 ) -> list[str]:
     results: list[str] = []
 
@@ -599,6 +600,15 @@ def _run_smoke_impl(
     _require(health.get("ok") is True, "/health did not return ok=true")
     _require("models" in health, "/health missing models")
     results.append("health ok")
+    account_summary = health.get("accounts") or {}
+    if require_account:
+        # 对外真实生成必须至少有一个启用且未过期的 Gemini 账号；接口层 smoke 可不强制。
+        available_accounts = int(account_summary.get("available") or 0)
+        _require(
+            available_accounts > 0,
+            "/health reports no available Gemini accounts; authorize at least one account before external generation.",
+        )
+        results.append("available account ok")
     warnings = [
         str(item)
         for item in health.get("warnings", [])
@@ -1657,6 +1667,7 @@ def run_smoke(
     cors_origin: str = "https://your-panel.example.com",
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
+    require_account: bool = False,
 ) -> list[str]:
     global _ACTIVE_API_KEY_HEADER
     previous_api_key_header = _ACTIVE_API_KEY_HEADER
@@ -1708,6 +1719,7 @@ def run_smoke(
             cors_origin=cors_origin,
             timeout=timeout,
             fail_on_warnings=fail_on_warnings,
+            require_account=require_account,
         )
     finally:
         _ACTIVE_API_KEY_HEADER = previous_api_key_header
@@ -1896,6 +1908,11 @@ def main() -> int:
         default="https://your-panel.example.com",
         help="Origin header used by --cors-probes.",
     )
+    parser.add_argument(
+        "--require-account",
+        action="store_true",
+        help="Fail unless /health reports at least one available Gemini account.",
+    )
     args = parser.parse_args()
     try:
         results = run_smoke(
@@ -1944,6 +1961,7 @@ def main() -> int:
             cors_origin=args.cors_origin,
             timeout=max(1.0, args.timeout),
             fail_on_warnings=args.fail_on_warnings,
+            require_account=args.require_account,
         )
     except Exception as exc:
         print(f"smoke failed: {exc}", file=sys.stderr)

@@ -192,6 +192,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --admin-username admin --admin-password your-admin-password
 ```
 
+如果要把服务交给外部客户端真实生成使用，建议先加 `--require-account` 验收账号池。这个检查只读取 `/health`，不会消耗模型请求；当没有启用且未过期的 Gemini 账号时会直接失败，避免接口层正常但真实调用不可用：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --require-account
+```
+
 需要确认外部客户端真实模型调用也可用时，可以显式传入 `--chat-prompt`。这会实际调用 `/v1/chat/completions` 并消耗一次账号请求：
 
 ```sh
