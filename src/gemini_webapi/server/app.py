@@ -2621,7 +2621,12 @@ def create_app(config: ServerConfig | None = None):
                     }
                     yield f"data: {json.dumps(chunk).decode()}\n\n"
             except Exception as exc:
-                error = {"ok": False, "error": str(exc), "status": _error_status(exc)}
+                error = {
+                    "ok": False,
+                    "error": str(exc),
+                    "status": _error_status(exc),
+                    "request_id": request_id,
+                }
                 yield _sse_error_event(error)
                 yield "data: [DONE]\n\n"
                 return
@@ -2630,7 +2635,12 @@ def create_app(config: ServerConfig | None = None):
                 try:
                     _ensure_media_generation_result(final_output, generation_mode)
                 except Exception as exc:
-                    error = {"ok": False, "error": str(exc), "status": _error_status(exc)}
+                    error = {
+                        "ok": False,
+                        "error": str(exc),
+                        "status": _error_status(exc),
+                        "request_id": request_id,
+                    }
                     yield _sse_error_event(error)
                     yield "data: [DONE]\n\n"
                     return
@@ -3279,6 +3289,7 @@ def create_app(config: ServerConfig | None = None):
                                 "error": _openai_error(
                                     str(exc),
                                     _error_status(exc),
+                                    request_id=request_id,
                                 )["error"],
                             },
                         },
@@ -3813,7 +3824,11 @@ def create_app(config: ServerConfig | None = None):
                         if stopped_by_sequence:
                             break
                 except Exception as exc:
-                    error = _openai_error(str(exc), _error_status(exc))
+                    error = _openai_error(
+                        str(exc),
+                        _error_status(exc),
+                        request_id=request_id,
+                    )
                     yield _sse_error_event(error)
                     yield "data: [DONE]\n\n"
                     return
@@ -3930,7 +3945,11 @@ def create_app(config: ServerConfig | None = None):
                             if stopped_by_sequence:
                                 break
                 except Exception as exc:
-                    error = _openai_error(str(exc), _error_status(exc))
+                    error = _openai_error(
+                        str(exc),
+                        _error_status(exc),
+                        request_id=request_id,
+                    )
                     yield _sse_error_event(error)
                     yield "data: [DONE]\n\n"
                     return
