@@ -269,6 +269,34 @@ def _require_openai_error(
     _require(error.get("request_id") == request_id, f"{label} error request_id mismatch")
 
 
+def _probe_unavailable_generation_endpoint(
+    *,
+    base_url: str,
+    timeout: float,
+    api_key: str | None,
+    path: str,
+    body: dict,
+    label: str,
+) -> None:
+    """账号池为空时校验生成类入口都返回一致的服务不可用错误。"""
+    status, data, headers = _request(
+        base_url,
+        path,
+        timeout=timeout,
+        api_key=api_key,
+        method="POST",
+        body=body,
+    )
+    _require_openai_error(
+        status,
+        data,
+        headers,
+        expected_status=503,
+        expected_type="service_unavailable",
+        label=label,
+    )
+
+
 def _require_head_response(
     status: int,
     body_text: str,
@@ -896,25 +924,57 @@ def _run_smoke_impl(
             "--unavailable-generation-probe only runs when /health reports zero available Gemini accounts.",
         )
         # 账号池不可用时应返回服务暂不可用，而不是伪装成外部 API Key 鉴权失败。
-        unavailable_status, unavailable, unavailable_headers = _request(
-            base_url,
-            "/v1/chat/completions",
-            timeout=timeout,
-            api_key=api_key,
-            method="POST",
-            body={
-                "model": chat_model,
-                "messages": [{"role": "user", "content": "smoke no available account"}],
-            },
-        )
-        _require_openai_error(
-            unavailable_status,
-            unavailable,
-            unavailable_headers,
-            expected_status=503,
-            expected_type="service_unavailable",
-            label="unavailable generation",
-        )
+        # 这里覆盖主要外部生成入口，避免某个兼容接口漏出 500 或非标准错误体。
+        for path, body, label in (
+            (
+                "/v1/chat/completions",
+                {
+                    "model": chat_model,
+                    "messages": [{"role": "user", "content": "smoke no available account"}],
+                },
+                "unavailable chat completions",
+            ),
+            (
+                "/v1/responses",
+                {
+                    "model": chat_model,
+                    "input": "smoke no available account",
+                },
+                "unavailable responses",
+            ),
+            (
+                "/v1/completions",
+                {
+                    "model": chat_model,
+                    "prompt": "smoke no available account",
+                },
+                "unavailable completions",
+            ),
+            (
+                "/v1/gemini/generate",
+                {
+                    "model": chat_model,
+                    "prompt": "smoke no available account",
+                },
+                "unavailable gemini generate",
+            ),
+            (
+                "/v1/images/generations",
+                {
+                    "model": image_model,
+                    "prompt": "smoke no available account image",
+                },
+                "unavailable image generation",
+            ),
+        ):
+            _probe_unavailable_generation_endpoint(
+                base_url=base_url,
+                timeout=timeout,
+                api_key=api_key,
+                path=path,
+                body=body,
+                label=label,
+            )
         results.append("unavailable generation ok")
 
     if probe_endpoints:

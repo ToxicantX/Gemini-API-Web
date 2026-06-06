@@ -1404,7 +1404,7 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertIn("error probes ok", results)
 
     def test_smoke_can_check_unavailable_generation_shape(self):
-        seen_generation = False
+        seen_generation_paths = []
 
         def openai_error(status, error_type, request_id, message):
             return {
@@ -1418,7 +1418,6 @@ class SmokeDeployTests(unittest.TestCase):
             }
 
         def fake_urlopen(request, timeout):
-            nonlocal seen_generation
             path = request.full_url.replace("http://service", "")
             auth = request.headers.get("Authorization")
             if path == "/health":
@@ -1453,19 +1452,25 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
-            if path == "/v1/chat/completions":
-                seen_generation = True
+            if path in {
+                "/v1/chat/completions",
+                "/v1/responses",
+                "/v1/completions",
+                "/v1/gemini/generate",
+                "/v1/images/generations",
+            }:
+                seen_generation_paths.append(path)
                 raise urllib.error.HTTPError(
                     request.full_url,
                     503,
                     "Service Unavailable",
-                    {"X-Request-ID": "req-unavailable"},
+                    {"X-Request-ID": f"req-unavailable-{len(seen_generation_paths)}"},
                     BytesIO(
                         json.dumps(
                             openai_error(
                                 503,
                                 "service_unavailable",
-                                "req-unavailable",
+                                f"req-unavailable-{len(seen_generation_paths)}",
                                 "No active Gemini accounts are available.",
                             )
                         ).encode("utf-8")
@@ -1482,7 +1487,16 @@ class SmokeDeployTests(unittest.TestCase):
                 unavailable_generation_probe=True,
             )
 
-        self.assertTrue(seen_generation)
+        self.assertEqual(
+            seen_generation_paths,
+            [
+                "/v1/chat/completions",
+                "/v1/responses",
+                "/v1/completions",
+                "/v1/gemini/generate",
+                "/v1/images/generations",
+            ],
+        )
         self.assertIn("unavailable generation ok", results)
 
     def test_smoke_can_check_file_head_probes(self):
