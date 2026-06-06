@@ -214,5 +214,12 @@ Temporary Items
 temp/
 
 # Cookies and credentials
+.env.*
+!.env.example
+accounts.json
 cookies.json
 *.cookies
+*.db
+*.sqlite
+*.sqlite3
+media-cache/

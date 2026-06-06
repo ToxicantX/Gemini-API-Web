@@ -59,6 +59,32 @@ class DeploymentFileTests(unittest.TestCase):
         ):
             self.assertIn(entry, entries)
 
+    def test_gitignore_excludes_sensitive_runtime_files(self):
+        gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+        entries = {
+            line.strip()
+            for line in gitignore.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+
+        # Git 提交层面也要拦住服务器运行时产生的 Cookie、数据库、媒体缓存和派生 .env。
+        for entry in (
+            "data/*",
+            "!data/",
+            "!data/accounts.example.json",
+            ".env",
+            ".env.*",
+            "!.env.example",
+            "accounts.json",
+            "cookies.json",
+            "*.cookies",
+            "*.db",
+            "*.sqlite",
+            "*.sqlite3",
+            "media-cache/",
+        ):
+            self.assertIn(entry, entries)
+
     def test_compose_passes_server_deployment_env(self):
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
