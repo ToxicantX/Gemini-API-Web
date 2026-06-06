@@ -192,6 +192,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --readiness-probes
 ```
 
+授权后或容器重启后，如果只想快速确认账号是否真的保存到持久化账户池，可以加 `--account-diagnostics`。它同样不会触发模型调用，只输出账号总数、可用数、禁用/过期数、当前账号、`ready` 状态和原因码，不会读取或打印 Cookie：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --account-diagnostics
+```
+
 如果当前确实还没有可用账号，可以加 `--unavailable-generation-probe` 验证外部生成失败形态。这个检查会向 `/v1/chat/completions`、`/v1/responses`、`/v1/completions`、`/v1/gemini/generate` 和 `/v1/images/generations` 各发送一次请求；当 `/health` 报告可用账号数为 0 时，预期返回 OpenAI 兼容错误体、HTTP `503` 和 `error.type=service_unavailable`，避免外部客户端误判为 API Key 错误或某个入口漏出非标准错误。账号授权完成后不要再使用这个参数，改用 `--require-account` 或真实生成 smoke：
 
 ```sh
