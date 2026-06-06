@@ -195,6 +195,112 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertIn("authorized models ok", results)
         self.assertIn("media cooldown summary ok", results)
 
+    def test_smoke_can_use_x_api_key_header(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            auth = request.headers.get("X-api-key")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if not auth:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-401"},
+                    BytesIO(
+                        json.dumps(
+                            {"error": {"message": "Invalid or missing API key."}}
+                        ).encode("utf-8")
+                    ),
+                )
+            self.assertEqual(auth, "sk-test")
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                "sk-test",
+                api_key_header="x-api-key",
+            )
+
+        self.assertIn("authorized models ok", results)
+        self.assertIn("media cooldown summary ok", results)
+
+    def test_smoke_can_probe_supported_auth_headers(self):
+        seen_headers = []
+
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if path == "/v1/models":
+                auth_headers = {
+                    key.lower(): value
+                    for key, value in request.headers.items()
+                    if key.lower() in {"authorization", "x-api-key", "api-key", "openai-api-key"}
+                }
+                if not auth_headers:
+                    raise urllib.error.HTTPError(
+                        request.full_url,
+                        401,
+                        "Unauthorized",
+                        {"X-Request-ID": "req-401"},
+                        BytesIO(
+                            json.dumps(
+                                {"error": {"message": "Invalid or missing API key."}}
+                            ).encode("utf-8")
+                        ),
+                    )
+                seen_headers.append(auth_headers)
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"X-Request-ID": "req-models"},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                "sk-test",
+                auth_header_probes=True,
+            )
+
+        self.assertEqual(
+            seen_headers,
+            [
+                {"authorization": "Bearer sk-test"},
+                {"authorization": "Bearer sk-test"},
+                {"x-api-key": "sk-test"},
+                {"api-key": "sk-test"},
+                {"openai-api-key": "sk-test"},
+            ],
+        )
+        self.assertIn("auth header probes ok", results)
+
     def test_smoke_can_check_endpoint_probes(self):
         seen_head = False
 

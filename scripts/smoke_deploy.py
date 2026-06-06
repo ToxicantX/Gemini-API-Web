@@ -11,12 +11,46 @@ import uuid
 from urllib.parse import urlparse
 
 
+_ACTIVE_API_KEY_HEADER = "authorization"
+
+
+def _normalize_api_key_header(value: str | None) -> str:
+    """规范化 smoke 请求使用的 API Key 头名称。"""
+    normalized = (value or "authorization").strip().lower()
+    aliases = {
+        "authorization": "authorization",
+        "bearer": "authorization",
+        "x-api-key": "x-api-key",
+        "api-key": "api-key",
+        "openai-api-key": "openai-api-key",
+    }
+    if normalized not in aliases:
+        raise AssertionError(
+            "--api-key-header must be one of: authorization, x-api-key, api-key, openai-api-key"
+        )
+    return aliases[normalized]
+
+
+def _api_key_auth_header(api_key: str, api_key_header: str | None = None) -> dict[str, str]:
+    """按外部客户端常用写法生成 API Key 请求头。"""
+    header = _normalize_api_key_header(api_key_header or _ACTIVE_API_KEY_HEADER)
+    if header == "authorization":
+        return {"Authorization": f"Bearer {api_key}"}
+    names = {
+        "x-api-key": "X-API-Key",
+        "api-key": "API-Key",
+        "openai-api-key": "OpenAI-API-Key",
+    }
+    return {names[header]: api_key}
+
+
 def _request(
     base_url: str,
     path: str,
     *,
     timeout: float,
     api_key: str | None = None,
+    api_key_header: str | None = None,
     headers: dict[str, str] | None = None,
     method: str = "GET",
     body: dict | None = None,
@@ -26,6 +60,7 @@ def _request(
         path,
         timeout=timeout,
         api_key=api_key,
+        api_key_header=api_key_header,
         headers=headers,
         method=method,
         body=body,
@@ -43,6 +78,7 @@ def _raw_request(
     *,
     timeout: float,
     api_key: str | None = None,
+    api_key_header: str | None = None,
     headers: dict[str, str] | None = None,
     method: str = "GET",
     body: dict | None = None,
@@ -52,7 +88,7 @@ def _raw_request(
     if headers:
         request_headers.update(headers)
     if api_key:
-        request_headers["Authorization"] = f"Bearer {api_key}"
+        request_headers.update(_api_key_auth_header(api_key, api_key_header))
     data = None
     if body is not None:
         request_headers["Content-Type"] = "application/json"
@@ -84,10 +120,11 @@ def _multipart_request(
     file_field: str = "file",
     fields: dict[str, str] | None = None,
     api_key: str | None = None,
+    api_key_header: str | None = None,
 ) -> tuple[int, dict, dict[str, str]]:
     """发送 multipart/form-data 请求，用于验证外部文件上传类接口。"""
     source = Path(file_path)
-    _require(source.is_file(), f"audio file does not exist: {file_path}")
+    _require(source.is_file(), f"upload file does not exist: {file_path}")
     boundary = f"----gemini-smoke-{uuid.uuid4().hex}"
     parts: list[bytes] = []
     for key, value in (fields or {}).items():
@@ -118,7 +155,7 @@ def _multipart_request(
         "Content-Type": f"multipart/form-data; boundary={boundary}",
     }
     if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+        headers.update(_api_key_auth_header(api_key, api_key_header))
     request = urllib.request.Request(
         f"{base_url.rstrip('/')}{path}",
         data=b"".join(parts),
@@ -202,6 +239,8 @@ def run_smoke(
     base_url: str,
     api_key: str | None,
     *,
+    api_key_header: str = "authorization",
+    auth_header_probes: bool = False,
     admin_username: str | None = None,
     admin_password: str | None = None,
     chat_prompt: str | None = None,
@@ -234,6 +273,9 @@ def run_smoke(
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
 ) -> list[str]:
+    global _ACTIVE_API_KEY_HEADER
+    previous_api_key_header = _ACTIVE_API_KEY_HEADER
+    _ACTIVE_API_KEY_HEADER = _normalize_api_key_header(api_key_header)
     results: list[str] = []
 
     health_status, health, _ = _request(base_url, "/health", timeout=timeout)
@@ -301,6 +343,21 @@ def run_smoke(
         _require(any(item.get("id") == "gemini" for item in models.get("data", [])), "/v1/models missing gemini")
         _require("x-request-id" in {key.lower(): value for key, value in headers.items()}, "authorized response missing X-Request-ID")
         results.append("authorized models ok")
+
+    if auth_header_probes:
+        _require(bool(api_key), "--auth-header-probes requires --api-key")
+        for header_name in ("authorization", "x-api-key", "api-key", "openai-api-key"):
+            status, models, headers = _request(
+                base_url,
+                "/v1/models",
+                timeout=timeout,
+                api_key=api_key,
+                api_key_header=header_name,
+            )
+            _require(status == 200, f"/v1/models with {header_name} returned {status}")
+            _require(models.get("object") == "list", f"/v1/models with {header_name} did not return an OpenAI list")
+            _require("x-request-id" in {key.lower(): value for key, value in headers.items()}, f"/v1/models with {header_name} missing X-Request-ID")
+        results.append("auth header probes ok")
 
     if probe_endpoints:
         # 外部 SDK、API 网关和反向代理经常先探测根路径、模型列表 HEAD 和模型详情。
@@ -867,6 +924,7 @@ def run_smoke(
             _require("metadata" in final_chunk, "gemini stream final chunk missing metadata")
             results.append("gemini stream ok")
 
+    _ACTIVE_API_KEY_HEADER = previous_api_key_header
     return results
 
 
@@ -874,6 +932,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Smoke test a deployed Gemini API Web service.")
     parser.add_argument("--base-url", default="http://localhost:7860")
     parser.add_argument("--api-key", default="")
+    parser.add_argument(
+        "--api-key-header",
+        default="authorization",
+        choices=("authorization", "bearer", "x-api-key", "api-key", "openai-api-key"),
+        help="Header style used by --api-key for smoke requests.",
+    )
+    parser.add_argument(
+        "--auth-header-probes",
+        action="store_true",
+        help="Verify Authorization, X-API-Key, API-Key, and OpenAI-API-Key auth headers.",
+    )
     parser.add_argument(
         "--timeout",
         type=float,
@@ -996,6 +1065,8 @@ def main() -> int:
         results = run_smoke(
             args.base_url,
             args.api_key or None,
+            api_key_header=args.api_key_header,
+            auth_header_probes=args.auth_header_probes,
             admin_username=args.admin_username or None,
             admin_password=args.admin_password or None,
             chat_prompt=args.chat_prompt or None,
