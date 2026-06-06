@@ -301,6 +301,82 @@ class SmokeDeployTests(unittest.TestCase):
         )
         self.assertIn("auth header probes ok", results)
 
+    def test_smoke_resets_api_key_header_after_failure(self):
+        calls = []
+
+        def failing_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            calls.append((path, dict(request.headers)))
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            raise urllib.error.HTTPError(
+                request.full_url,
+                401,
+                "Unauthorized",
+                {"X-Request-ID": "req-401"},
+                BytesIO(
+                    json.dumps(
+                        {"error": {"message": "Invalid or missing API key."}}
+                    ).encode("utf-8")
+                ),
+            )
+
+        with patch("urllib.request.urlopen", failing_urlopen):
+            with self.assertRaises(AssertionError):
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    "sk-test",
+                    api_key_header="x-api-key",
+                )
+
+        def succeeding_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if path == "/v1/models":
+                if not request.headers.get("Authorization"):
+                    raise urllib.error.HTTPError(
+                        request.full_url,
+                        401,
+                        "Unauthorized",
+                        {"X-Request-ID": "req-401"},
+                        BytesIO(
+                            json.dumps(
+                                {"error": {"message": "Invalid or missing API key."}}
+                            ).encode("utf-8")
+                        ),
+                    )
+                self.assertEqual(request.headers.get("Authorization"), "Bearer sk-test")
+                self.assertIsNone(request.headers.get("X-api-key"))
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                self.assertEqual(request.headers.get("Authorization"), "Bearer sk-test")
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", succeeding_urlopen):
+            results = smoke_deploy.run_smoke("http://service", "sk-test")
+
+        self.assertTrue(any("X-api-key" in headers for _, headers in calls))
+        self.assertIn("authorized models ok", results)
+
     def test_smoke_can_check_endpoint_probes(self):
         seen_head = False
 

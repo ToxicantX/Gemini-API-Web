@@ -235,7 +235,7 @@ def _sse_event_names(body_text: str) -> list[str]:
     return events
 
 
-def run_smoke(
+def _run_smoke_impl(
     base_url: str,
     api_key: str | None,
     *,
@@ -273,9 +273,6 @@ def run_smoke(
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
 ) -> list[str]:
-    global _ACTIVE_API_KEY_HEADER
-    previous_api_key_header = _ACTIVE_API_KEY_HEADER
-    _ACTIVE_API_KEY_HEADER = _normalize_api_key_header(api_key_header)
     results: list[str] = []
 
     health_status, health, _ = _request(base_url, "/health", timeout=timeout)
@@ -924,8 +921,90 @@ def run_smoke(
             _require("metadata" in final_chunk, "gemini stream final chunk missing metadata")
             results.append("gemini stream ok")
 
-    _ACTIVE_API_KEY_HEADER = previous_api_key_header
     return results
+
+
+def run_smoke(
+    base_url: str,
+    api_key: str | None,
+    *,
+    api_key_header: str = "authorization",
+    auth_header_probes: bool = False,
+    admin_username: str | None = None,
+    admin_password: str | None = None,
+    chat_prompt: str | None = None,
+    chat_model: str = "gemini",
+    chat_stream: bool = False,
+    image_prompt: str | None = None,
+    image_model: str = "gemini",
+    image_response_format: str = "url",
+    media_history: bool = False,
+    media_content_probes: bool = False,
+    media_content_probe_limit: int = 3,
+    probe_endpoints: bool = False,
+    probe_model: str = "gemini",
+    file_probes: bool = False,
+    file_smoke_path: str | None = None,
+    file_smoke_purpose: str = "assistants",
+    responses_prompt: str | None = None,
+    responses_model: str = "gemini",
+    responses_stream: bool = False,
+    completion_prompt: str | None = None,
+    completion_model: str = "gemini",
+    completion_stream: bool = False,
+    gemini_prompt: str | None = None,
+    gemini_model: str = "gemini",
+    gemini_stream: bool = False,
+    audio_transcription_file: str | None = None,
+    audio_translation_file: str | None = None,
+    audio_model: str = "gemini",
+    health_probes: bool = False,
+    timeout: float = 120.0,
+    fail_on_warnings: bool = False,
+) -> list[str]:
+    global _ACTIVE_API_KEY_HEADER
+    previous_api_key_header = _ACTIVE_API_KEY_HEADER
+    _ACTIVE_API_KEY_HEADER = _normalize_api_key_header(api_key_header)
+    try:
+        return _run_smoke_impl(
+            base_url,
+            api_key,
+            api_key_header=api_key_header,
+            auth_header_probes=auth_header_probes,
+            admin_username=admin_username,
+            admin_password=admin_password,
+            chat_prompt=chat_prompt,
+            chat_model=chat_model,
+            chat_stream=chat_stream,
+            image_prompt=image_prompt,
+            image_model=image_model,
+            image_response_format=image_response_format,
+            media_history=media_history,
+            media_content_probes=media_content_probes,
+            media_content_probe_limit=media_content_probe_limit,
+            probe_endpoints=probe_endpoints,
+            probe_model=probe_model,
+            file_probes=file_probes,
+            file_smoke_path=file_smoke_path,
+            file_smoke_purpose=file_smoke_purpose,
+            responses_prompt=responses_prompt,
+            responses_model=responses_model,
+            responses_stream=responses_stream,
+            completion_prompt=completion_prompt,
+            completion_model=completion_model,
+            completion_stream=completion_stream,
+            gemini_prompt=gemini_prompt,
+            gemini_model=gemini_model,
+            gemini_stream=gemini_stream,
+            audio_transcription_file=audio_transcription_file,
+            audio_translation_file=audio_translation_file,
+            audio_model=audio_model,
+            health_probes=health_probes,
+            timeout=timeout,
+            fail_on_warnings=fail_on_warnings,
+        )
+    finally:
+        _ACTIVE_API_KEY_HEADER = previous_api_key_header
 
 
 def main() -> int:
