@@ -790,6 +790,7 @@ def _run_smoke_impl(
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
     readiness_probes: bool = False,
+    account_diagnostics: bool = False,
     unavailable_generation_probe: bool = False,
     require_account: bool = False,
 ) -> list[str]:
@@ -925,7 +926,7 @@ def _run_smoke_impl(
         _require("x-request-id" in {key.lower(): value for key, value in headers.items()}, "authorized response missing X-Request-ID")
         results.append("authorized models ok")
 
-        if readiness_probes or require_account:
+        if readiness_probes or require_account or account_diagnostics:
             readiness_status, readiness, readiness_headers = _request(
                 base_url,
                 "/v1/generation-readiness",
@@ -942,6 +943,24 @@ def _run_smoke_impl(
             )
             _require_generation_readiness(readiness)
             results.append("generation readiness ok")
+            if account_diagnostics:
+                accounts = readiness.get("accounts") or {}
+                reason_codes = [
+                    str(reason.get("code") or "unknown")
+                    for reason in readiness.get("reasons") or []
+                    if isinstance(reason, dict)
+                ]
+                # 只输出非敏感汇总，便于确认授权是否已经真正保存到持久化账户池。
+                results.append(
+                    "account diagnostics: "
+                    f"total={accounts.get('total', 0)}, "
+                    f"available={accounts.get('available', 0)}, "
+                    f"disabled={accounts.get('disabled', 0)}, "
+                    f"expired={accounts.get('expired', 0)}, "
+                    f"current={accounts.get('current_account_id') or '-'}, "
+                    f"ready={bool(readiness.get('ready'))}, "
+                    f"reasons={','.join(reason_codes) or '-'}"
+                )
             if require_account:
                 _require(
                     readiness.get("ready") is True,
@@ -2089,6 +2108,7 @@ def run_smoke(
     readiness_probes: bool = False,
     unavailable_generation_probe: bool = False,
     require_account: bool = False,
+    account_diagnostics: bool = False,
 ) -> list[str]:
     global _ACTIVE_API_KEY_HEADER
     previous_api_key_header = _ACTIVE_API_KEY_HEADER
@@ -2142,6 +2162,7 @@ def run_smoke(
             timeout=timeout,
             fail_on_warnings=fail_on_warnings,
             readiness_probes=readiness_probes,
+            account_diagnostics=account_diagnostics,
             unavailable_generation_probe=unavailable_generation_probe,
             require_account=require_account,
         )
@@ -2343,6 +2364,11 @@ def main() -> int:
         help="Verify /v1/generation-readiness without consuming model calls.",
     )
     parser.add_argument(
+        "--account-diagnostics",
+        action="store_true",
+        help="Print non-sensitive account readiness counts and reason codes.",
+    )
+    parser.add_argument(
         "--unavailable-generation-probe",
         action="store_true",
         help="When no account is available, verify generation returns OpenAI-compatible 503.",
@@ -2402,6 +2428,7 @@ def main() -> int:
             timeout=max(1.0, args.timeout),
             fail_on_warnings=args.fail_on_warnings,
             readiness_probes=args.readiness_probes,
+            account_diagnostics=args.account_diagnostics,
             unavailable_generation_probe=args.unavailable_generation_probe,
             require_account=args.require_account,
         )

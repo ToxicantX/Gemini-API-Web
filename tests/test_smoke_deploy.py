@@ -314,6 +314,66 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertTrue(seen_readiness)
         self.assertIn("generation readiness ok", results)
 
+    def test_smoke_can_print_account_diagnostics(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"],
+                        "accounts": {"total": 2, "available": 0, "current_account_id": None},
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if path == "/v1/models" and not request.headers.get("Authorization"):
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-401"},
+                    BytesIO(json.dumps({"error": {"message": "missing key"}}).encode("utf-8")),
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
+                )
+            if path == "/v1/generation-readiness":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "ready": False,
+                        "reasons": [{"code": "no_available_accounts"}],
+                        "accounts": {
+                            "total": 2,
+                            "available": 0,
+                            "disabled": 1,
+                            "expired": 1,
+                            "current_account_id": None,
+                        },
+                        "media_cooldowns": [],
+                    },
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                "sk-test",
+                account_diagnostics=True,
+            )
+
+        self.assertIn("generation readiness ok", results)
+        self.assertIn(
+            "account diagnostics: total=2, available=0, disabled=1, expired=1, current=-, ready=False, reasons=no_available_accounts",
+            results,
+        )
+
     def test_smoke_can_require_available_account(self):
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")
