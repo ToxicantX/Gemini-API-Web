@@ -141,6 +141,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --gemini-prompt "用一句话回复 ok" --gemini-model gemini
 ```
 
+如果外部客户端会使用 Gemini 原生流式接口，可以再加 `--gemini-stream`，脚本会额外验证 `/v1/gemini/stream` 的 SSE final 包和 `[DONE]` 结束标记：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --gemini-prompt "用一句话回复 ok" --gemini-stream
+```
+
 需要验证新版 OpenAI Responses API 时，可以显式传入 `--responses-prompt`，脚本会实际调用 `/v1/responses` 并校验 `output_text` 和 `output` 结构：
 
 ```sh

@@ -132,6 +132,7 @@ def run_smoke(
     completion_stream: bool = False,
     gemini_prompt: str | None = None,
     gemini_model: str = "gemini",
+    gemini_stream: bool = False,
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
 ) -> list[str]:
@@ -437,6 +438,37 @@ def run_smoke(
         )
         results.append("gemini generate ok")
 
+        if gemini_stream:
+            # Gemini 原生流式接口返回分类输出的 final 包，和 OpenAI 兼容流式格式不同。
+            stream_status, stream_body, stream_headers = _raw_request(
+                base_url,
+                "/v1/gemini/stream",
+                timeout=timeout,
+                api_key=api_key,
+                method="POST",
+                body={
+                    "model": gemini_model,
+                    "prompt": gemini_prompt,
+                },
+            )
+            _require(stream_status == 200, f"/v1/gemini/stream returned {stream_status}")
+            content_type = next(
+                (value for key, value in stream_headers.items() if key.lower() == "content-type"),
+                "",
+            )
+            _require("text/event-stream" in content_type.lower(), "gemini stream is not text/event-stream")
+            _require("x-request-id" in {key.lower(): value for key, value in stream_headers.items()}, "gemini stream missing X-Request-ID")
+            data_items = _sse_data_items(stream_body)
+            _require("[DONE]" in data_items, "gemini stream missing [DONE]")
+            chunks = [json.loads(item) for item in data_items if item != "[DONE]"]
+            final_chunks = [item for item in chunks if item.get("type") == "final"]
+            _require(bool(final_chunks), "gemini stream missing final chunk")
+            final_chunk = final_chunks[-1]
+            _require(final_chunk.get("ok") is True, "gemini stream final chunk missing ok=true")
+            _require(isinstance(final_chunk.get("output"), dict), "gemini stream final chunk missing output object")
+            _require("metadata" in final_chunk, "gemini stream final chunk missing metadata")
+            results.append("gemini stream ok")
+
     return results
 
 
@@ -503,6 +535,11 @@ def main() -> int:
     )
     parser.add_argument("--gemini-model", default="gemini")
     parser.add_argument(
+        "--gemini-stream",
+        action="store_true",
+        help="Also verify streaming /v1/gemini/stream when --gemini-prompt is set.",
+    )
+    parser.add_argument(
         "--fail-on-warnings",
         action="store_true",
         help="Fail when /health reports deployment warnings.",
@@ -528,6 +565,7 @@ def main() -> int:
             completion_stream=args.completion_stream,
             gemini_prompt=args.gemini_prompt or None,
             gemini_model=args.gemini_model,
+            gemini_stream=args.gemini_stream,
             timeout=max(1.0, args.timeout),
             fail_on_warnings=args.fail_on_warnings,
         )
