@@ -1181,6 +1181,22 @@ def _run_smoke_impl(
                 api_key_admin.get("detail") == "Admin login required.",
                 "external API key unexpectedly accessed admin endpoint",
             )
+            api_key_create_status, api_key_create, _ = _request(
+                base_url,
+                "/v1/system-settings/api-keys",
+                timeout=timeout,
+                api_key=api_key,
+                method="POST",
+                body={},
+            )
+            _require(
+                api_key_create_status == 401,
+                "/v1/system-settings/api-keys should reject external API key",
+            )
+            _require(
+                api_key_create.get("detail") == "Admin login required.",
+                "external API key unexpectedly generated a system API key",
+            )
         login_status, login, login_headers = _request(
             base_url,
             "/v1/admin/login",
@@ -1200,6 +1216,34 @@ def _run_smoke_impl(
         )
         _require(logs_status == 200, f"/v1/request-logs with admin cookie returned {logs_status}")
         _require("logs" in logs, "/v1/request-logs missing logs")
+        generated_status, generated, _ = _request(
+            base_url,
+            "/v1/system-settings/api-keys",
+            timeout=timeout,
+            method="POST",
+            body={},
+            headers={"Cookie": cookie},
+        )
+        _require(
+            generated_status == 200,
+            f"/v1/system-settings/api-keys with admin cookie returned {generated_status}",
+        )
+        generated_key = str(generated.get("api_key") or "")
+        generated_fingerprint = str(generated.get("fingerprint") or "")
+        _require(generated_key.startswith("sk-gemini-"), "admin API key generation returned an unexpected key")
+        _require(bool(generated_fingerprint), "admin API key generation missing fingerprint")
+        delete_status, deleted, _ = _request(
+            base_url,
+            f"/v1/system-settings/api-keys/{generated_fingerprint}",
+            timeout=timeout,
+            method="DELETE",
+            headers={"Cookie": cookie},
+        )
+        _require(
+            delete_status == 200,
+            f"DELETE /v1/system-settings/api-keys/{generated_fingerprint} returned {delete_status}",
+        )
+        _require(deleted.get("deleted") == 1, "admin API key cleanup did not delete the generated key")
         logout_status, logout, logout_headers = _request(
             base_url,
             "/v1/admin/logout",

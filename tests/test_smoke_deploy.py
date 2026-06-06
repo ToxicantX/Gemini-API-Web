@@ -1917,6 +1917,27 @@ class SmokeDeployTests(unittest.TestCase):
                         ),
                     )
                 return FakeHTTPResponse(200, {"logs": []})
+            if path == "/v1/system-settings/api-keys":
+                self.assertIn(
+                    "gemini_admin_session=abc.def",
+                    request.headers.get("Cookie", ""),
+                )
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "api_key": "sk-gemini-generated",
+                        "fingerprint": "fp-generated",
+                        "settings": {"api_keys": []},
+                    },
+                )
+            if path == "/v1/system-settings/api-keys/fp-generated":
+                self.assertEqual(request.get_method(), "DELETE")
+                self.assertIn(
+                    "gemini_admin_session=abc.def",
+                    request.headers.get("Cookie", ""),
+                )
+                return FakeHTTPResponse(200, {"ok": True, "deleted": 1})
             raise AssertionError(path)
 
         with patch("urllib.request.urlopen", fake_urlopen):
@@ -1931,9 +1952,10 @@ class SmokeDeployTests(unittest.TestCase):
 
     def test_smoke_rejects_api_key_on_admin_management_endpoints(self):
         seen_admin_api_key = False
+        seen_api_key_create = False
 
         def fake_urlopen(request, timeout):
-            nonlocal seen_admin_api_key
+            nonlocal seen_admin_api_key, seen_api_key_create
             path = request.full_url.replace("http://service", "")
             if path == "/health":
                 return FakeHTTPResponse(
@@ -2008,6 +2030,37 @@ class SmokeDeployTests(unittest.TestCase):
                         ).encode("utf-8")
                     ),
                 )
+            if path == "/v1/system-settings/api-keys":
+                if "gemini_admin_session=abc.def" in request.headers.get("Cookie", ""):
+                    return FakeHTTPResponse(
+                        200,
+                        {
+                            "ok": True,
+                            "api_key": "sk-gemini-generated",
+                            "fingerprint": "fp-generated",
+                            "settings": {"api_keys": []},
+                        },
+                    )
+                if request.headers.get("Authorization") == "Bearer sk-test":
+                    seen_api_key_create = True
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-admin-401"},
+                    BytesIO(
+                        json.dumps(
+                            {"ok": False, "detail": "Admin login required."}
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/system-settings/api-keys/fp-generated":
+                self.assertEqual(request.get_method(), "DELETE")
+                self.assertIn(
+                    "gemini_admin_session=abc.def",
+                    request.headers.get("Cookie", ""),
+                )
+                return FakeHTTPResponse(200, {"ok": True, "deleted": 1})
             raise AssertionError(path)
 
         with patch("urllib.request.urlopen", fake_urlopen):
@@ -2018,6 +2071,7 @@ class SmokeDeployTests(unittest.TestCase):
             )
 
         self.assertTrue(seen_admin_api_key)
+        self.assertTrue(seen_api_key_create)
         self.assertIn("admin login and boundary ok", results)
 
     def test_smoke_requires_admin_username_when_server_requires_it(self):
