@@ -1405,6 +1405,17 @@ class SmokeDeployTests(unittest.TestCase):
 
     def test_smoke_can_check_unavailable_generation_shape(self):
         seen_generation_paths = []
+        unavailable_paths = {
+            "/v1/chat/completions",
+            "/v1/responses",
+            "/v1/completions",
+            "/v1/gemini/generate",
+            "/v1/images/generations",
+            "/v1/images/edits",
+            "/v1/images/variations",
+            "/v1/audio/transcriptions",
+            "/v1/audio/translations",
+        }
 
         def openai_error(status, error_type, request_id, message):
             return {
@@ -1452,13 +1463,7 @@ class SmokeDeployTests(unittest.TestCase):
                     200,
                     {"object": "list", "data": [{"id": "gemini-3.1-flash-lite"}, {"id": "gemini-3.5-flash"}, {"id": "gemini-3.1-pro"}]},
                 )
-            if path in {
-                "/v1/chat/completions",
-                "/v1/responses",
-                "/v1/completions",
-                "/v1/gemini/generate",
-                "/v1/images/generations",
-            }:
+            if path in unavailable_paths:
                 seen_generation_paths.append(path)
                 raise urllib.error.HTTPError(
                     request.full_url,
@@ -1495,6 +1500,10 @@ class SmokeDeployTests(unittest.TestCase):
                 "/v1/completions",
                 "/v1/gemini/generate",
                 "/v1/images/generations",
+                "/v1/images/edits",
+                "/v1/images/variations",
+                "/v1/audio/transcriptions",
+                "/v1/audio/translations",
             ],
         )
         self.assertIn("unavailable generation ok", results)

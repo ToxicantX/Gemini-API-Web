@@ -5,6 +5,7 @@ import json
 import mimetypes
 from pathlib import Path
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 import uuid
@@ -286,6 +287,35 @@ def _probe_unavailable_generation_endpoint(
         api_key=api_key,
         method="POST",
         body=body,
+    )
+    _require_openai_error(
+        status,
+        data,
+        headers,
+        expected_status=503,
+        expected_type="service_unavailable",
+        label=label,
+    )
+
+
+def _probe_unavailable_multipart_generation_endpoint(
+    *,
+    base_url: str,
+    timeout: float,
+    api_key: str | None,
+    path: str,
+    files: list[tuple[str, str]],
+    fields: dict[str, str],
+    label: str,
+) -> None:
+    """账号池为空时校验 multipart 生成入口也返回一致的服务不可用错误。"""
+    status, data, headers = _multipart_request(
+        base_url,
+        path,
+        timeout=timeout,
+        api_key=api_key,
+        files=files,
+        fields=fields,
     )
     _require_openai_error(
         status,
@@ -1032,6 +1062,64 @@ def _run_smoke_impl(
                 body=body,
                 label=label,
             )
+        with tempfile.TemporaryDirectory(prefix="gemini-smoke-unavailable-") as tmp:
+            temp_dir = Path(tmp)
+            # 这些小文件只用于验证 multipart 外部入口的错误形态，不会进入真实 Gemini 调用。
+            image_path = temp_dir / "smoke.png"
+            image_path.write_bytes(
+                b"\x89PNG\r\n\x1a\n"
+                b"\x00\x00\x00\rIHDR"
+                b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00"
+                b"\x90wS\xde"
+                b"\x00\x00\x00\x0cIDATx\x9cc```\x00\x00\x00\x04\x00\x01"
+                b"\xf6\x178U"
+                b"\x00\x00\x00\x00IEND\xaeB`\x82"
+            )
+            audio_path = temp_dir / "smoke.wav"
+            audio_path.write_bytes(
+                b"RIFF$\x00\x00\x00WAVEfmt "
+                b"\x10\x00\x00\x00\x01\x00\x01\x00"
+                b"@\x1f\x00\x00@\x1f\x00\x00"
+                b"\x01\x00\x08\x00data\x00\x00\x00\x00"
+            )
+            for path, files, fields, label in (
+                (
+                    "/v1/images/edits",
+                    [("image", str(image_path))],
+                    {
+                        "model": image_model,
+                        "prompt": "smoke no available account image edit",
+                    },
+                    "unavailable image edit",
+                ),
+                (
+                    "/v1/images/variations",
+                    [("image", str(image_path))],
+                    {"model": image_model},
+                    "unavailable image variation",
+                ),
+                (
+                    "/v1/audio/transcriptions",
+                    [("file", str(audio_path))],
+                    {"model": chat_model, "response_format": "json"},
+                    "unavailable audio transcription",
+                ),
+                (
+                    "/v1/audio/translations",
+                    [("file", str(audio_path))],
+                    {"model": chat_model, "response_format": "json"},
+                    "unavailable audio translation",
+                ),
+            ):
+                _probe_unavailable_multipart_generation_endpoint(
+                    base_url=base_url,
+                    timeout=timeout,
+                    api_key=api_key,
+                    path=path,
+                    files=files,
+                    fields=fields,
+                    label=label,
+                )
         results.append("unavailable generation ok")
 
     if probe_endpoints:
