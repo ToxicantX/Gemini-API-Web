@@ -603,6 +603,105 @@ class SmokeDeployTests(unittest.TestCase):
 
         self.assertIn("endpoint probe protection ok", results)
 
+    def test_smoke_can_check_openai_compatible_error_responses(self):
+        seen = []
+
+        def openai_error(status, error_type, request_id, message):
+            return {
+                "error": {
+                    "message": message,
+                    "type": error_type,
+                    "code": status,
+                    "request_id": request_id,
+                },
+                "request_id": request_id,
+            }
+
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            auth = request.headers.get("Authorization")
+            seen.append((request.get_method(), path, bool(auth)))
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if path == "/v1/models" and not auth:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-unauth"},
+                    BytesIO(
+                        json.dumps(
+                            openai_error(
+                                401,
+                                "authentication_error",
+                                "req-unauth",
+                                "Invalid or missing API key.",
+                            )
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                    {"X-Request-ID": "req-models"},
+                )
+            if path == "/v1/not-a-real-smoke-endpoint":
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    404,
+                    "Not Found",
+                    {"X-Request-ID": "req-missing"},
+                    BytesIO(
+                        json.dumps(
+                            openai_error(
+                                404,
+                                "invalid_request_error",
+                                "req-missing",
+                                "The requested endpoint was not found.",
+                            )
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/chat/completions" and request.get_method() == "GET":
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    405,
+                    "Method Not Allowed",
+                    {"X-Request-ID": "req-method"},
+                    BytesIO(
+                        json.dumps(
+                            openai_error(
+                                405,
+                                "invalid_request_error",
+                                "req-method",
+                                "The requested method is not allowed.",
+                            )
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                "sk-test",
+                error_probes=True,
+            )
+
+        self.assertIn(("GET", "/v1/not-a-real-smoke-endpoint", True), seen)
+        self.assertIn(("GET", "/v1/chat/completions", True), seen)
+        self.assertIn("error probes ok", results)
+
     def test_smoke_can_check_file_head_probes(self):
         seen_heads = []
 

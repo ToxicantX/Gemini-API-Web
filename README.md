@@ -136,6 +136,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --probe-endpoints
 ```
 
+需要验证外部客户端常见错误路径时，可以加 `--error-probes`。脚本会检查未授权的 `401`、不存在接口的 `404` 和错误方法的 `405` 是否都返回 OpenAI 兼容错误体，并带有 `X-Request-ID`，不会触发模型调用：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --error-probes
+```
+
 需要验证部署平台或反向代理常用的探活别名时，可以加 `--health-probes`。脚本会检查 `GET/HEAD /healthz`、`GET/HEAD /readyz` 和 `GET/HEAD /livez`：
 
 ```sh

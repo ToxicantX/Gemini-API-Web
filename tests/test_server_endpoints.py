@@ -1347,6 +1347,7 @@ class ServerEndpointTests(unittest.TestCase):
             app = create_app(config)
             with TestClient(app) as client:
                 status_before = client.get("/v1/admin/status")
+                public_logout = client.post("/v1/admin/logout", json={})
                 login = client.post(
                     "/v1/admin/login",
                     json={"password": "admin-pass"},
@@ -1358,6 +1359,9 @@ class ServerEndpointTests(unittest.TestCase):
             self.assertEqual(status_before.status_code, 200)
             self.assertTrue(status_before.json()["enabled"])
             self.assertFalse(status_before.json()["authenticated"])
+            # 浏览器残留失效 Cookie 时，未登录也应该能调用登出接口完成本地会话清理。
+            self.assertEqual(public_logout.status_code, 200)
+            self.assertIn("Max-Age=0", public_logout.headers["set-cookie"])
             self.assertEqual(login.status_code, 200)
             self.assertTrue(status_after.json()["authenticated"])
             self.assertEqual(logout.status_code, 200)

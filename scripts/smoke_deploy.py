@@ -232,6 +232,29 @@ def _require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def _require_openai_error(
+    status: int,
+    data: dict,
+    headers: dict[str, str],
+    *,
+    expected_status: int,
+    expected_type: str,
+    label: str,
+) -> None:
+    """校验外部错误响应保持 OpenAI 兼容格式，便于 SDK 和网关统一处理。"""
+    lower_headers = {key.lower(): value for key, value in headers.items()}
+    request_id = lower_headers.get("x-request-id", "")
+    _require(status == expected_status, f"{label} returned {status}")
+    _require(bool(request_id), f"{label} response missing X-Request-ID")
+    error = data.get("error") or {}
+    _require(isinstance(error, dict), f"{label} response missing OpenAI error body")
+    _require(error.get("type") == expected_type, f"{label} returned unexpected error type")
+    _require(error.get("code") == expected_status, f"{label} returned unexpected error code")
+    _require(bool(error.get("message")), f"{label} response missing error message")
+    _require(data.get("request_id") == request_id, f"{label} top request_id mismatch")
+    _require(error.get("request_id") == request_id, f"{label} error request_id mismatch")
+
+
 def _cookie_header(headers: dict[str, str]) -> str:
     raw_cookie = ""
     for key, value in headers.items():
@@ -312,6 +335,7 @@ def _run_smoke_impl(
     media_content_probes: bool = False,
     media_content_probe_limit: int = 3,
     probe_endpoints: bool = False,
+    error_probes: bool = False,
     probe_model: str = "gemini",
     file_probes: bool = False,
     file_smoke_path: str | None = None,
@@ -416,6 +440,56 @@ def _run_smoke_impl(
             _require(models.get("object") == "list", f"/v1/models with {header_name} did not return an OpenAI list")
             _require("x-request-id" in {key.lower(): value for key, value in headers.items()}, f"/v1/models with {header_name} missing X-Request-ID")
         results.append("auth header probes ok")
+
+    if error_probes:
+        if health.get("auth", {}).get("api_key_required"):
+            unauth_status, unauth, unauth_headers = _request(
+                base_url,
+                "/v1/models",
+                timeout=timeout,
+            )
+            _require_openai_error(
+                unauth_status,
+                unauth,
+                unauth_headers,
+                expected_status=401,
+                expected_type="authentication_error",
+                label="unauthenticated /v1/models",
+            )
+        _require(
+            bool(api_key) or not health.get("auth", {}).get("api_key_required"),
+            "--error-probes requires --api-key when API key auth is enabled",
+        )
+        missing_status, missing, missing_headers = _request(
+            base_url,
+            "/v1/not-a-real-smoke-endpoint",
+            timeout=timeout,
+            api_key=api_key,
+        )
+        _require_openai_error(
+            missing_status,
+            missing,
+            missing_headers,
+            expected_status=404,
+            expected_type="invalid_request_error",
+            label="missing endpoint",
+        )
+        method_status, method_body, method_headers = _request(
+            base_url,
+            "/v1/chat/completions",
+            timeout=timeout,
+            api_key=api_key,
+            method="GET",
+        )
+        _require_openai_error(
+            method_status,
+            method_body,
+            method_headers,
+            expected_status=405,
+            expected_type="invalid_request_error",
+            label="wrong method endpoint",
+        )
+        results.append("error probes ok")
 
     if probe_endpoints:
         # 外部 SDK、API 网关和反向代理经常先探测根路径、模型列表 HEAD 和模型详情。
@@ -1139,6 +1213,7 @@ def run_smoke(
     media_content_probes: bool = False,
     media_content_probe_limit: int = 3,
     probe_endpoints: bool = False,
+    error_probes: bool = False,
     probe_model: str = "gemini",
     file_probes: bool = False,
     file_smoke_path: str | None = None,
@@ -1186,6 +1261,7 @@ def run_smoke(
             media_content_probes=media_content_probes,
             media_content_probe_limit=media_content_probe_limit,
             probe_endpoints=probe_endpoints,
+            error_probes=error_probes,
             probe_model=probe_model,
             file_probes=file_probes,
             file_smoke_path=file_smoke_path,
@@ -1315,6 +1391,11 @@ def main() -> int:
         action="store_true",
         help="Verify /v1 root, HEAD /v1/models, and /v1/models/{model} probes.",
     )
+    parser.add_argument(
+        "--error-probes",
+        action="store_true",
+        help="Verify OpenAI-compatible 401/404/405 error responses and request IDs.",
+    )
     parser.add_argument("--probe-model", default="gemini")
     parser.add_argument(
         "--file-probes",
@@ -1398,6 +1479,7 @@ def main() -> int:
             media_content_probes=args.media_content_probes,
             media_content_probe_limit=max(1, args.media_content_probe_limit),
             probe_endpoints=args.probe_endpoints,
+            error_probes=args.error_probes,
             probe_model=args.probe_model,
             file_probes=args.file_probes,
             file_smoke_path=args.file_smoke_path or None,

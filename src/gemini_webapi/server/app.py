@@ -1754,6 +1754,7 @@ def create_app(config: ServerConfig | None = None):
             "/livez",
             "/v1/admin/status",
             "/v1/admin/login",
+            "/v1/admin/logout",
             "/static",
         }
         if config.admin_password and not (
