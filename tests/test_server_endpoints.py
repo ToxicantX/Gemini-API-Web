@@ -3583,8 +3583,8 @@ class ServerEndpointTests(unittest.TestCase):
 
             async def fake_upload(**kwargs):
                 return {
-                    "url": "https://cdn.example.test/tmp-assets/gemini-web/image.png",
-                    "key": "tmp-assets/gemini-web/image.png",
+                    "url": "https://cdn.example.test/gemini-web/image.png",
+                    "key": "gemini-web/image.png",
                     "size": len(kwargs["data"]),
                     "content_type": kwargs["content_type"],
                 }
@@ -3633,7 +3633,7 @@ class ServerEndpointTests(unittest.TestCase):
                 self.assertTrue(media["stored"])
                 self.assertEqual(
                     media["url"],
-                    "https://cdn.example.test/tmp-assets/gemini-web/image.png",
+                    "https://cdn.example.test/gemini-web/image.png",
                 )
                 self.assertEqual(media["content_url"], media["url"])
                 self.assertEqual(

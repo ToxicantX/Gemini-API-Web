@@ -14,9 +14,6 @@ from urllib.parse import quote, urlparse
 import httpx
 
 
-TEMP_OBJECT_ROOT = "tmp-assets"
-
-
 @dataclass(frozen=True)
 class ObjectStorageConfig:
     enabled: bool
@@ -66,12 +63,11 @@ def build_media_object_key(
     content_type: str | None,
     source_url: str = "",
 ) -> str:
-    """生成媒体对象路径；tmp-assets 方便对象存储生命周期规则自动清理。"""
+    """生成媒体对象路径；路径前缀由桶生命周期规则控制清理范围。"""
     now = datetime.now(timezone.utc)
     digest = hashlib.sha256(data).hexdigest()[:24]
     suffix = _media_suffix(content_type, source_url)
     parts = [
-        TEMP_OBJECT_ROOT,
         _safe_part(prefix or "gemini-web"),
         _safe_path(category or "media"),
         now.strftime("%Y/%m/%d"),

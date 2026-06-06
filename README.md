@@ -82,7 +82,9 @@ OBJECT_STORAGE_PUBLIC_URL=https://cdn.example.com/gemini-media
 OBJECT_STORAGE_FORCE_PATH_STYLE=true
 ```
 
-这些环境变量会作为容器首次启动的系统设置默认值，也可以在管理端“系统设置”里修改；管理端保存后的 SQLite 设置优先于环境变量。只有请求显式启用媒体保存时才会上传对象存储，未配置或上传失败时仍会保留本地缓存/代理链接。
+`OBJECT_STORAGE_PREFIX` 会直接作为桶内保存路径，例如 `gemini-assets` 会生成 `gemini-assets/gemini/images/...` 这类对象路径；如果对象存储配置了 7 天生命周期清理，建议把清理规则匹配到这个前缀。Backblaze B2 S3 兼容桶可使用类似 `https://s3.us-east-005.backblazeb2.com` 的 Endpoint，`OBJECT_STORAGE_ACCESS_KEY_ID` 填应用密钥的 `keyID`，`OBJECT_STORAGE_SECRET_ACCESS_KEY` 填同一组 `applicationKey`，Public URL 可使用 `https://f005.backblazeb2.com/file/<bucket>`。
+
+这些环境变量会作为容器首次启动的系统设置默认值，也可以在管理端“系统设置”里修改；管理端保存后的 SQLite 设置优先于环境变量。修改 `.env` 后如果管理端仍显示旧配置，需要在“系统设置”里同步保存一次。只有请求显式启用媒体保存时才会上传对象存储，未配置或上传失败时仍会保留本地缓存/代理链接。
 
 ## 更新 Docker 镜像
 
