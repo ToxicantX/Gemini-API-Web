@@ -30,8 +30,15 @@ class DeploymentFileTests(unittest.TestCase):
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
         # compose 必须把 .env.example 中的服务器部署关键项传入容器，避免文档配置后不生效。
-        self.assertIn("ADMIN_USERNAME: ${ADMIN_USERNAME:-}", compose)
-        self.assertIn("ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}", compose)
+        self.assertIn("ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}", compose)
+        self.assertIn(
+            "ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-this-admin-password}",
+            compose,
+        )
+        self.assertIn(
+            "ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET:-change-this-to-a-long-random-string}",
+            compose,
+        )
         self.assertIn("REQUIRE_API_KEY: ${REQUIRE_API_KEY:-true}", compose)
         self.assertIn("API_KEYS: ${API_KEYS:-}", compose)
         self.assertIn(

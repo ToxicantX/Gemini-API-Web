@@ -149,8 +149,8 @@ environment:
   GEMINI_AUTO_REFRESH: "true"
   GEMINI_AUTH_HEADLESS: "false"
   ADMIN_USERNAME: "admin"
-  ADMIN_PASSWORD: ""
-  ADMIN_SESSION_SECRET: ""
+  ADMIN_PASSWORD: "change-this-admin-password"
+  ADMIN_SESSION_SECRET: "change-this-to-a-long-random-string"
   ADMIN_COOKIE_SECURE: "false"
   REQUIRE_API_KEY: "true"
   API_KEYS: ""
@@ -166,8 +166,8 @@ environment:
 - `GEMINI_AUTO_REFRESH`：是否启用 Cookie 自动刷新。
 - `GEMINI_AUTH_HEADLESS`：授权浏览器是否无头运行。需要 noVNC 登录时保持 `false`。
 - `ADMIN_USERNAME`：管理员账号。为空时管理端保持旧版“只输密码”模式；服务器部署建议设置。
-- `ADMIN_PASSWORD`：管理员密码。为空时不启用管理端登录，适合本地自用；服务器部署建议设置。
-- `ADMIN_SESSION_SECRET`：管理员会话签名密钥。服务器部署建议设置为一段随机长字符串。
+- `ADMIN_PASSWORD`：管理员密码。为空时不启用管理端登录，只适合本地可信环境；Docker Compose 默认提供占位值，服务器部署必须修改。
+- `ADMIN_SESSION_SECRET`：管理员会话签名密钥。Docker Compose 默认提供占位值，服务器部署必须改成一段随机长字符串。
 - `ADMIN_COOKIE_SECURE`：管理员会话 Cookie 是否只允许 HTTPS 发送。直连本地 HTTP 保持 `false`；通过 HTTPS 域名反向代理部署时建议设为 `true`。
 - `REQUIRE_API_KEY`：是否强制外部 `/v1/*` 接口必须使用 API Key。服务器部署建议设为 `true`；即使暂未配置或生成 API Key，也不会让外部接口无密钥开放。
 - `API_KEYS`：外部调用鉴权密钥，多个值可用英文逗号分隔；也可以在管理端“系统设置”里生成和管理。
@@ -177,10 +177,10 @@ environment:
 
 ## 管理员登录与外部鉴权
 
-如果要部署到服务器，建议至少配置 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD`：
+如果要部署到服务器，必须修改默认管理员密码和会话密钥，建议至少配置 `ADMIN_USERNAME`、`ADMIN_PASSWORD` 和 `ADMIN_SESSION_SECRET`：
 
 ```sh
-ADMIN_USERNAME=admin ADMIN_PASSWORD=your-admin-password docker compose up -d --build
+ADMIN_USERNAME=admin ADMIN_PASSWORD=your-admin-password ADMIN_SESSION_SECRET=change-me-to-a-random-secret docker compose up -d --build
 ```
 
 也可以同时配置固定会话密钥、HTTPS 安全 Cookie 和外部 API Key：
