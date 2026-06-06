@@ -116,15 +116,18 @@ def _multipart_request(
     path: str,
     *,
     timeout: float,
-    file_path: str,
+    file_path: str | None = None,
     file_field: str = "file",
+    files: list[tuple[str, str]] | None = None,
     fields: dict[str, str] | None = None,
     api_key: str | None = None,
     api_key_header: str | None = None,
 ) -> tuple[int, dict, dict[str, str]]:
     """发送 multipart/form-data 请求，用于验证外部文件上传类接口。"""
-    source = Path(file_path)
-    _require(source.is_file(), f"upload file does not exist: {file_path}")
+    upload_files = list(files or [])
+    if file_path is not None:
+        upload_files.append((file_field, file_path))
+    _require(bool(upload_files), "multipart request requires at least one file")
     boundary = f"----gemini-smoke-{uuid.uuid4().hex}"
     parts: list[bytes] = []
     for key, value in (fields or {}).items():
@@ -136,20 +139,23 @@ def _multipart_request(
                 b"\r\n",
             ]
         )
-    content_type = mimetypes.guess_type(source.name)[0] or "application/octet-stream"
-    parts.extend(
-        [
-            f"--{boundary}\r\n".encode("utf-8"),
-            (
-                f'Content-Disposition: form-data; name="{file_field}"; '
-                f'filename="{source.name}"\r\n'
-            ).encode("utf-8"),
-            f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"),
-            source.read_bytes(),
-            b"\r\n",
-            f"--{boundary}--\r\n".encode("utf-8"),
-        ]
-    )
+    for field_name, upload_path in upload_files:
+        source = Path(upload_path)
+        _require(source.is_file(), f"upload file does not exist: {upload_path}")
+        content_type = mimetypes.guess_type(source.name)[0] or "application/octet-stream"
+        parts.extend(
+            [
+                f"--{boundary}\r\n".encode("utf-8"),
+                (
+                    f'Content-Disposition: form-data; name="{field_name}"; '
+                    f'filename="{source.name}"\r\n'
+                ).encode("utf-8"),
+                f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"),
+                source.read_bytes(),
+                b"\r\n",
+            ]
+        )
+    parts.append(f"--{boundary}--\r\n".encode("utf-8"))
     headers = {
         "Accept": "application/json",
         "Content-Type": f"multipart/form-data; boundary={boundary}",
@@ -249,6 +255,10 @@ def _run_smoke_impl(
     image_prompt: str | None = None,
     image_model: str = "gemini",
     image_response_format: str = "url",
+    image_edit_file: str | None = None,
+    image_edit_prompt: str | None = None,
+    image_edit_mask_file: str | None = None,
+    image_variation_file: str | None = None,
     media_history: bool = False,
     media_content_probes: bool = False,
     media_content_probe_limit: int = 3,
@@ -784,6 +794,61 @@ def _run_smoke_impl(
             _require(url.startswith(("http://", "https://")), "image response missing absolute url")
         results.append("image generation ok")
 
+    if image_edit_file:
+        # 图片编辑会消耗图片生成次数；显式传入图片文件时才验证 OpenAI 兼容 multipart 入口。
+        _require(bool(image_edit_prompt), "--image-edit-file requires --image-edit-prompt")
+        files = [("image", image_edit_file)]
+        if image_edit_mask_file:
+            files.append(("mask", image_edit_mask_file))
+        edit_status, edit, edit_headers = _multipart_request(
+            base_url,
+            "/v1/images/edits",
+            timeout=timeout,
+            api_key=api_key,
+            files=files,
+            fields={
+                "model": image_model,
+                "prompt": image_edit_prompt or "",
+                "response_format": image_response_format,
+            },
+        )
+        _require(edit_status == 200, f"/v1/images/edits returned {edit_status}")
+        _require("x-request-id" in {key.lower(): value for key, value in edit_headers.items()}, "image edit response missing X-Request-ID")
+        data = edit.get("data") or []
+        _require(bool(data), "image edit response missing data")
+        first_item = data[0]
+        if image_response_format == "b64_json":
+            _require(bool(first_item.get("b64_json")), "image edit response missing b64_json")
+        else:
+            url = str(first_item.get("url") or "")
+            _require(url.startswith(("http://", "https://")), "image edit response missing absolute url")
+        results.append("image edit ok")
+
+    if image_variation_file:
+        # 图片变体同样是媒体生成入口，显式传入图片文件时才执行真实接口验证。
+        variation_status, variation, variation_headers = _multipart_request(
+            base_url,
+            "/v1/images/variations",
+            timeout=timeout,
+            api_key=api_key,
+            files=[("image", image_variation_file)],
+            fields={
+                "model": image_model,
+                "response_format": image_response_format,
+            },
+        )
+        _require(variation_status == 200, f"/v1/images/variations returned {variation_status}")
+        _require("x-request-id" in {key.lower(): value for key, value in variation_headers.items()}, "image variation response missing X-Request-ID")
+        data = variation.get("data") or []
+        _require(bool(data), "image variation response missing data")
+        first_item = data[0]
+        if image_response_format == "b64_json":
+            _require(bool(first_item.get("b64_json")), "image variation response missing b64_json")
+        else:
+            url = str(first_item.get("url") or "")
+            _require(url.startswith(("http://", "https://")), "image variation response missing absolute url")
+        results.append("image variation ok")
+
     if audio_transcription_file:
         # 音频转写需要上传本地文件，只有显式传入文件路径时才执行真实外部接口验证。
         audio_status, audio, audio_headers = _multipart_request(
@@ -994,6 +1059,10 @@ def run_smoke(
     image_prompt: str | None = None,
     image_model: str = "gemini",
     image_response_format: str = "url",
+    image_edit_file: str | None = None,
+    image_edit_prompt: str | None = None,
+    image_edit_mask_file: str | None = None,
+    image_variation_file: str | None = None,
     media_history: bool = False,
     media_content_probes: bool = False,
     media_content_probe_limit: int = 3,
@@ -1036,6 +1105,10 @@ def run_smoke(
             image_prompt=image_prompt,
             image_model=image_model,
             image_response_format=image_response_format,
+            image_edit_file=image_edit_file,
+            image_edit_prompt=image_edit_prompt,
+            image_edit_mask_file=image_edit_mask_file,
+            image_variation_file=image_variation_file,
             media_history=media_history,
             media_content_probes=media_content_probes,
             media_content_probe_limit=media_content_probe_limit,
@@ -1109,6 +1182,26 @@ def main() -> int:
         "--image-response-format",
         default="url",
         choices=("url", "b64_json"),
+    )
+    parser.add_argument(
+        "--image-edit-file",
+        default="",
+        help="Optional local image file for a real /v1/images/edits smoke request.",
+    )
+    parser.add_argument(
+        "--image-edit-prompt",
+        default="",
+        help="Prompt used with --image-edit-file.",
+    )
+    parser.add_argument(
+        "--image-edit-mask-file",
+        default="",
+        help="Optional local mask file used with --image-edit-file.",
+    )
+    parser.add_argument(
+        "--image-variation-file",
+        default="",
+        help="Optional local image file for a real /v1/images/variations smoke request.",
     )
     parser.add_argument(
         "--audio-transcription-file",
@@ -1217,6 +1310,10 @@ def main() -> int:
             image_prompt=args.image_prompt or None,
             image_model=args.image_model,
             image_response_format=args.image_response_format,
+            image_edit_file=args.image_edit_file or None,
+            image_edit_prompt=args.image_edit_prompt or None,
+            image_edit_mask_file=args.image_edit_mask_file or None,
+            image_variation_file=args.image_variation_file or None,
             media_history=args.media_history,
             media_content_probes=args.media_content_probes,
             media_content_probe_limit=max(1, args.media_content_probe_limit),

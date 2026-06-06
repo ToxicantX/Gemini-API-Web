@@ -232,6 +232,13 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --image-prompt "生成一张简单的蓝色图标" --image-model gpt-image-2
 ```
 
+需要验证 OpenAI 图片编辑或图片变体端点时，可以传入本地图片文件。脚本会实际调用 `/v1/images/edits` 或 `/v1/images/variations`，并消耗一次图片生成次数：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --image-edit-file ./source.png --image-edit-prompt "把背景改成浅蓝色"
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --image-variation-file ./source.png
+```
+
 需要验证 OpenAI 音频转写或翻译端点时，可以传入本地音频文件。脚本会使用 multipart/form-data 实际调用 `/v1/audio/transcriptions` 或 `/v1/audio/translations`，并校验返回的 `text` 字段：
 
 ```sh

@@ -1602,6 +1602,177 @@ class SmokeDeployTests(unittest.TestCase):
 
         self.assertIn("image generation ok", results)
 
+    def test_smoke_can_check_image_edit_shape(self):
+        seen_edit = False
+
+        def fake_urlopen(request, timeout):
+            nonlocal seen_edit
+            path = request.full_url.replace("http://service", "")
+            auth = request.headers.get("Authorization")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": True},
+                    },
+                )
+            if not auth:
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    401,
+                    "Unauthorized",
+                    {"X-Request-ID": "req-401"},
+                    BytesIO(
+                        json.dumps(
+                            {"error": {"message": "Invalid or missing API key."}}
+                        ).encode("utf-8")
+                    ),
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/images/edits":
+                seen_edit = True
+                body = request.data.decode("utf-8", errors="replace")
+                self.assertIn('name="model"', body)
+                self.assertIn("gpt-image-2", body)
+                self.assertIn('name="prompt"', body)
+                self.assertIn("make it blue", body)
+                self.assertIn('name="image"; filename="source.png"', body)
+                self.assertIn('name="mask"; filename="mask.png"', body)
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "created": 1,
+                        "data": [
+                            {
+                                "url": "http://service/v1/gemini/media/edit-token/content",
+                                "revised_prompt": "make it blue",
+                            }
+                        ],
+                    },
+                    {"X-Request-ID": "req-image-edit"},
+                )
+            raise AssertionError(path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source_file = f"{tmp}\\source.png"
+            mask_file = f"{tmp}\\mask.png"
+            with open(source_file, "wb") as handle:
+                handle.write(b"\x89PNG\r\n")
+            with open(mask_file, "wb") as handle:
+                handle.write(b"\x89PNG\r\n")
+            with patch("urllib.request.urlopen", fake_urlopen):
+                results = smoke_deploy.run_smoke(
+                    "http://service",
+                    "sk-test",
+                    image_model="gpt-image-2",
+                    image_edit_file=source_file,
+                    image_edit_prompt="make it blue",
+                    image_edit_mask_file=mask_file,
+                )
+
+        self.assertTrue(seen_edit)
+        self.assertIn("image edit ok", results)
+
+    def test_smoke_can_check_image_variation_shape(self):
+        seen_variation = False
+
+        def fake_urlopen(request, timeout):
+            nonlocal seen_variation
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            if path == "/v1/images/variations":
+                seen_variation = True
+                body = request.data.decode("utf-8", errors="replace")
+                self.assertIn('name="model"', body)
+                self.assertIn("gemini", body)
+                self.assertIn('name="image"; filename="source.png"', body)
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "created": 1,
+                        "data": [
+                            {
+                                "url": "http://service/v1/gemini/media/variation-token/content",
+                                "revised_prompt": "variation",
+                            }
+                        ],
+                    },
+                    {"X-Request-ID": "req-image-variation"},
+                )
+            raise AssertionError(path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source_file = f"{tmp}\\source.png"
+            with open(source_file, "wb") as handle:
+                handle.write(b"\x89PNG\r\n")
+            with patch("urllib.request.urlopen", fake_urlopen):
+                results = smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    image_variation_file=source_file,
+                )
+
+        self.assertTrue(seen_variation)
+        self.assertIn("image variation ok", results)
+
+    def test_smoke_requires_image_edit_prompt(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source_file = f"{tmp}\\source.png"
+            with open(source_file, "wb") as handle:
+                handle.write(b"\x89PNG\r\n")
+            with patch("urllib.request.urlopen", fake_urlopen):
+                with self.assertRaises(AssertionError) as raised:
+                    smoke_deploy.run_smoke(
+                        "http://service",
+                        None,
+                        image_edit_file=source_file,
+                    )
+
+        self.assertIn("--image-edit-prompt", str(raised.exception))
+
     def test_smoke_can_check_audio_transcription_shape(self):
         seen_audio = False
 
