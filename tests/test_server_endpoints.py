@@ -3984,6 +3984,85 @@ class ServerEndpointTests(unittest.TestCase):
             # 单账号冷却清理同样属于管理操作，不能仅凭外部 API Key 操作具体账号。
             self.assertEqual(account_scoped.status_code, 401)
 
+    def test_generation_readiness_is_available_to_external_api_keys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                unauthenticated = client.get("/v1/generation-readiness")
+                no_account = client.get(
+                    "/v1/generation-readiness",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                account = app.state.store.upsert_account(
+                    secure_1psid="psid-active",
+                    cookies={"__Secure-1PSID": "psid-active"},
+                    name="active",
+                )
+                ready = client.get(
+                    "/v1/generation-readiness",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+                disabled = app.state.store.upsert_account(
+                    secure_1psid="psid-disabled",
+                    cookies={"__Secure-1PSID": "psid-disabled"},
+                    name="disabled",
+                )
+                app.state.store.set_account_enabled(disabled.id, False)
+                expired = app.state.store.upsert_account(
+                    secure_1psid="psid-expired",
+                    cookies={"__Secure-1PSID": "psid-expired"},
+                    name="expired",
+                )
+                app.state.store.set_account_validation(
+                    expired.id,
+                    expired=True,
+                    status="UNAUTHENTICATED",
+                    message="expired",
+                )
+                mixed = client.get(
+                    "/v1/generation-readiness",
+                    headers={"Authorization": "Bearer sk-external"},
+                )
+
+            self.assertEqual(unauthenticated.status_code, 401)
+            self.assertEqual(no_account.status_code, 200)
+            self.assertFalse(no_account.json()["ready"])
+            self.assertEqual(no_account.json()["reasons"][0]["code"], "no_accounts")
+            self.assertEqual(no_account.json()["accounts"]["available"], 0)
+            self.assertNotIn("psid", no_account.text)
+            self.assertEqual(ready.status_code, 200)
+            self.assertTrue(ready.json()["ready"])
+            self.assertEqual(ready.json()["reasons"], [])
+            self.assertEqual(ready.json()["accounts"]["total"], 1)
+            self.assertEqual(ready.json()["accounts"]["available"], 1)
+            self.assertIn(ready.json()["accounts"]["current_account_id"], {None, account.id})
+            self.assertEqual(mixed.status_code, 200)
+            self.assertTrue(mixed.json()["ready"])
+            self.assertEqual(mixed.json()["accounts"]["total"], 3)
+            self.assertEqual(mixed.json()["accounts"]["available"], 1)
+            self.assertEqual(mixed.json()["accounts"]["disabled"], 1)
+            self.assertEqual(mixed.json()["accounts"]["expired"], 1)
+            self.assertIsInstance(mixed.json()["media_cooldowns"], list)
+            self.assertNotIn("psid-active", mixed.text)
+
     def test_request_validation_runs_before_account_selection(self):
         with tempfile.TemporaryDirectory() as tmp:
             app = create_app(

@@ -1269,6 +1269,7 @@ def _external_api_path(path: str) -> bool:
         "/v1/images/edits",
         "/v1/images/variations",
         "/v1/generate",
+        "/v1/generation-readiness",
         "/v1/media-cooldowns",
         "/v1/gemini/generate",
         "/v1/gemini/stream",
@@ -1560,6 +1561,50 @@ def _media_cooldown_summary(status: dict[str, Any]) -> dict[str, Any]:
             }
         )
     return {"summary": summary, "active_account_count": len(active_accounts)}
+
+
+def _generation_readiness_payload(status: dict[str, Any]) -> dict[str, Any]:
+    """生成外部可监控的调用就绪状态，不暴露 Cookie 或账号敏感字段。"""
+    accounts = status.get("accounts") or []
+    available_accounts = [
+        account for account in accounts if account.get("enabled") and not account.get("expired")
+    ]
+    disabled_accounts = [
+        account for account in accounts if not account.get("enabled")
+    ]
+    expired_accounts = [
+        account for account in accounts if account.get("expired")
+    ]
+    reasons: list[dict[str, str]] = []
+    if not accounts:
+        reasons.append(
+            {
+                "code": "no_accounts",
+                "message": "No Gemini accounts have been authorized yet.",
+            }
+        )
+    elif not available_accounts:
+        reasons.append(
+            {
+                "code": "no_available_accounts",
+                "message": "All Gemini accounts are disabled or expired.",
+            }
+        )
+    media_cooldowns = _media_cooldown_summary(status)
+    return {
+        "ok": True,
+        "ready": bool(available_accounts),
+        "reasons": reasons,
+        "accounts": {
+            "total": len(accounts),
+            "available": len(available_accounts),
+            "disabled": len(disabled_accounts),
+            "expired": len(expired_accounts),
+            "current_account_id": status.get("current_account_id"),
+        },
+        "media_cooldowns": media_cooldowns["summary"],
+        "active_account_count": media_cooldowns["active_account_count"],
+    }
 
 
 def _media_host_allowed(url: str) -> bool:
@@ -2080,6 +2125,10 @@ def create_app(config: ServerConfig | None = None):
     @app.get("/v1/status")
     async def status() -> dict[str, Any]:
         return rotator.status()
+
+    @app.get("/v1/generation-readiness")
+    async def generation_readiness() -> dict[str, Any]:
+        return _generation_readiness_payload(rotator.status())
 
     @app.get("/v1/media-cooldowns")
     async def media_cooldowns() -> dict[str, Any]:

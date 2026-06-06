@@ -376,6 +376,31 @@ def _require_media_cooldown_summary(data: dict) -> None:
         )
 
 
+def _require_generation_readiness(data: dict) -> None:
+    """校验生成就绪状态，方便外部监控区分服务异常和账号未授权。"""
+    _require(data.get("ok") is True, "/v1/generation-readiness missing ok=true")
+    _require(isinstance(data.get("ready"), bool), "/v1/generation-readiness missing ready boolean")
+    reasons = data.get("reasons")
+    _require(isinstance(reasons, list), "/v1/generation-readiness missing reasons list")
+    accounts = data.get("accounts")
+    _require(isinstance(accounts, dict), "/v1/generation-readiness missing accounts object")
+    for field in ("total", "available", "disabled", "expired"):
+        value = accounts.get(field)
+        _require(
+            isinstance(value, int) and value >= 0,
+            f"/v1/generation-readiness accounts.{field} is invalid",
+        )
+    _require(
+        accounts["available"] <= accounts["total"],
+        "/v1/generation-readiness available accounts exceeds total",
+    )
+    media_cooldowns = data.get("media_cooldowns")
+    _require(
+        isinstance(media_cooldowns, list),
+        "/v1/generation-readiness missing media_cooldowns list",
+    )
+
+
 def _require_media_content_headers(
     headers: dict[str, str],
     *,
@@ -591,6 +616,7 @@ def _run_smoke_impl(
     cors_origin: str = "https://your-panel.example.com",
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
+    readiness_probes: bool = False,
     require_account: bool = False,
 ) -> list[str]:
     results: list[str] = []
@@ -707,6 +733,29 @@ def _run_smoke_impl(
         )
         _require("x-request-id" in {key.lower(): value for key, value in headers.items()}, "authorized response missing X-Request-ID")
         results.append("authorized models ok")
+
+        if readiness_probes or require_account:
+            readiness_status, readiness, readiness_headers = _request(
+                base_url,
+                "/v1/generation-readiness",
+                timeout=timeout,
+                api_key=api_key,
+            )
+            _require(
+                readiness_status == 200,
+                f"/v1/generation-readiness returned {readiness_status}",
+            )
+            _require(
+                "x-request-id" in {key.lower(): value for key, value in readiness_headers.items()},
+                "/v1/generation-readiness response missing X-Request-ID",
+            )
+            _require_generation_readiness(readiness)
+            results.append("generation readiness ok")
+            if require_account:
+                _require(
+                    readiness.get("ready") is True,
+                    "/v1/generation-readiness reports generation is not ready; authorize at least one Gemini account.",
+                )
 
     if auth_header_probes:
         _require(bool(api_key), "--auth-header-probes requires --api-key")
@@ -1711,6 +1760,7 @@ def run_smoke(
     cors_origin: str = "https://your-panel.example.com",
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
+    readiness_probes: bool = False,
     require_account: bool = False,
 ) -> list[str]:
     global _ACTIVE_API_KEY_HEADER
@@ -1763,6 +1813,7 @@ def run_smoke(
             cors_origin=cors_origin,
             timeout=timeout,
             fail_on_warnings=fail_on_warnings,
+            readiness_probes=readiness_probes,
             require_account=require_account,
         )
     finally:
@@ -1953,6 +2004,11 @@ def main() -> int:
         help="Origin header used by --cors-probes.",
     )
     parser.add_argument(
+        "--readiness-probes",
+        action="store_true",
+        help="Verify /v1/generation-readiness without consuming model calls.",
+    )
+    parser.add_argument(
         "--require-account",
         action="store_true",
         help="Fail unless /health reports at least one available Gemini account.",
@@ -2005,6 +2061,7 @@ def main() -> int:
             cors_origin=args.cors_origin,
             timeout=max(1.0, args.timeout),
             fail_on_warnings=args.fail_on_warnings,
+            readiness_probes=args.readiness_probes,
             require_account=args.require_account,
         )
     except Exception as exc:

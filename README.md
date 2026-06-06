@@ -180,6 +180,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --native-probes
 ```
 
+需要给外部监控或调用方检查“当前是否具备真实生成条件”时，可以加 `--readiness-probes`。这不会触发模型调用，只会读取 `GET /v1/generation-readiness`，返回账号池是否就绪、不可用原因和媒体冷却摘要；没有可用账号时 `ready=false`，但 HTTP 仍为 `200`，便于监控区分“服务可访问”和“账号未授权/已失效”：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --readiness-probes
+```
+
 如果已经有媒体历史记录，还可以同时验证 `content_url` 的公开内容链接是否支持 `HEAD` 探测，并检查 `Content-Type` 是否与图片/视频/音频类型匹配、`Content-Length` 是否为合法非负数。这个检查适合发现反向代理、对象存储或 CDN 把媒体响应头弄丢，导致外部客户端无法预览的问题：
 
 ```sh
