@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import mimetypes
+from pathlib import Path
 import sys
 import urllib.error
 import urllib.request
+import uuid
 
 
 def _request(
@@ -69,6 +72,72 @@ def _raw_request(
         status = exc.code
         response_headers = dict(exc.headers.items())
     return status, response_body.decode("utf-8", errors="replace"), response_headers
+
+
+def _multipart_request(
+    base_url: str,
+    path: str,
+    *,
+    timeout: float,
+    file_path: str,
+    file_field: str = "file",
+    fields: dict[str, str] | None = None,
+    api_key: str | None = None,
+) -> tuple[int, dict, dict[str, str]]:
+    """发送 multipart/form-data 请求，用于验证外部文件上传类接口。"""
+    source = Path(file_path)
+    _require(source.is_file(), f"audio file does not exist: {file_path}")
+    boundary = f"----gemini-smoke-{uuid.uuid4().hex}"
+    parts: list[bytes] = []
+    for key, value in (fields or {}).items():
+        parts.extend(
+            [
+                f"--{boundary}\r\n".encode("utf-8"),
+                f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode("utf-8"),
+                str(value).encode("utf-8"),
+                b"\r\n",
+            ]
+        )
+    content_type = mimetypes.guess_type(source.name)[0] or "application/octet-stream"
+    parts.extend(
+        [
+            f"--{boundary}\r\n".encode("utf-8"),
+            (
+                f'Content-Disposition: form-data; name="{file_field}"; '
+                f'filename="{source.name}"\r\n'
+            ).encode("utf-8"),
+            f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"),
+            source.read_bytes(),
+            b"\r\n",
+            f"--{boundary}--\r\n".encode("utf-8"),
+        ]
+    )
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    request = urllib.request.Request(
+        f"{base_url.rstrip('/')}{path}",
+        data=b"".join(parts),
+        headers=headers,
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            response_body = response.read()
+            status = response.status
+            response_headers = dict(response.headers.items())
+    except urllib.error.HTTPError as exc:
+        response_body = exc.read()
+        status = exc.code
+        response_headers = dict(exc.headers.items())
+    try:
+        data = json.loads(response_body.decode("utf-8", errors="replace")) if response_body else {}
+    except json.JSONDecodeError:
+        data = {}
+    return status, data, response_headers
 
 
 def _require(condition: bool, message: str) -> None:
@@ -137,6 +206,9 @@ def run_smoke(
     gemini_prompt: str | None = None,
     gemini_model: str = "gemini",
     gemini_stream: bool = False,
+    audio_transcription_file: str | None = None,
+    audio_translation_file: str | None = None,
+    audio_model: str = "gemini",
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
 ) -> list[str]:
@@ -438,6 +510,42 @@ def run_smoke(
             _require(url.startswith(("http://", "https://")), "image response missing absolute url")
         results.append("image generation ok")
 
+    if audio_transcription_file:
+        # 音频转写需要上传本地文件，只有显式传入文件路径时才执行真实外部接口验证。
+        audio_status, audio, audio_headers = _multipart_request(
+            base_url,
+            "/v1/audio/transcriptions",
+            timeout=timeout,
+            api_key=api_key,
+            file_path=audio_transcription_file,
+            fields={
+                "model": audio_model,
+                "response_format": "json",
+            },
+        )
+        _require(audio_status == 200, f"/v1/audio/transcriptions returned {audio_status}")
+        _require("x-request-id" in {key.lower(): value for key, value in audio_headers.items()}, "audio transcription response missing X-Request-ID")
+        _require(bool(audio.get("text")), "audio transcription response missing text")
+        results.append("audio transcription ok")
+
+    if audio_translation_file:
+        # 音频翻译同样走 OpenAI 兼容 multipart 入口，校验 JSON text 字段即可覆盖外部客户端常用路径。
+        audio_status, audio, audio_headers = _multipart_request(
+            base_url,
+            "/v1/audio/translations",
+            timeout=timeout,
+            api_key=api_key,
+            file_path=audio_translation_file,
+            fields={
+                "model": audio_model,
+                "response_format": "json",
+            },
+        )
+        _require(audio_status == 200, f"/v1/audio/translations returned {audio_status}")
+        _require("x-request-id" in {key.lower(): value for key, value in audio_headers.items()}, "audio translation response missing X-Request-ID")
+        _require(bool(audio.get("text")), "audio translation response missing text")
+        results.append("audio translation ok")
+
     if responses_prompt:
         # Responses API 是新版 OpenAI SDK 的常用入口；显式传参时验证它的基础返回结构。
         responses_status, responses, responses_headers = _request(
@@ -633,6 +741,17 @@ def main() -> int:
         choices=("url", "b64_json"),
     )
     parser.add_argument(
+        "--audio-transcription-file",
+        default="",
+        help="Optional local audio file for a real /v1/audio/transcriptions smoke request.",
+    )
+    parser.add_argument(
+        "--audio-translation-file",
+        default="",
+        help="Optional local audio file for a real /v1/audio/translations smoke request.",
+    )
+    parser.add_argument("--audio-model", default="gemini")
+    parser.add_argument(
         "--media-history",
         action="store_true",
         help="Verify /v1/gemini/media history shape without consuming model calls.",
@@ -712,6 +831,9 @@ def main() -> int:
             gemini_prompt=args.gemini_prompt or None,
             gemini_model=args.gemini_model,
             gemini_stream=args.gemini_stream,
+            audio_transcription_file=args.audio_transcription_file or None,
+            audio_translation_file=args.audio_translation_file or None,
+            audio_model=args.audio_model,
             timeout=max(1.0, args.timeout),
             fail_on_warnings=args.fail_on_warnings,
         )

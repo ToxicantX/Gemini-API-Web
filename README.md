@@ -201,6 +201,13 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --image-prompt "生成一张简单的蓝色图标" --image-model gpt-image-2
 ```
 
+需要验证 OpenAI 音频转写或翻译端点时，可以传入本地音频文件。脚本会使用 multipart/form-data 实际调用 `/v1/audio/transcriptions` 或 `/v1/audio/translations`，并校验返回的 `text` 字段：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --audio-transcription-file ./sample.wav
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --audio-translation-file ./sample.mp3
+```
+
 Smoke 测试会把 `/health` 返回的部署安全警告打印为 `health warning: ...`，例如仍在使用 Docker Compose 占位管理员密码或占位会话密钥。正式上服务器前建议开启严格模式，让这些警告直接导致测试失败：
 
 ```sh
