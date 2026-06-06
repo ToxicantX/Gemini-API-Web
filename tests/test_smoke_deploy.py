@@ -139,6 +139,8 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertIn("health probes ok", results)
 
     def test_smoke_accepts_api_key_protected_deployment_without_key(self):
+        protected_paths = []
+
         def fake_urlopen(request, timeout):
             path = request.full_url.replace("http://service", "")
             if path == "/health":
@@ -150,14 +152,24 @@ class SmokeDeployTests(unittest.TestCase):
                         "auth": {"api_key_required": True},
                     },
                 )
+            protected_paths.append(path)
+            request_id = f"req-401-{path.strip('/').replace('/', '-') or 'root'}"
             raise urllib.error.HTTPError(
                 request.full_url,
                 401,
                 "Unauthorized",
-                {"X-Request-ID": "req-401"},
+                {"X-Request-ID": request_id},
                 BytesIO(
                     json.dumps(
-                        {"error": {"message": "Invalid or missing API key."}}
+                        {
+                            "error": {
+                                "message": "Invalid or missing API key.",
+                                "type": "authentication_error",
+                                "code": 401,
+                                "request_id": request_id,
+                            },
+                            "request_id": request_id,
+                        }
                     ).encode("utf-8")
                 ),
             )
@@ -168,6 +180,7 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertIn("health ok", results)
         self.assertIn("api key protection ok", results)
         self.assertIn("media cooldown protection ok", results)
+        self.assertIn("/v1/models", protected_paths)
 
     def test_smoke_checks_authorized_models_and_media_cooldowns(self):
         def fake_urlopen(request, timeout):
@@ -1073,18 +1086,23 @@ class SmokeDeployTests(unittest.TestCase):
                         "auth": {"api_key_required": True},
                     },
                 )
-            if path == "/v1/models" and not auth:
+            if path in {"/v1/models", "/models", "/engines"} and not auth:
+                request_id = (
+                    "req-unauth-v1-models"
+                    if path == "/v1/models"
+                    else f"req-unauth-{path.strip('/')}"
+                )
                 raise urllib.error.HTTPError(
                     request.full_url,
                     401,
                     "Unauthorized",
-                    {"X-Request-ID": "req-unauth"},
+                    {"X-Request-ID": request_id},
                     BytesIO(
                         json.dumps(
                             openai_error(
                                 401,
                                 "authentication_error",
-                                "req-unauth",
+                                request_id,
                                 "Invalid or missing API key.",
                             )
                         ).encode("utf-8")
@@ -1167,6 +1185,8 @@ class SmokeDeployTests(unittest.TestCase):
             )
 
         self.assertIn(("GET", "/v1/not-a-real-smoke-endpoint", True), seen)
+        self.assertIn(("GET", "/models", False), seen)
+        self.assertIn(("GET", "/engines", False), seen)
         self.assertIn(("GET", "/models/not-a-real-smoke-model", True), seen)
         self.assertIn(("GET", "/engines/not-a-real-smoke-model", True), seen)
         self.assertIn(("GET", "/v1/chat/completions", True), seen)

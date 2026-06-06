@@ -704,19 +704,20 @@ def _run_smoke_impl(
 
     if error_probes:
         if health.get("auth", {}).get("api_key_required"):
-            unauth_status, unauth, unauth_headers = _request(
-                base_url,
-                "/v1/models",
-                timeout=timeout,
-            )
-            _require_openai_error(
-                unauth_status,
-                unauth,
-                unauth_headers,
-                expected_status=401,
-                expected_type="authentication_error",
-                label="unauthenticated /v1/models",
-            )
+            for path in ("/v1/models", "/models", "/engines"):
+                unauth_status, unauth, unauth_headers = _request(
+                    base_url,
+                    path,
+                    timeout=timeout,
+                )
+                _require_openai_error(
+                    unauth_status,
+                    unauth,
+                    unauth_headers,
+                    expected_status=401,
+                    expected_type="authentication_error",
+                    label=f"unauthenticated {path}",
+                )
         _require(
             bool(api_key) or not health.get("auth", {}).get("api_key_required"),
             "--error-probes requires --api-key when API key auth is enabled",
