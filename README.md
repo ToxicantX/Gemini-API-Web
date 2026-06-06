@@ -147,6 +147,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --media-history
 ```
 
+如果已经有媒体历史记录，还可以同时验证 `content_url` 的公开内容链接是否支持 `HEAD` 探测，适合检查反向代理和外部客户端预览链路：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-your-external-key --media-history --media-content-probes
+```
+
 也可以同时验证管理员登录链路，确认登录 Cookie 能访问管理接口：
 
 ```sh

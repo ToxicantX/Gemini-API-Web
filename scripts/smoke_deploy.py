@@ -8,6 +8,7 @@ import sys
 import urllib.error
 import urllib.request
 import uuid
+from urllib.parse import urlparse
 
 
 def _request(
@@ -140,6 +141,22 @@ def _multipart_request(
     return status, data, response_headers
 
 
+def _media_content_path(base_url: str, content_url: str) -> str:
+    """把媒体 content_url 归一成当前服务内的路径，避免误探测外部域名。"""
+    value = str(content_url or "").strip()
+    _require(bool(value), "media content_url is empty")
+    if value.startswith("/"):
+        return value
+    parsed = urlparse(value)
+    _require(bool(parsed.scheme and parsed.netloc), f"media content_url is not a URL: {content_url}")
+    base = urlparse(base_url.rstrip("/"))
+    _require(
+        parsed.netloc == base.netloc,
+        f"media content_url points to another host: {content_url}",
+    )
+    return parsed.path + (f"?{parsed.query}" if parsed.query else "")
+
+
 def _require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
@@ -194,6 +211,8 @@ def run_smoke(
     image_model: str = "gemini",
     image_response_format: str = "url",
     media_history: bool = False,
+    media_content_probes: bool = False,
+    media_content_probe_limit: int = 3,
     probe_endpoints: bool = False,
     probe_model: str = "gemini",
     file_probes: bool = False,
@@ -487,6 +506,32 @@ def run_smoke(
                 _require(bool(item.get("url")), "media history item missing url")
                 _require(bool(item.get("content_url")), "media history item missing content_url")
             results.append("media history ok")
+            if media_content_probes:
+                if not records:
+                    results.append("media content probes skipped: no media records")
+                else:
+                    checked = 0
+                    for item in records[: max(1, int(media_content_probe_limit))]:
+                        content_path = _media_content_path(base_url, str(item.get("content_url") or ""))
+                        status, body_text, headers = _raw_request(
+                            base_url,
+                            content_path,
+                            timeout=timeout,
+                            method="HEAD",
+                        )
+                        _require(status == 200, f"HEAD {content_path} returned {status}")
+                        _require(body_text == "", f"HEAD {content_path} should not return a body")
+                        content_type = next(
+                            (
+                                value
+                                for key, value in headers.items()
+                                if key.lower() == "content-type"
+                            ),
+                            "",
+                        )
+                        _require(bool(content_type), f"HEAD {content_path} missing Content-Type")
+                        checked += 1
+                    results.append(f"media content probes ok ({checked})")
 
     if admin_password:
         admin_status, admin, _ = _request(
@@ -852,6 +897,17 @@ def main() -> int:
         help="Verify /v1/gemini/media history shape without consuming model calls.",
     )
     parser.add_argument(
+        "--media-content-probes",
+        action="store_true",
+        help="When --media-history is set, also HEAD probe media content_url links.",
+    )
+    parser.add_argument(
+        "--media-content-probe-limit",
+        type=int,
+        default=3,
+        help="Maximum number of media content_url links to HEAD probe.",
+    )
+    parser.add_argument(
         "--probe-endpoints",
         action="store_true",
         help="Verify /v1 root, HEAD /v1/models, and /v1/models/{model} probes.",
@@ -920,6 +976,8 @@ def main() -> int:
             image_model=args.image_model,
             image_response_format=args.image_response_format,
             media_history=args.media_history,
+            media_content_probes=args.media_content_probes,
+            media_content_probe_limit=max(1, args.media_content_probe_limit),
             probe_endpoints=args.probe_endpoints,
             probe_model=args.probe_model,
             file_probes=args.file_probes,
