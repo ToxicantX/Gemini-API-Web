@@ -139,6 +139,34 @@ class DeploymentFileTests(unittest.TestCase):
             compose,
         )
 
+    def test_compose_passes_every_env_example_variable(self):
+        env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+        compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        env_names = {
+            line.split("=", 1)[0].strip()
+            for line in env_example.splitlines()
+            if line.strip() and not line.strip().startswith("#") and "=" in line
+        }
+
+        # .env.example 是服务器部署入口；模板里的变量必须全部传入容器，否则用户配置后不会生效。
+        self.assertTrue(env_names)
+        for name in sorted(env_names):
+            self.assertIn(f"${{{name}", compose)
+
+    def test_compose_env_variables_are_documented_in_env_example(self):
+        env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+        compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+        env_names = {
+            line.split("=", 1)[0].strip()
+            for line in env_example.splitlines()
+            if line.strip() and not line.strip().startswith("#") and "=" in line
+        }
+        compose_names = set(re.findall(r"\$\{([A-Z0-9_]+)(?::-[^}]*)?\}", compose))
+
+        # compose 暴露给容器的环境变量也必须在 .env.example 中有模板，避免隐藏配置入口。
+        self.assertTrue(compose_names)
+        self.assertEqual(set(), compose_names - env_names)
+
     def test_env_example_defaults_are_server_safe(self):
         env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
 
