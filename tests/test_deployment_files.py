@@ -34,7 +34,7 @@ class DeploymentFileTests(unittest.TestCase):
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
         # 服务器部署只发布统一入口，避免绕过管理员登录直接访问授权浏览器。
-        self.assertIn('"7860:7860"', compose)
+        self.assertIn('"${HOST_PORT:-7860}:${PORT:-7860}"', compose)
         self.assertNotIn("6080:6080", compose)
         self.assertNotIn('"6080:6080"', compose)
 
@@ -130,6 +130,8 @@ class DeploymentFileTests(unittest.TestCase):
             "CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-https://your-panel.example.com}",
             compose,
         )
+        self.assertIn("HOST: ${HOST:-0.0.0.0}", compose)
+        self.assertIn("PORT: ${PORT:-7860}", compose)
         self.assertIn("GIT_COMMIT: ${GIT_COMMIT:-}", compose)
         self.assertIn("OBJECT_STORAGE_ENABLED: ${OBJECT_STORAGE_ENABLED:-false}", compose)
         self.assertIn("OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-}", compose)
@@ -175,6 +177,9 @@ class DeploymentFileTests(unittest.TestCase):
         self.assertIn("REQUIRE_API_KEY=true", env_example)
         self.assertIn("API_KEYS=sk-change-this-external-key", env_example)
         self.assertIn("CORS_ALLOW_ORIGINS=https://your-panel.example.com", env_example)
+        self.assertIn("HOST_PORT=7860", env_example)
+        self.assertIn("HOST=0.0.0.0", env_example)
+        self.assertIn("PORT=7860", env_example)
         self.assertIn("GIT_COMMIT=", env_example)
         self.assertIn("OBJECT_STORAGE_ENABLED=false", env_example)
         self.assertIn("OBJECT_STORAGE_PREFIX=gemini-web", env_example)

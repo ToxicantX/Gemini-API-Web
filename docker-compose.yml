@@ -3,7 +3,7 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "7860:7860"
+      - "${HOST_PORT:-7860}:${PORT:-7860}"
     volumes:
       - ./data:/app/data
     environment:
@@ -20,6 +20,8 @@ services:
       REQUIRE_API_KEY: ${REQUIRE_API_KEY:-true}
       API_KEYS: ${API_KEYS:-}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-https://your-panel.example.com}
+      HOST: ${HOST:-0.0.0.0}
+      PORT: ${PORT:-7860}
       GIT_COMMIT: ${GIT_COMMIT:-}
       OBJECT_STORAGE_ENABLED: ${OBJECT_STORAGE_ENABLED:-false}
       OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-}

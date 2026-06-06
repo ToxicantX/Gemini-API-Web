@@ -104,6 +104,8 @@ docker compose up -d --build
 
 `docker-compose.yml` 默认使用 `restart: unless-stopped`，适合服务器长期运行；宿主机重启或进程异常退出后会自动拉起，手动执行 `docker compose stop` 时不会反复重启。
 
+默认宿主机端口是 `7860`。如果服务器上端口冲突，可以在 `.env` 中修改 `HOST_PORT=17860`；容器内服务端口默认仍是 `PORT=7860`，通常不需要改。
+
 镜像内置 Docker 健康检查，会定时访问容器内 `/health`。更新或重启后可以查看：
 
 ```sh
