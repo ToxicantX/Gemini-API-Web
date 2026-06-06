@@ -344,6 +344,28 @@ def _require_media_cooldown_summary(data: dict) -> None:
         )
 
 
+def _require_cors_preflight(
+    status: int,
+    headers: dict[str, str],
+    *,
+    origin: str,
+    label: str,
+) -> None:
+    """校验浏览器跨域预检响应，避免网页客户端卡在 OPTIONS 阶段。"""
+    lower_headers = {key.lower(): value for key, value in headers.items()}
+    _require(status == 200, f"{label} CORS preflight returned {status}")
+    allow_origin = lower_headers.get("access-control-allow-origin", "")
+    _require(
+        allow_origin in {origin, "*"},
+        f"{label} CORS preflight returned unexpected allow-origin",
+    )
+    allow_headers = lower_headers.get("access-control-allow-headers", "").lower()
+    _require("authorization" in allow_headers, f"{label} CORS preflight missing authorization header")
+    _require("content-type" in allow_headers, f"{label} CORS preflight missing content-type header")
+    allow_methods = lower_headers.get("access-control-allow-methods", "").lower()
+    _require("post" in allow_methods, f"{label} CORS preflight missing POST method")
+
+
 def _require_chat_completion_response(data: dict) -> None:
     """校验非流式 Chat Completions 基础结构，贴近 OpenAI SDK 的解析预期。"""
     _require(data.get("object") == "chat.completion", "chat response is not an OpenAI chat completion")
@@ -456,6 +478,8 @@ def _run_smoke_impl(
     audio_model: str = "gemini",
     audio_response_format: str = "json",
     health_probes: bool = False,
+    cors_probes: bool = False,
+    cors_origin: str = "https://your-panel.example.com",
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
 ) -> list[str]:
@@ -499,6 +523,27 @@ def _run_smoke_impl(
             _require(head_body == "", f"HEAD {path} should not return a body")
             _require("x-request-id" in {key.lower(): value for key, value in head_headers.items()}, f"HEAD {path} missing X-Request-ID")
         results.append("health probes ok")
+
+    if cors_probes:
+        # 浏览器客户端会先发 OPTIONS 预检；这里不消耗模型调用，只验证跨域调用面能过网关。
+        cors_status, _, cors_headers = _request(
+            base_url,
+            "/v1/chat/completions",
+            timeout=timeout,
+            method="OPTIONS",
+            headers={
+                "Origin": cors_origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+        _require_cors_preflight(
+            cors_status,
+            cors_headers,
+            origin=cors_origin,
+            label="/v1/chat/completions",
+        )
+        results.append("cors preflight ok")
 
     unauth_status, unauth, unauth_headers = _request(
         base_url,
@@ -1414,6 +1459,8 @@ def run_smoke(
     audio_model: str = "gemini",
     audio_response_format: str = "json",
     health_probes: bool = False,
+    cors_probes: bool = False,
+    cors_origin: str = "https://your-panel.example.com",
     timeout: float = 120.0,
     fail_on_warnings: bool = False,
 ) -> list[str]:
@@ -1463,6 +1510,8 @@ def run_smoke(
             audio_model=audio_model,
             audio_response_format=audio_response_format,
             health_probes=health_probes,
+            cors_probes=cors_probes,
+            cors_origin=cors_origin,
             timeout=timeout,
             fail_on_warnings=fail_on_warnings,
         )
@@ -1643,6 +1692,16 @@ def main() -> int:
         action="store_true",
         help="Verify GET/HEAD /healthz, /readyz, and /livez deployment probes.",
     )
+    parser.add_argument(
+        "--cors-probes",
+        action="store_true",
+        help="Verify browser CORS preflight for /v1/chat/completions.",
+    )
+    parser.add_argument(
+        "--cors-origin",
+        default="https://your-panel.example.com",
+        help="Origin header used by --cors-probes.",
+    )
     args = parser.parse_args()
     try:
         results = run_smoke(
@@ -1687,6 +1746,8 @@ def main() -> int:
             audio_model=args.audio_model,
             audio_response_format=args.audio_response_format,
             health_probes=args.health_probes,
+            cors_probes=args.cors_probes,
+            cors_origin=args.cors_origin,
             timeout=max(1.0, args.timeout),
             fail_on_warnings=args.fail_on_warnings,
         )

@@ -150,6 +150,12 @@ python scripts/smoke_deploy.py --base-url http://localhost:7860 --api-key sk-you
 python scripts/smoke_deploy.py --base-url http://localhost:7860 --health-probes
 ```
 
+需要验证浏览器跨域调用的预检请求时，可以加 `--cors-probes`。脚本会向 `/v1/chat/completions` 发送 `OPTIONS` 预检，并检查 `Authorization`、`Content-Type` 和 `POST` 是否被允许：
+
+```sh
+python scripts/smoke_deploy.py --base-url http://localhost:7860 --cors-probes --cors-origin https://your-panel.example.com
+```
+
 需要验证文件接口的 HEAD 探测时，可以加 `--file-probes`。脚本会检查 `HEAD /v1/files` 和 `HEAD /v1/gemini/files`，不会上传文件或触发模型调用：
 
 ```sh

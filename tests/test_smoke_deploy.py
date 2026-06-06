@@ -325,6 +325,99 @@ class SmokeDeployTests(unittest.TestCase):
         self.assertIn("authorized models ok", results)
         self.assertIn("media cooldown summary ok", results)
 
+    def test_smoke_can_check_cors_preflight(self):
+        seen_preflight = False
+
+        def fake_urlopen(request, timeout):
+            nonlocal seen_preflight
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/chat/completions" and request.get_method() == "OPTIONS":
+                seen_preflight = True
+                self.assertEqual(request.headers["Origin"], "https://panel.example.com")
+                self.assertEqual(
+                    request.headers["Access-control-request-method"],
+                    "POST",
+                )
+                return FakeHTTPResponse(
+                    200,
+                    headers={
+                        "Access-Control-Allow-Origin": "https://panel.example.com",
+                        "Access-Control-Allow-Headers": "authorization, content-type",
+                        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                    },
+                    body="",
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            results = smoke_deploy.run_smoke(
+                "http://service",
+                None,
+                cors_probes=True,
+                cors_origin="https://panel.example.com",
+            )
+
+        self.assertTrue(seen_preflight)
+        self.assertIn("cors preflight ok", results)
+
+    def test_smoke_rejects_cors_preflight_without_authorization_header(self):
+        def fake_urlopen(request, timeout):
+            path = request.full_url.replace("http://service", "")
+            if path == "/health":
+                return FakeHTTPResponse(
+                    200,
+                    {
+                        "ok": True,
+                        "models": ["gemini"],
+                        "auth": {"api_key_required": False},
+                    },
+                )
+            if path == "/v1/chat/completions" and request.get_method() == "OPTIONS":
+                return FakeHTTPResponse(
+                    200,
+                    headers={
+                        "Access-Control-Allow-Origin": "https://panel.example.com",
+                        "Access-Control-Allow-Headers": "content-type",
+                        "Access-Control-Allow-Methods": "POST",
+                    },
+                    body="",
+                )
+            if path == "/v1/models":
+                return FakeHTTPResponse(
+                    200,
+                    {"object": "list", "data": [{"id": "gemini"}]},
+                )
+            if path == "/v1/media-cooldowns":
+                return FakeHTTPResponse(200, {"ok": True, "summary": []})
+            raise AssertionError(path)
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            with self.assertRaises(AssertionError) as raised:
+                smoke_deploy.run_smoke(
+                    "http://service",
+                    None,
+                    cors_probes=True,
+                    cors_origin="https://panel.example.com",
+                )
+
+        self.assertIn("missing authorization", str(raised.exception))
+
     def test_smoke_can_probe_supported_auth_headers(self):
         seen_headers = []
 
