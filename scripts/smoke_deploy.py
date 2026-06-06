@@ -857,6 +857,28 @@ def _run_smoke_impl(
         )
         _require(logs_status == 200, f"/v1/request-logs with admin cookie returned {logs_status}")
         _require("logs" in logs, "/v1/request-logs missing logs")
+        logout_status, logout, logout_headers = _request(
+            base_url,
+            "/v1/admin/logout",
+            timeout=timeout,
+            method="POST",
+            body={},
+            headers={"Cookie": cookie},
+        )
+        _require(logout_status == 200, f"/v1/admin/logout returned {logout_status}")
+        _require(logout.get("ok") is True, "admin logout did not return ok=true")
+        logout_cookie = next(
+            (
+                value
+                for key, value in logout_headers.items()
+                if key.lower() == "set-cookie"
+            ),
+            "",
+        )
+        _require(
+            "gemini_admin_session=" in logout_cookie and "Max-Age=0" in logout_cookie,
+            "admin logout did not clear the session cookie",
+        )
         results.append("admin login and boundary ok")
 
     if chat_prompt:

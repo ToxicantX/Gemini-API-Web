@@ -1271,6 +1271,18 @@ class SmokeDeployTests(unittest.TestCase):
                         "Set-Cookie": "gemini_admin_session=abc.def; HttpOnly; Path=/",
                     },
                 )
+            if path == "/v1/admin/logout":
+                self.assertIn(
+                    "gemini_admin_session=abc.def",
+                    request.headers.get("Cookie", ""),
+                )
+                return FakeHTTPResponse(
+                    200,
+                    {"ok": True},
+                    {
+                        "Set-Cookie": "gemini_admin_session=\"\"; Max-Age=0; Path=/",
+                    },
+                )
             if path == "/v1/request-logs":
                 if "gemini_admin_session=abc.def" not in request.headers.get("Cookie", ""):
                     raise urllib.error.HTTPError(
@@ -1346,6 +1358,18 @@ class SmokeDeployTests(unittest.TestCase):
                     {"ok": True, "enabled": True, "authenticated": True},
                     {
                         "Set-Cookie": "gemini_admin_session=abc.def; HttpOnly; Path=/",
+                    },
+                )
+            if path == "/v1/admin/logout":
+                self.assertIn(
+                    "gemini_admin_session=abc.def",
+                    request.headers.get("Cookie", ""),
+                )
+                return FakeHTTPResponse(
+                    200,
+                    {"ok": True},
+                    {
+                        "Set-Cookie": "gemini_admin_session=\"\"; Max-Age=0; Path=/",
                     },
                 )
             if path == "/v1/request-logs":
