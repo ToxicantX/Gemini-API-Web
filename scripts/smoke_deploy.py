@@ -499,6 +499,18 @@ def _require_admin_ui(body: str) -> None:
     _require("外部调用未就绪" in body, "admin UI missing readiness diagnostic copy")
     _require("网页授权" in body, "admin UI missing web authorization action")
     _require("检查授权状态" in body, "admin UI missing auth cookie diagnostics action")
+    _require(
+        "网页授权集中在系统设置中操作" in body,
+        "admin UI auth controls are not centralized in system settings",
+    )
+    _require(
+        "data-panel-action=\"system-auth\"" in body,
+        "admin UI missing system settings auth navigation action",
+    )
+    _require(
+        "data-panel-action=\"auth\"" not in body,
+        "admin UI still exposes direct auth actions outside system settings",
+    )
     _require("gemini-3.1-pro" in body, "admin UI missing gemini-3.1-pro model option")
     _require("gemini-3.5-flash" in body, "admin UI missing gemini-3.5-flash model option")
     _require(

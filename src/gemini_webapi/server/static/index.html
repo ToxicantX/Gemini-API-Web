@@ -693,19 +693,6 @@
               <span class="hint">设置为 0 表示关闭对应自动切换；429/503 和鉴权错误仍会保护性切换。</span>
             </div>
           </section>
-          <section>
-            <div class="section-head"><h2>授权操作</h2><button id="saveAuthBtn" class="primary">保存授权 Cookie</button></div>
-            <div class="content stack">
-              <div class="notice">点击“网页授权”会启动容器内浏览器，并在新界面打开 noVNC。登录完成后回到这里保存 Cookie。</div>
-              <div class="row button-row">
-                <button id="reopenAuthBtn">打开授权界面</button>
-                <button id="reloadAuthBtn">刷新授权浏览器</button>
-                <button id="diagnoseAuthBtn">检查授权状态</button>
-                <button id="closeAuthBtn">关闭授权会话</button>
-              </div>
-              <div id="authDiagnoseBox" class="hint">授权浏览器启动后，可先检查是否已经拿到 Gemini Cookie，再保存到账户池。</div>
-            </div>
-          </section>
         </div>
         <section>
           <div class="section-head"><h2>账户池</h2><button id="refreshAccountsBtn">刷新</button></div>
@@ -717,7 +704,6 @@
               <button id="validateCurrentBtn">验证当前</button>
               <button id="validateAllBtn">验证全部</button>
               <button id="manualOpenBtn">手动添加</button>
-              <button id="authOpenBtn" class="primary">网页授权</button>
             </div>
             <div id="accountList" class="account-grid"></div>
           </div>
@@ -755,6 +741,15 @@
             <label>Public URL<input id="objectStoragePublicUrl" placeholder="https://cdn.example.com/media"></label>
           </div>
           <div class="stack">
+            <div class="notice">网页授权集中在系统设置中操作：启动授权浏览器后，在 noVNC 里完成 Google/Gemini 登录，检查到 Cookie 后保存到账户池。保存完成会自动关闭授权界面。</div>
+            <div class="row button-row">
+              <button id="authOpenBtn" class="primary">网页授权</button>
+              <button id="reloadAuthBtn">刷新授权浏览器</button>
+              <button id="diagnoseAuthBtn">检查授权状态</button>
+              <button id="saveAuthBtn">保存授权 Cookie</button>
+              <button id="closeAuthBtn">关闭授权会话</button>
+            </div>
+            <div id="authDiagnoseBox" class="hint">授权浏览器启动后，可先检查是否已经拿到 Gemini Cookie，再保存到账户池。</div>
             <div class="split">
               <label>Access Key ID<input id="objectStorageAccessKey" autocomplete="off"></label>
               <label>Secret Access Key<input id="objectStorageSecretKey" type="password" autocomplete="new-password" placeholder="保存后会脱敏显示"></label>
@@ -993,7 +988,7 @@
     }
     function readinessReasonText(reason) {
       const map = {
-        no_accounts: "还没有授权 Gemini 账户，请到“账户设置”使用网页授权或手动添加 Cookie。",
+        no_accounts: "还没有授权 Gemini 账户，请到“系统设置”使用网页授权，或到“账户设置”手动添加 Cookie。",
         no_available_accounts: "账户都已停用或过期，请重新验证、启用或重新授权。",
         readiness_error: "调用就绪检查失败，请检查外部 API Key、管理员会话或服务状态。",
       };
@@ -1021,7 +1016,7 @@
             </div>
           </div>
           <div class="diagnostic-actions">
-            <button data-panel-action="auth">网页授权</button>
+            <button data-panel-action="system-auth">去系统设置授权</button>
             <button data-panel-action="validate-all">验证全部账户</button>
           </div>
         </div>`;
@@ -1101,10 +1096,10 @@
           <div class="diagnostic">
             <div>
               <div class="diagnostic-title">当前没有可用账户</div>
-              <div class="hint">请添加 Cookie，或使用网页授权重新登录 Gemini。</div>
+              <div class="hint">请到系统设置完成网页授权，或手动添加 Cookie。</div>
             </div>
             <div class="diagnostic-actions">
-              <button class="primary" data-panel-action="auth">网页授权</button>
+              <button class="primary" data-panel-action="system-auth">去系统设置授权</button>
               <button data-panel-action="validate-all">验证全部账户</button>
             </div>
           </div>`;
@@ -1138,7 +1133,7 @@
             </div>
           </div>
           <div class="diagnostic-actions">
-            ${current.expired ? `<button class="primary" data-panel-action="auth">重新网页授权</button>` : ""}
+            ${current.expired ? `<button class="primary" data-panel-action="system-auth">去系统设置重新授权</button>` : ""}
             <button data-panel-action="validate-current">验证当前</button>
             <button data-panel-action="validate-all">验证全部</button>
           </div>
@@ -1353,14 +1348,17 @@
       $(infoId).textContent = "";
       setMsg("已清空参考附件");
     }
-
-    document.querySelectorAll("nav button").forEach(btn => btn.onclick = () => {
+    function activateTab(tabId) {
+      const btn = document.querySelector(`nav button[data-tab="${tabId}"]`);
+      if (!btn) return;
       document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b === btn));
-      document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === btn.dataset.tab));
-      if (btn.dataset.tab === "gems") refreshGems().catch(e => setMsg(e.message));
-      if (btn.dataset.tab === "media") refreshMedia().catch(e => setMsg(e.message));
-      if (btn.dataset.tab === "system") refreshSystemSettings().catch(e => setMsg(e.message));
-    });
+      document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === tabId));
+      if (tabId === "gems") refreshGems().catch(e => setMsg(e.message));
+      if (tabId === "media") refreshMedia().catch(e => setMsg(e.message));
+      if (tabId === "system") refreshSystemSettings().catch(e => setMsg(e.message));
+    }
+
+    document.querySelectorAll("nav button").forEach(btn => btn.onclick = () => activateTab(btn.dataset.tab));
     document.body.onclick = event => {
       const close = event.target.closest("[data-close-modal]");
       if (close) closeModal(close.dataset.closeModal);
@@ -1632,8 +1630,9 @@
       const btn = event.target.closest("button[data-panel-action]");
       if (!btn) return;
       const action = btn.dataset.panelAction;
-      if (action === "auth") {
-        await startAuth().catch(e => setMsg(e.message));
+      if (action === "system-auth") {
+        activateTab("system");
+        setMsg("请在系统设置中完成网页授权。");
         return;
       }
       if (action === "validate-current") {
@@ -1654,6 +1653,11 @@
       if (!state.authWindow) throw new Error("浏览器阻止了弹窗，请允许此站点打开新窗口。");
       $("authDiagnoseBox").textContent = "授权浏览器已打开。登录完成后点击“检查授权状态”，确认 Cookie 可用后再保存。";
     }
+    async function closeAuthSession() {
+      await api("/v1/auth/session", { method: "DELETE" });
+      if (state.authWindow && !state.authWindow.closed) state.authWindow.close();
+      state.authWindow = null;
+    }
     async function diagnoseAuth() {
       const data = await api("/v1/auth/diagnose");
       const ok = Boolean(data.has_secure_1psid);
@@ -1666,20 +1670,24 @@
       return data;
     }
     $("authOpenBtn").onclick = () => startAuth().catch(e => setMsg(e.message));
-    $("reopenAuthBtn").onclick = () => startAuth().catch(e => setMsg(e.message));
     $("reloadAuthBtn").onclick = () => api("/v1/auth/press", { method: "POST", body: JSON.stringify({ key: "F5" }) }).catch(e => setMsg(e.message));
     $("diagnoseAuthBtn").onclick = () => diagnoseAuth().catch(e => {
       $("authDiagnoseBox").textContent = `无法检查授权状态：${e.message}`;
       setMsg(e.message);
     });
-    $("closeAuthBtn").onclick = async () => { await api("/v1/auth/session", { method: "DELETE" }); if (state.authWindow && !state.authWindow.closed) state.authWindow.close(); };
+    $("closeAuthBtn").onclick = async () => {
+      await closeAuthSession();
+      $("authDiagnoseBox").textContent = "授权会话已关闭。";
+    };
     $("authSaveConfirmBtn").onclick = async () => {
       try {
         const data = await api("/v1/auth/save", { method: "POST", body: JSON.stringify({ name: $("authSaveName").value || null }) });
         closeModal("authSaveModal");
         await refreshAll();
+        await closeAuthSession().catch(() => {});
         const savedText = data.saved ? `授权 Cookie 已保存到账户池 #${data.account_id}，当前共 ${data.account_count ?? (data.accounts || []).length} 个账户。` : "授权 Cookie 未确认保存。";
-        setMsg(data.validation?.valid ? `${savedText} 验证通过。` : `${savedText} 但验证失败：${data.validation?.message || "请稍后重新验证。"}`);
+        $("authDiagnoseBox").textContent = `${savedText} 授权界面已关闭。`;
+        setMsg(data.validation?.valid ? `${savedText} 验证通过，授权界面已关闭。` : `${savedText} 但验证失败：${data.validation?.message || "请稍后重新验证。"} 授权界面已关闭。`);
       } catch (error) {
         $("authSaveDiagnose").textContent = `保存失败：${error.message}。请先点击“检查授权状态”，确认已发现 __Secure-1PSID。`;
         setMsg(error.message);

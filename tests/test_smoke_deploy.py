@@ -1195,6 +1195,8 @@ class SmokeDeployTests(unittest.TestCase):
                     <title>Gemini API 管理端</title>
                     <div id="readinessPanel">外部调用未就绪</div>
                     <strong id="metricReadiness">未知</strong>
+                    <div>网页授权集中在系统设置中操作</div>
+                    <button data-panel-action="system-auth">去系统设置授权</button>
                     <button>网页授权</button>
                     <button>检查授权状态</button>
                     <option value="gemini-3.1-pro">gemini-3.1-pro</option>
@@ -1237,6 +1239,8 @@ class SmokeDeployTests(unittest.TestCase):
                     <title>Gemini API 管理端</title>
                     <div id="readinessPanel">外部调用未就绪</div>
                     <strong id="metricReadiness">未知</strong>
+                    <div>网页授权集中在系统设置中操作</div>
+                    <button data-panel-action="system-auth">去系统设置授权</button>
                     <button>网页授权</button>
                     <button>检查授权状态</button>
                     <option value="gemini-3.1-pro">gemini-3.1-pro</option>
