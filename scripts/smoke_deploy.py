@@ -721,6 +721,24 @@ def _run_smoke_impl(
             expected_type="invalid_request_error",
             label="missing endpoint",
         )
+        for path, label in (
+            ("/models/not-a-real-smoke-model", "missing rootless model"),
+            ("/engines/not-a-real-smoke-model", "missing rootless engine"),
+        ):
+            alias_missing_status, alias_missing, alias_missing_headers = _request(
+                base_url,
+                path,
+                timeout=timeout,
+                api_key=api_key,
+            )
+            _require_openai_error(
+                alias_missing_status,
+                alias_missing,
+                alias_missing_headers,
+                expected_status=404,
+                expected_type="invalid_request_error",
+                label=label,
+            )
         method_status, method_body, method_headers = _request(
             base_url,
             "/v1/chat/completions",

@@ -1057,6 +1057,31 @@ class SmokeDeployTests(unittest.TestCase):
                         ).encode("utf-8")
                     ),
                 )
+            if path in {
+                "/models/not-a-real-smoke-model",
+                "/engines/not-a-real-smoke-model",
+            }:
+                request_id = (
+                    "req-missing-model"
+                    if path.startswith("/models/")
+                    else "req-missing-engine"
+                )
+                raise urllib.error.HTTPError(
+                    request.full_url,
+                    404,
+                    "Not Found",
+                    {"X-Request-ID": request_id},
+                    BytesIO(
+                        json.dumps(
+                            openai_error(
+                                404,
+                                "invalid_request_error",
+                                request_id,
+                                "The requested model was not found.",
+                            )
+                        ).encode("utf-8")
+                    ),
+                )
             if path == "/v1/chat/completions" and request.get_method() == "GET":
                 raise urllib.error.HTTPError(
                     request.full_url,
@@ -1086,6 +1111,8 @@ class SmokeDeployTests(unittest.TestCase):
             )
 
         self.assertIn(("GET", "/v1/not-a-real-smoke-endpoint", True), seen)
+        self.assertIn(("GET", "/models/not-a-real-smoke-model", True), seen)
+        self.assertIn(("GET", "/engines/not-a-real-smoke-model", True), seen)
         self.assertIn(("GET", "/v1/chat/completions", True), seen)
         self.assertIn("error probes ok", results)
 
