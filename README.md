@@ -661,6 +661,8 @@ curl http://localhost:7860/v1/gemini/stream \
 - `POST /v1/auth/session`
 - `POST /v1/auth/save`
 
+除 `GET /health`、`/healthz`、`/readyz`、`/livez` 外，上述接口属于管理端调用面。服务器部署并设置 `ADMIN_PASSWORD` 后，它们只接受管理员网页登录态，不接受外部 `API_KEYS` 直接调用；`API_KEYS` 只用于 OpenAI 兼容接口和 Gemini 原生生成/媒体/文件等外部调用面。这样可以避免外部客户端拿到模型调用 Key 后顺手修改账号池、授权浏览器或系统设置。
+
 账号列表和当前账号状态通过 `GET /v1/status` 返回。
 
 `GET /health` 不需要管理员登录或 API Key，适合 Docker、反向代理和监控系统探活。它只返回非敏感摘要，包括服务版本、公开模型列表、账号总数/可用数、当前账号 id、是否启用管理员登录以及外部 API Key 是否必需，不会返回 Cookie 或 API Key 明文。`/healthz`、`/readyz`、`/livez` 是同样内容的兼容别名，并支持 `HEAD` 探测。

@@ -1334,6 +1334,61 @@ class ServerEndpointTests(unittest.TestCase):
                     "Admin login required.",
                 )
 
+    def test_external_api_key_cannot_access_admin_management_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp)
+            config = ServerConfig(
+                database_path=config.database_path,
+                accounts_file=config.accounts_file,
+                switch_on_uses=config.switch_on_uses,
+                failure_threshold=config.failure_threshold,
+                immediate_switch_status_codes=config.immediate_switch_status_codes,
+                proxy=config.proxy,
+                request_timeout=config.request_timeout,
+                auto_refresh=config.auto_refresh,
+                auth_url=config.auth_url,
+                auth_headless=config.auth_headless,
+                api_keys=("sk-external",),
+                host=config.host,
+                port=config.port,
+                admin_username="admin",
+                admin_password="admin-pass",
+                admin_session_secret="session-secret",
+            )
+            app = create_app(config)
+            with TestClient(app) as client:
+                management_requests = [
+                    ("GET", "/v1/request-logs", None),
+                    ("GET", "/v1/settings", None),
+                    ("PATCH", "/v1/settings", {"switch_on_uses": 20}),
+                    ("GET", "/v1/system-settings", None),
+                    ("PATCH", "/v1/system-settings", {"api_keys": []}),
+                    ("POST", "/v1/system-settings/api-keys", {}),
+                    ("GET", "/v1/accounts", None),
+                    (
+                        "POST",
+                        "/v1/accounts",
+                        {"name": "one", "secure_1psid": "psid-one"},
+                    ),
+                    ("POST", "/v1/accounts/switch", {"account_id": 1}),
+                    ("POST", "/v1/accounts/validate", {}),
+                    ("POST", "/v1/auth/session", {}),
+                ]
+                for method, path, payload in management_requests:
+                    with self.subTest(method=method, path=path):
+                        response = client.request(
+                            method,
+                            path,
+                            headers={"Authorization": "Bearer sk-external"},
+                            json=payload,
+                        )
+                        # API Key 只用于外部模型调用；后台状态、账号和授权操作必须走管理员会话。
+                        self.assertEqual(response.status_code, 401)
+                        self.assertEqual(
+                            response.json()["detail"],
+                            "Admin login required.",
+                        )
+
     def test_admin_login_guards_novnc_websocket(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp)
