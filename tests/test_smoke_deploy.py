@@ -3831,6 +3831,8 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "id": "cmpl-test",
                         "object": "text_completion",
+                        "created": 1,
+                        "model": "gemini-3.5-flash",
                         "choices": [
                             {
                                 "index": 0,
@@ -3838,6 +3840,11 @@ class SmokeDeployTests(unittest.TestCase):
                                 "finish_reason": "stop",
                             }
                         ],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-completion"},
                 )
@@ -3878,7 +3885,14 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "id": "cmpl-test",
                         "object": "text_completion",
+                        "created": 1,
+                        "model": "gemini-3.1-pro",
                         "choices": [],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-completion"},
                 )
@@ -3941,8 +3955,9 @@ class SmokeDeployTests(unittest.TestCase):
                             "X-Request-ID": "req-completion-stream",
                         },
                         body=(
-                            'data: {"object":"text_completion.chunk","choices":[{"text":" done"}]}\n\n'
-                            'data: {"object":"text_completion.chunk","choices":[],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}\n\n'
+                            'data: {"id":"cmpl-test","object":"text_completion.chunk","created":1,"model":"gemini-3.1-pro","choices":[{"index":0,"text":" done","finish_reason":null}]}\n\n'
+                            'data: {"id":"cmpl-test","object":"text_completion.chunk","created":1,"model":"gemini-3.1-pro","choices":[{"index":0,"text":"","finish_reason":"stop"}]}\n\n'
+                            'data: {"id":"cmpl-test","object":"text_completion.chunk","created":1,"model":"gemini-3.1-pro","choices":[],"usage":{"prompt_tokens":0,"completion_tokens":0,"total_tokens":0}}\n\n'
                             "data: [DONE]\n\n"
                         ),
                     )
@@ -3951,7 +3966,14 @@ class SmokeDeployTests(unittest.TestCase):
                     {
                         "id": "cmpl-test",
                         "object": "text_completion",
-                        "choices": [{"index": 0, "text": " done"}],
+                        "created": 1,
+                        "model": "gemini-3.1-pro",
+                        "choices": [{"index": 0, "text": " done", "finish_reason": "stop"}],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-completion"},
                 )
@@ -3997,14 +4019,21 @@ class SmokeDeployTests(unittest.TestCase):
                             "Content-Type": "text/event-stream",
                             "X-Request-ID": "req-completion-stream",
                         },
-                        body='data: {"object":"text_completion.chunk","choices":[]}\n\n',
+                        body='data: {"id":"cmpl-test","object":"text_completion.chunk","created":1,"model":"gemini-3.1-pro","choices":[]}\n\n',
                     )
                 return FakeHTTPResponse(
                     200,
                     {
                         "id": "cmpl-test",
                         "object": "text_completion",
-                        "choices": [{"index": 0, "text": " done"}],
+                        "created": 1,
+                        "model": "gemini-3.1-pro",
+                        "choices": [{"index": 0, "text": " done", "finish_reason": "stop"}],
+                        "usage": {
+                            "prompt_tokens": 0,
+                            "completion_tokens": 0,
+                            "total_tokens": 0,
+                        },
                     },
                     {"X-Request-ID": "req-completion"},
                 )

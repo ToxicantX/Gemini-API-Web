@@ -588,6 +588,45 @@ def _require_openai_stream_usage_chunk(data: dict, *, label: str) -> None:
         _require(isinstance(usage.get(field), int), f"{label} stream usage missing {field}")
 
 
+def _require_completion_response(data: dict, *, expected_model: str) -> None:
+    """校验旧版 Completions API 返回结构，确保老客户端能读到模型、文本和用量。"""
+    _require(data.get("object") == "text_completion", "completion body is not an OpenAI text completion")
+    _require(str(data.get("id") or "").startswith("cmpl-"), "completion body missing cmpl id")
+    _require(isinstance(data.get("created"), int), "completion body missing integer created")
+    _require(data.get("model") == expected_model, "completion body has unexpected model")
+    usage = data.get("usage")
+    _require(isinstance(usage, dict), "completion body missing usage")
+    for field in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        _require(isinstance(usage.get(field), int), f"completion body usage missing {field}")
+    choices = data.get("choices") or []
+    _require(bool(choices), "completion body missing choices")
+    choice = choices[0]
+    _require(choice.get("index") == 0, "completion body first choice index is not 0")
+    _require(isinstance(choice.get("text"), str) and bool(choice.get("text")), "completion body missing choice text")
+    _require(choice.get("finish_reason") in {"stop", "length"}, "completion body has invalid finish_reason")
+
+
+def _require_completion_stream_chunk(data: dict, *, expected_model: str, final: bool = False) -> None:
+    """校验旧版 Completions 流式 chunk，避免老客户端解析时缺少关键字段。"""
+    _require(data.get("object") == "text_completion.chunk", "completion stream chunk is not a text completion chunk")
+    _require(str(data.get("id") or "").startswith("cmpl-"), "completion stream chunk missing cmpl id")
+    _require(isinstance(data.get("created"), int), "completion stream chunk missing integer created")
+    _require(data.get("model") == expected_model, "completion stream chunk has unexpected model")
+    choices = data.get("choices")
+    _require(isinstance(choices, list), "completion stream chunk missing choices")
+    if final and choices == []:
+        return
+    _require(bool(choices), "completion stream chunk missing choices")
+    choice = choices[0]
+    _require(choice.get("index") == 0, "completion stream chunk first choice index is not 0")
+    _require("text" in choice, "completion stream chunk missing text")
+    finish_reason = choice.get("finish_reason")
+    if final:
+        _require(finish_reason in {"stop", "length"}, "completion stream final chunk has invalid finish_reason")
+    else:
+        _require(finish_reason is None, "completion stream delta finish_reason must be null")
+
+
 def _require_responses_stream_usage_event(data: dict) -> None:
     """校验 Responses 流式完成事件里包含兼容 SDK 可读取的 usage 字段。"""
     response = data.get("response") if isinstance(data, dict) else None
@@ -1770,10 +1809,7 @@ def _run_smoke_impl(
         )
         _require(completion_status == 200, f"/v1/completions returned {completion_status}")
         _require("x-request-id" in {key.lower(): value for key, value in completion_headers.items()}, "completion response missing X-Request-ID")
-        _require(completion.get("object") == "text_completion", "completion body is not an OpenAI text completion")
-        choices = completion.get("choices") or []
-        _require(bool(choices), "completion body missing choices")
-        _require(bool(choices[0].get("text")), "completion body missing choice text")
+        _require_completion_response(completion, expected_model=completion_model)
         results.append("completions api ok")
 
         if completion_stream:
@@ -1801,10 +1837,19 @@ def _run_smoke_impl(
             _require("[DONE]" in data_items, "completion stream missing [DONE]")
             chunks = [item for item in data_items if item != "[DONE]"]
             _require(bool(chunks), "completion stream missing data chunks")
-            first_chunk = json.loads(chunks[0])
-            _require(first_chunk.get("object") == "text_completion.chunk", "completion stream chunk is not a text completion chunk")
-            _require("choices" in first_chunk, "completion stream chunk missing choices")
             parsed_chunks = [json.loads(item) for item in chunks]
+            _require_completion_stream_chunk(parsed_chunks[0], expected_model=completion_model)
+            final_chunks = [
+                item
+                for item in parsed_chunks
+                if (item.get("choices") or [{}])[0].get("finish_reason") is not None
+            ]
+            _require(bool(final_chunks), "completion stream missing final finish_reason chunk")
+            _require_completion_stream_chunk(
+                final_chunks[-1],
+                expected_model=completion_model,
+                final=True,
+            )
             usage_chunks = [item for item in parsed_chunks if item.get("choices") == []]
             _require(bool(usage_chunks), "completion stream missing include_usage chunk")
             _require_openai_stream_usage_chunk(usage_chunks[-1], label="completion")
