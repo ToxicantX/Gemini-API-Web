@@ -16,6 +16,30 @@ def _request(
     method: str = "GET",
     body: dict | None = None,
 ) -> tuple[int, dict, dict[str, str]]:
+    status, body_text, response_headers = _raw_request(
+        base_url,
+        path,
+        api_key=api_key,
+        headers=headers,
+        method=method,
+        body=body,
+    )
+    try:
+        data = json.loads(body_text) if body_text else {}
+    except json.JSONDecodeError:
+        data = {}
+    return status, data, response_headers
+
+
+def _raw_request(
+    base_url: str,
+    path: str,
+    *,
+    api_key: str | None = None,
+    headers: dict[str, str] | None = None,
+    method: str = "GET",
+    body: dict | None = None,
+) -> tuple[int, str, dict[str, str]]:
     url = f"{base_url.rstrip('/')}{path}"
     request_headers = {"Accept": "application/json"}
     if headers:
@@ -34,18 +58,14 @@ def _request(
     )
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
-            body = response.read()
+            response_body = response.read()
             status = response.status
             response_headers = dict(response.headers.items())
     except urllib.error.HTTPError as exc:
-        body = exc.read()
+        response_body = exc.read()
         status = exc.code
         response_headers = dict(exc.headers.items())
-    try:
-        data = json.loads(body.decode("utf-8")) if body else {}
-    except json.JSONDecodeError:
-        data = {}
-    return status, data, response_headers
+    return status, response_body.decode("utf-8", errors="replace"), response_headers
 
 
 def _require(condition: bool, message: str) -> None:
@@ -69,6 +89,16 @@ def _cookie_header(headers: dict[str, str]) -> str:
     return "; ".join(parts)
 
 
+def _sse_data_items(body_text: str) -> list[str]:
+    items: list[str] = []
+    for line in body_text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("data:"):
+            continue
+        items.append(stripped.removeprefix("data:").strip())
+    return items
+
+
 def run_smoke(
     base_url: str,
     api_key: str | None,
@@ -77,6 +107,7 @@ def run_smoke(
     admin_password: str | None = None,
     chat_prompt: str | None = None,
     chat_model: str = "gemini",
+    chat_stream: bool = False,
     fail_on_warnings: bool = False,
 ) -> list[str]:
     results: list[str] = []
@@ -178,6 +209,35 @@ def run_smoke(
         )
         results.append("chat completions ok")
 
+        if chat_stream:
+            # 流式接口是很多 OpenAI 兼容客户端的默认路径，这里校验 SSE chunk 和结束标记。
+            stream_status, stream_body, stream_headers = _raw_request(
+                base_url,
+                "/v1/chat/completions",
+                api_key=api_key,
+                method="POST",
+                body={
+                    "model": chat_model,
+                    "stream": True,
+                    "messages": [{"role": "user", "content": chat_prompt}],
+                },
+            )
+            _require(stream_status == 200, f"stream /v1/chat/completions returned {stream_status}")
+            content_type = next(
+                (value for key, value in stream_headers.items() if key.lower() == "content-type"),
+                "",
+            )
+            _require("text/event-stream" in content_type.lower(), "stream response is not text/event-stream")
+            _require("x-request-id" in {key.lower(): value for key, value in stream_headers.items()}, "stream response missing X-Request-ID")
+            data_items = _sse_data_items(stream_body)
+            _require("[DONE]" in data_items, "stream response missing [DONE]")
+            chunks = [item for item in data_items if item != "[DONE]"]
+            _require(bool(chunks), "stream response missing data chunks")
+            first_chunk = json.loads(chunks[0])
+            _require(first_chunk.get("object") == "chat.completion.chunk", "stream chunk is not an OpenAI chat completion chunk")
+            _require("choices" in first_chunk, "stream chunk missing choices")
+            results.append("chat stream ok")
+
     return results
 
 
@@ -194,6 +254,11 @@ def main() -> int:
     )
     parser.add_argument("--chat-model", default="gemini")
     parser.add_argument(
+        "--chat-stream",
+        action="store_true",
+        help="Also verify streaming /v1/chat/completions when --chat-prompt is set.",
+    )
+    parser.add_argument(
         "--fail-on-warnings",
         action="store_true",
         help="Fail when /health reports deployment warnings.",
@@ -207,6 +272,7 @@ def main() -> int:
             admin_password=args.admin_password or None,
             chat_prompt=args.chat_prompt or None,
             chat_model=args.chat_model,
+            chat_stream=args.chat_stream,
             fail_on_warnings=args.fail_on_warnings,
         )
     except Exception as exc:
